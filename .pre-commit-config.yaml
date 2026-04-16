@@ -14,6 +14,9 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-json
+        # tsconfig*.json files are JSONC (JSON with comments) — Vite
+        # and the TypeScript compiler accept them but stdlib json does not.
+        exclude: tsconfig.*\.json$
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
