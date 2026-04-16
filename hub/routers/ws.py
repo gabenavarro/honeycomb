@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from hub.models.schemas import WSFrame
+from hub.services import metrics
 
 logger = logging.getLogger("hub.routers.ws")
 
@@ -32,6 +33,7 @@ class ConnectionManager:
         ws_id = id(websocket)
         self._connections.append(websocket)
         self._subscriptions[ws_id] = {"system"}  # Always subscribed to system
+        metrics.ws_clients.set(len(self._connections))
         logger.info("WebSocket connected: %d (total: %d)", ws_id, len(self._connections))
         return ws_id
 
@@ -40,6 +42,7 @@ class ConnectionManager:
         if websocket in self._connections:
             self._connections.remove(websocket)
         self._subscriptions.pop(ws_id, None)
+        metrics.ws_clients.set(len(self._connections))
         logger.info("WebSocket disconnected: %d (total: %d)", ws_id, len(self._connections))
 
     def subscribe(self, websocket: WebSocket, channels: list[str]) -> None:

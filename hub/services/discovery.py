@@ -20,6 +20,7 @@ import docker
 import docker.errors
 import httpx
 
+from hub.config import get_settings
 from hub.services.registry import Registry
 
 logger = logging.getLogger("hub.discovery")
@@ -135,20 +136,18 @@ def infer_project_type(*text_sources: str) -> str:
 
 
 def _discover_roots() -> list[Path]:
-    """Parse HIVE_DISCOVER_ROOTS, falling back to conventional layouts.
+    """Return the list of discover roots, filtered to existing directories.
 
-    Empty/nonexistent paths are filtered out silently — we don't want to
-    spam warnings on hosts missing a particular convention.
+    The raw list of candidate strings comes from ``HiveSettings.discover_roots``,
+    which in turn accepts either the historical ``HIVE_DISCOVER_ROOTS``
+    colon-separated format or a JSON list. Paths are expanded (``~``) and
+    resolved here. Nonexistent paths are dropped silently — we don't
+    want to spam warnings on hosts missing a particular convention.
     """
-    raw = os.environ.get("HIVE_DISCOVER_ROOTS", "")
-    candidates = (
-        [s.strip() for s in raw.split(":") if s.strip()]
-        if raw
-        else list(DEFAULT_DISCOVER_ROOT_CANDIDATES)
-    )
+    candidates = get_settings().discover_roots or list(DEFAULT_DISCOVER_ROOT_CANDIDATES)
     roots: list[Path] = []
     for c in candidates:
-        p = Path(os.path.expanduser(c)).resolve()
+        p = Path(os.path.expanduser(str(c))).resolve()
         if p.is_dir():
             roots.append(p)
     return roots

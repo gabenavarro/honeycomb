@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from hub.models.schemas import CommandOutput, CommandRequest, CommandResponse
+from hub.services import metrics
 
 logger = logging.getLogger("hub.routers.commands")
 
@@ -47,6 +48,7 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
                 command=req.command,
                 command_id=req.command_id,
             )
+            metrics.commands_total.labels(relay_path="agent").inc()
             return CommandResponse(
                 command_id=result["command_id"],
                 pid=result.get("pid"),
@@ -79,6 +81,7 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
                     record_id,
                     (stderr or "").strip()[:500],
                 )
+            metrics.commands_total.labels(relay_path="devcontainer_exec").inc()
             return CommandResponse(
                 command_id=req.command_id or "exec",
                 pid=None,
@@ -126,6 +129,7 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
             (stderr or "").strip()[:500],
         )
 
+    metrics.commands_total.labels(relay_path="docker_exec").inc()
     return CommandResponse(
         command_id=req.command_id or "exec",
         pid=None,
