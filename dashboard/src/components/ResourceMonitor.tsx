@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Cpu, HardDrive, MonitorDot } from "lucide-react";
 import { getResources } from "../lib/api";
-import type { ResourceStats } from "../lib/types";
 
 interface Props {
   containerId: number;

@@ -39,8 +39,13 @@ function quietWsProxy(proxy: { on: (event: string, cb: (...args: unknown[]) => v
     console.warn("[vite:ws-proxy]", (err as Error | undefined)?.message ?? err);
   };
   proxy.on("error", swallow);
+  // http-proxy's `proxyReqWs` callback is `(_proxyReq, _req, socket) => void`,
+  // but its TS signature is the more general `(...args: unknown[]) => void`.
+  // The narrow signature below is correct at runtime — strict-typing the
+  // adapter is tracked for the dashboard typing pass (post-M1).
   proxy.on(
     "proxyReqWs",
+    // @ts-expect-error — see comment above
     (
       _proxyReq: unknown,
       _req: unknown,
@@ -64,6 +69,8 @@ export default defineConfig({
       "/ws": {
         target: "ws://127.0.0.1:8420",
         ws: true,
+        // @ts-expect-error — vite expects ProxyServer; quietWsProxy takes a
+        // structural subset. Same follow-up as the proxyReqWs handler above.
         configure: quietWsProxy,
       },
     },
