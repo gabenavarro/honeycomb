@@ -8,6 +8,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from hub.auth import authenticate_websocket
 from hub.models.schemas import WSFrame
 from hub.services import metrics
 
@@ -113,7 +114,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     Server sends tagged frames:
         {"channel": "1", "event": "output", "data": "..."}
         {"channel": "system", "event": "status", "data": {...}}
+
+    Auth: bearer token must be supplied as ``?token=…`` on the connect
+    URL. The browser WebSocket API cannot attach request headers, so the
+    query param is the handshake mechanism.
     """
+    token = getattr(websocket.app.state, "auth_token", "")
+    if not await authenticate_websocket(websocket, token):
+        return
+
     ws_id = await manager.connect(websocket)
 
     # Send welcome

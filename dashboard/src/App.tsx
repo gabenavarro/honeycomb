@@ -20,6 +20,7 @@ import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { ContainerTabs } from "./components/ContainerTabs";
 import { StatusBar } from "./components/StatusBar";
 import { CommandPalette } from "./components/CommandPalette";
+import { AuthGate } from "./components/AuthGate";
 import { backoffRefetch } from "./hooks/useSmartPoll";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
@@ -193,134 +194,136 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
-      <div className="flex min-h-0 flex-1">
-        <ActivityBar
-          active={activity}
-          onChange={(a) => {
+    <AuthGate>
+      <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
+        <div className="flex min-h-0 flex-1">
+          <ActivityBar
+            active={activity}
+            onChange={(a) => {
+              setActivity(a);
+              setSidebarOpen(true);
+            }}
+            containerCount={containers.length}
+            prCount={prs.length}
+            onOpenCommandPalette={() => setPaletteOpen(true)}
+          />
+
+          {sidebarOpen && (
+            <aside
+              aria-label="Primary sidebar"
+              className="flex w-72 shrink-0 flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
+            >
+              <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
+                <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+                  {activity === "containers"
+                    ? "Containers"
+                    : activity === "gitops"
+                      ? "Git Ops"
+                      : "Settings"}
+                </h2>
+                {activity === "containers" && (
+                  <button
+                    type="button"
+                    onClick={() => setShowProvisioner(true)}
+                    className="rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#1188e0]"
+                  >
+                    + New
+                  </button>
+                )}
+              </header>
+              <div className="flex-1 overflow-y-auto">
+                {activity === "containers" && (
+                  <ContainerList selectedId={activeTabId} onSelect={openContainer} />
+                )}
+                {activity === "gitops" && <GitOpsPanel />}
+                {activity === "settings" && <SettingsPane />}
+              </div>
+            </aside>
+          )}
+
+          {/* Editor area: tabs + active pane */}
+          <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
+            <ContainerTabs
+              openContainers={openContainers}
+              activeId={activeTabId}
+              onFocus={setActiveTabId}
+              onClose={closeTab}
+            />
+            {active ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                {selectedUnhealthy && (
+                  <div
+                    role="alert"
+                    className="flex items-center justify-between gap-3 border-b border-yellow-800/50 bg-yellow-900/20 px-3 py-1 text-[11px] text-yellow-300"
+                  >
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle size={11} />
+                      {active.project_name} is{" "}
+                      {active.container_status !== "running"
+                        ? active.container_status
+                        : "unreachable"}
+                      .
+                    </span>
+                    {firstHealthy && firstHealthy.id !== active.id && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTabId(firstHealthy.id)}
+                        className="rounded bg-yellow-800/40 px-2 py-0.5 hover:bg-yellow-700/40"
+                      >
+                        Switch to {firstHealthy.project_name}
+                      </button>
+                    )}
+                  </div>
+                )}
+                <div className="flex min-h-0 min-w-0 flex-1 p-2">
+                  <TerminalPane
+                    key={active.id}
+                    containerId={active.id}
+                    containerName={active.project_name}
+                    hasClaudeCli={active.has_claude_cli}
+                  />
+                </div>
+              </div>
+            ) : (
+              <EmptyEditor
+                onOpenProvisioner={() => setShowProvisioner(true)}
+                hasRegistered={containers.length > 0}
+              />
+            )}
+          </main>
+
+          {secondaryOpen && active && (
+            <aside
+              aria-label="Secondary panel"
+              className="w-64 shrink-0 overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
+            >
+              <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+                Resources
+              </h2>
+              <ResourceMonitor containerId={active.id} />
+            </aside>
+          )}
+        </div>
+
+        <StatusBar activeContainerName={active?.project_name ?? null} />
+
+        {showProvisioner && <Provisioner onClose={() => setShowProvisioner(false)} />}
+
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          containers={containers}
+          onFocusContainer={openContainer}
+          onCloseContainer={closeTab}
+          onNewClaudeSession={newClaudeSession}
+          onActivity={(a) => {
             setActivity(a);
             setSidebarOpen(true);
           }}
-          containerCount={containers.length}
-          prCount={prs.length}
-          onOpenCommandPalette={() => setPaletteOpen(true)}
+          onOpenProvisioner={() => setShowProvisioner(true)}
         />
-
-        {sidebarOpen && (
-          <aside
-            aria-label="Primary sidebar"
-            className="flex w-72 shrink-0 flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
-          >
-            <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
-              <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                {activity === "containers"
-                  ? "Containers"
-                  : activity === "gitops"
-                    ? "Git Ops"
-                    : "Settings"}
-              </h2>
-              {activity === "containers" && (
-                <button
-                  type="button"
-                  onClick={() => setShowProvisioner(true)}
-                  className="rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#1188e0]"
-                >
-                  + New
-                </button>
-              )}
-            </header>
-            <div className="flex-1 overflow-y-auto">
-              {activity === "containers" && (
-                <ContainerList selectedId={activeTabId} onSelect={openContainer} />
-              )}
-              {activity === "gitops" && <GitOpsPanel />}
-              {activity === "settings" && <SettingsPane />}
-            </div>
-          </aside>
-        )}
-
-        {/* Editor area: tabs + active pane */}
-        <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
-          <ContainerTabs
-            openContainers={openContainers}
-            activeId={activeTabId}
-            onFocus={setActiveTabId}
-            onClose={closeTab}
-          />
-          {active ? (
-            <div className="flex min-h-0 flex-1 flex-col">
-              {selectedUnhealthy && (
-                <div
-                  role="alert"
-                  className="flex items-center justify-between gap-3 border-b border-yellow-800/50 bg-yellow-900/20 px-3 py-1 text-[11px] text-yellow-300"
-                >
-                  <span className="flex items-center gap-2">
-                    <AlertTriangle size={11} />
-                    {active.project_name} is{" "}
-                    {active.container_status !== "running"
-                      ? active.container_status
-                      : "unreachable"}
-                    .
-                  </span>
-                  {firstHealthy && firstHealthy.id !== active.id && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveTabId(firstHealthy.id)}
-                      className="rounded bg-yellow-800/40 px-2 py-0.5 hover:bg-yellow-700/40"
-                    >
-                      Switch to {firstHealthy.project_name}
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                <TerminalPane
-                  key={active.id}
-                  containerId={active.id}
-                  containerName={active.project_name}
-                  hasClaudeCli={active.has_claude_cli}
-                />
-              </div>
-            </div>
-          ) : (
-            <EmptyEditor
-              onOpenProvisioner={() => setShowProvisioner(true)}
-              hasRegistered={containers.length > 0}
-            />
-          )}
-        </main>
-
-        {secondaryOpen && active && (
-          <aside
-            aria-label="Secondary panel"
-            className="w-64 shrink-0 overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
-          >
-            <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-              Resources
-            </h2>
-            <ResourceMonitor containerId={active.id} />
-          </aside>
-        )}
       </div>
-
-      <StatusBar activeContainerName={active?.project_name ?? null} />
-
-      {showProvisioner && <Provisioner onClose={() => setShowProvisioner(false)} />}
-
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        containers={containers}
-        onFocusContainer={openContainer}
-        onCloseContainer={closeTab}
-        onNewClaudeSession={newClaudeSession}
-        onActivity={(a) => {
-          setActivity(a);
-          setSidebarOpen(true);
-        }}
-        onOpenProvisioner={() => setShowProvisioner(true)}
-      />
-    </div>
+    </AuthGate>
   );
 
   // Reference queryClient so the import isn't pruned and so children can

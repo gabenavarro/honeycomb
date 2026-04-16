@@ -1,5 +1,6 @@
 /** API client for the Claude Hive hub. */
 
+import { clearAuthToken, getAuthToken, UnauthorizedError } from "./auth";
 import type {
   CommandResponse,
   ContainerCreate,
@@ -15,10 +16,22 @@ import type {
 const BASE = "/api";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+
+  if (res.status === 401) {
+    // Stale / missing token. Clear it so the AuthGate re-prompts, and
+    // throw a dedicated error so UI can distinguish from "real" failures.
+    clearAuthToken();
+    const body = await res.text().catch(() => "");
+    throw new UnauthorizedError(body || "Unauthorized");
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status}: ${body}`);

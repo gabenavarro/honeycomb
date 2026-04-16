@@ -101,14 +101,29 @@ class HiveSettings(BaseSettings):
         ),
     )
 
-    # ── Auth (enforced in M3) ──────────────────────────────────────
+    # ── Auth ────────────────────────────────────────────────────────
     auth_token: str | None = Field(
         default=None,
         description=(
-            "Bearer token gating every HTTP + WebSocket endpoint once M3 "
-            "lands. None (the default) disables auth — only safe when "
-            "host=127.0.0.1. Generated once at first run and persisted "
-            "to ~/.config/honeycomb/token."
+            "Bearer token gating every HTTP + WebSocket endpoint. When "
+            "unset the hub loads ~/.config/honeycomb/token on start-up; "
+            "if that file is also absent, a token is generated, printed "
+            "to stdout once, and persisted (mode 0600). Set this env var "
+            "to override the file-based token, e.g. in CI or multi-hub "
+            "setups."
+        ),
+    )
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        description=(
+            "Origins permitted by the CORS middleware. Defaults to the "
+            "Vite dev server on localhost:5173. Accepts a comma-separated "
+            "string or a JSON list. Set to ['*'] only if you really want "
+            "an open hub — combined with HIVE_HOST=0.0.0.0 and no auth "
+            "token that is equivalent to a public shell on the box."
         ),
     )
 
@@ -133,6 +148,24 @@ class HiveSettings(BaseSettings):
     )
 
     # ── Validators ──────────────────────────────────────────────────
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_comma_origins(cls, value: object) -> object:
+        """Accept comma-separated strings (standard HTTP-ish format) and JSON."""
+        import json
+
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            if stripped.startswith("["):
+                try:
+                    return json.loads(stripped)
+                except json.JSONDecodeError:
+                    pass
+            return [segment.strip() for segment in value.split(",") if segment.strip()]
+        return value
+
     @field_validator("discover_roots", mode="before")
     @classmethod
     def _split_colon_roots(cls, value: object) -> object:

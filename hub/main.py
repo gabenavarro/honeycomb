@@ -14,6 +14,7 @@ from fastapi import FastAPI, Response
 from fastapi import Request as FARequest
 from fastapi.middleware.cors import CORSMiddleware
 
+from hub.auth import AuthMiddleware, load_or_create_token
 from hub.config import HiveSettings, get_settings
 from hub.logging_setup import (
     bind_container_id,
@@ -67,6 +68,17 @@ async def lifespan(app: FastAPI):
         log_format=settings.log_format,
         metrics_enabled=settings.metrics_enabled,
         auth_enabled=bool(settings.auth_token),
+    )
+
+    # Resolve the bearer token once and store it on app.state. Routers
+    # and the WebSocket handshake read from there so tests can patch the
+    # value without reaching into the middleware instance.
+    token, token_source = load_or_create_token(settings)
+    app.state.auth_token = token
+    logger.info(
+        "hub_auth_token_ready",
+        source=token_source,
+        length=len(token),
     )
 
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,16 +176,50 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Local-only by default. M3 replaces the wildcard with an allowlist and
-# adds bearer-token auth, at which point 0.0.0.0 deployment becomes safe.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Middleware stack — built from innermost to outermost because Starlette's
+# add_middleware / @app.middleware insert at the head of the stack. After
+# all three calls below, the effective request flow is:
+#
+#   CORS (outermost)  ->  request_id  ->  bearer-token auth  ->  handler
+#
+# That ordering means:
+#   - CORS headers are attached to every response, including 401s.
+#   - Every log line emitted during auth or the handler carries the
+#     request-id bound by the middleware.
+#   - Auth runs last, so by the time a handler sees a request, the
+#     bearer token has been verified.
 
 
+# ── Innermost: bearer-token auth ────────────────────────────────────
+class _LazyAuthMiddleware(AuthMiddleware):
+    """Reads the active token from app.state on every request.
+
+    Using app.state (rather than capturing the token at construction
+    time) lets tests monkey-patch the token by assigning to
+    ``app.state.auth_token`` without having to reinstantiate the app,
+    and avoids a chicken-and-egg problem where the middleware is built
+    before the lifespan has resolved the token.
+    """
+
+    def __init__(self, app) -> None:
+        super().__init__(app, token="")
+
+    async def dispatch(self, request, call_next):  # type: ignore[override]
+        token = getattr(request.app.state, "auth_token", None)
+        if not token:
+            # Startup hasn't run yet — refuse every request to avoid
+            # accidentally serving with an empty token.
+            from hub.auth import _unauthorized  # local import to avoid cycles
+
+            return _unauthorized("hub not ready", request)
+        self._token = token
+        return await super().dispatch(request, call_next)
+
+
+app.add_middleware(_LazyAuthMiddleware)
+
+
+# ── Middle: request-id binding ──────────────────────────────────────
 @app.middleware("http")
 async def request_id_middleware(request: FARequest, call_next):
     """Bind a short request-id into the logging contextvar for every request.
@@ -192,6 +238,26 @@ async def request_id_middleware(request: FARequest, call_next):
         bind_container_id(None)
     response.headers["X-Request-ID"] = rid
     return response
+
+
+# ── Outermost: CORS ─────────────────────────────────────────────────
+# Origins come from HiveSettings.cors_origins. Default is the Vite dev
+# server on localhost:5173; set HIVE_CORS_ORIGINS to extend. Wildcard
+# is still permitted, with a loud warning below.
+_cors_settings = get_settings()
+if "*" in _cors_settings.cors_origins:
+    logger.warning(
+        "hub_cors_wildcard_configured",
+        hint="HIVE_CORS_ORIGINS='*' opens the hub to any origin. Narrow unless intentional.",
+    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_settings.cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+    expose_headers=["X-Request-ID"],
+)
 
 
 # Mount routers

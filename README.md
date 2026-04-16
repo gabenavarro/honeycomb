@@ -80,13 +80,15 @@ python hub/main.py
 
 The hub starts on `http://127.0.0.1:8420`. It will check for prerequisites and warn about any missing tools.
 
+> **Bearer token.** On first start the hub prints a banner with a generated token and writes it to `~/.config/honeycomb/token` (mode `0600`). Every HTTP and WebSocket endpoint (except `/api/health`) requires this token. Override with `HIVE_AUTH_TOKEN=…` in your environment — useful for CI. See [SECURITY.md](SECURITY.md) for the full auth model.
+
 **Terminal 2 — Dashboard:**
 ```bash
 cd dashboard
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173` in your browser.
+Open `http://127.0.0.1:5173` in your browser. The dashboard will prompt for the bearer token from Terminal 1; it's stored in `localStorage` and attached to every request.
 
 ### 4. Authenticate Claude (one-time)
 

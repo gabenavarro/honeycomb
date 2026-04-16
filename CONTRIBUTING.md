@@ -69,6 +69,14 @@ See [SECURITY.md](SECURITY.md). In short: nothing committable ever
 contains a real token. `.env` is gitignored. `pre-commit` runs
 `gitleaks`; CI runs it again on every PR.
 
+## Running the hub locally after M3
+
+The hub is gated by a bearer token. On first start it prints a token
+banner and writes `~/.config/honeycomb/token` (mode `0600`). The
+dashboard prompts for the token on first load; pass the same value via
+`HIVE_AUTH_TOKEN` to any `hive-agent` containers that need to
+heartbeat. Rotate by deleting the token file and restarting.
+
 ## Tests that must pass before merge
 
 From M1 onward, CI runs these on every PR:

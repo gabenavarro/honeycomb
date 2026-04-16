@@ -13,11 +13,24 @@
  */
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { getAuthToken, onAuthTokenChange } from "../lib/auth";
 import type { WSFrame } from "../lib/types";
 
-const WS_URL = `ws://${window.location.host}/ws`;
+const WS_BASE = `ws://${window.location.host}/ws`;
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 15_000;
+
+/** Build the multiplex-WS URL including the current bearer token.
+ *
+ * The hub's WebSocket handshake requires the token as a query param
+ * because browsers cannot attach custom headers to WebSocket upgrades.
+ */
+function buildWsUrl(): string {
+  const token = getAuthToken();
+  if (!token) return WS_BASE;
+  const sep = WS_BASE.includes("?") ? "&" : "?";
+  return `${WS_BASE}${sep}token=${encodeURIComponent(token)}`;
+}
 
 type Listener = (frame: WSFrame) => void;
 
@@ -38,6 +51,29 @@ class HiveSocket {
     // Close cleanly when the page goes away so Vite's proxy doesn't see
     // a half-open client on reload.
     window.addEventListener("beforeunload", () => this.dispose());
+    // When the user pastes a new token (or the current one is cleared
+    // by a 401), drop the existing socket and reconnect so the next
+    // handshake uses the fresh credentials.
+    onAuthTokenChange(() => this.bounce());
+    this.connect();
+  }
+
+  /** Close the current socket and reconnect immediately. */
+  private bounce(): void {
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {
+        // ignore — close() failures are non-fatal, the socket will be
+        // replaced by the reconnect below regardless.
+      }
+      this.ws = null;
+    }
+    if (this.reconnectTimer !== null) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = 0;
     this.connect();
   }
 
@@ -63,7 +99,7 @@ class HiveSocket {
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(WS_URL);
+      ws = new WebSocket(buildWsUrl());
     } catch (err) {
       // Construction throws on malformed URLs or blocked protocols.
       // Schedule a retry instead of crashing the app.
