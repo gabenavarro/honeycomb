@@ -205,3 +205,99 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ════════════════════════════════════════════════════════
+# Claude Hive — project-specific
+# ════════════════════════════════════════════════════════
+
+# Secrets — .env variants (real .env is covered above; also block locals/per-env files)
+.env.*
+!.env.example
+*.env.local
+secrets.*
+credentials.*
+auth.json
+gh-token*
+.npmrc
+
+# Crypto material — SSH keys, TLS certs, keystores
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+*.ppk
+known_hosts
+
+# Claude Code local state — machine-specific, may contain tool-use allowlists / tokens
+.claude/settings.local.json
+.claude/cache/
+.claude/sessions/
+.claude/.session-*
+
+# Hive runtime state — SQLite registry, PTY scrollback, etc.
+.claude-hive/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# Node / frontend build artifacts (dashboard/)
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs & diagnostic data not covered by *.log above
+logs/
+*.jsonl.log
+*.ndjson.log
+
+# Docker / devcontainer overrides (local-only tweaks)
+docker-compose.override.yml
+docker-compose.override.yaml
+.devcontainer.local/
+
+# OS / editor droppings
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# Backups, scratch, and accidental duplicates (e.g. "README copy.md")
+*.bak
+*.orig
+*.rej
+* copy.*
+* copy *.*
+
+# Troubleshoot scratchpad — if it contains incident-specific tokens/paths, keep local
+# (Comment out the next line if you want to check troubleshoot.md into git.)
+# troubleshoot.md

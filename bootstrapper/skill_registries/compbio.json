@@ -1,0 +1,50 @@
+{
+    "project_type": "compbio",
+    "description": "Skills for computational biology, bioinformatics, and cheminformatics",
+    "extends": "base",
+    "skills": {
+        "methodology": {
+            "description": "Development methodology skills",
+            "items": [
+                "hive-orchestration",
+                "project-bootstrap",
+                "cross-repo-gitops",
+                "container-health",
+                "compbio-workflow"
+            ]
+        },
+        "scientific": {
+            "description": "Scientific skills from K-Dense-AI/claude-scientific-skills",
+            "source": "claude-scientific-skills",
+            "items": [
+                "biopython",
+                "scanpy",
+                "anndata",
+                "scvi-tools",
+                "scvelo",
+                "pydeseq2",
+                "pysam",
+                "gget",
+                "bioservices",
+                "cobrapy",
+                "esm",
+                "rdkit",
+                "datamol",
+                "scientific-visualization",
+                "matplotlib",
+                "seaborn",
+                "statistical-analysis"
+            ]
+        }
+    },
+    "mcp_servers": {
+        "context7": {
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp"]
+        },
+        "deepwiki": {
+            "command": "npx",
+            "args": ["-y", "deepwiki-mcp"]
+        }
+    }
+}

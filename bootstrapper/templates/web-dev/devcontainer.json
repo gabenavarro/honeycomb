@@ -1,0 +1,38 @@
+{
+    "name": "{{ project_name | default('Web Dev Workspace') }}",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "target": "dev",
+        "context": "."
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
+    "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+    "remoteEnv": {
+        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+        "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
+        "HIVE_AGENT_PORT": "9100"
+    },
+    "forwardPorts": [9100, 3000, 5173, 8000],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "anthropic.claude-code",
+                "ms-python.python",
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "bradlc.vscode-tailwindcss"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "esbenp.prettier-vscode"
+            }
+        }
+    },
+    "postCreateCommand": "node --version && python3 --version && echo 'Web dev devcontainer ready.'",
+    "mounts": [
+        "source=claude-auth,target=/root/.claude,type=volume",
+        "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume",
+        "source=claude-hive-${localWorkspaceFolderBasename}-npm-cache,target=/root/.npm,type=volume"
+    ]
+}

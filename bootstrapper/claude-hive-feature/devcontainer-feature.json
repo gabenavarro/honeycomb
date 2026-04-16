@@ -1,0 +1,38 @@
+{
+    "id": "claude-hive",
+    "version": "0.1.0",
+    "name": "Claude Hive Agent",
+    "description": "Installs Claude Code CLI, hive-agent, and configures skills/hooks for Claude Hive orchestration",
+    "options": {
+        "projectType": {
+            "type": "string",
+            "enum": ["base", "ml-cuda", "web-dev", "compbio"],
+            "default": "base",
+            "description": "Project type determines which skills and CLAUDE.md template are installed"
+        },
+        "installSkills": {
+            "type": "boolean",
+            "default": true,
+            "description": "Install curated skills for the project type"
+        },
+        "hubUrl": {
+            "type": "string",
+            "default": "http://host.docker.internal:8420",
+            "description": "URL of the Claude Hive hub"
+        },
+        "agentPort": {
+            "type": "string",
+            "default": "9100",
+            "description": "Port for the hive-agent command listener"
+        }
+    },
+    "installsAfter": [],
+    "entrypoint": "",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "anthropic.claude-code"
+            ]
+        }
+    }
+}

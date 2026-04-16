@@ -1,0 +1,37 @@
+{
+    "name": "{{ project_name | default('CompBio Workspace') }}",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "target": "dev",
+        "context": "."
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
+    "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+    "remoteEnv": {
+        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+        "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
+        "HIVE_AGENT_PORT": "9100",
+        "NCBI_API_KEY": "${localEnv:NCBI_API_KEY}"
+    },
+    "forwardPorts": [9100, 8888],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "anthropic.claude-code",
+                "ms-python.python",
+                "ms-toolsai.jupyter",
+                "ms-python.debugpy"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "python.defaultInterpreterPath": "/usr/local/bin/python3"
+            }
+        }
+    },
+    "postCreateCommand": "python3 -c 'import scanpy; import biopython; print(\"CompBio devcontainer ready.\")' || echo 'CompBio devcontainer ready (some packages may need setup).'",
+    "mounts": [
+        "source=claude-auth,target=/root/.claude,type=volume",
+        "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume",
+        "source=claude-hive-${localWorkspaceFolderBasename}-bio-data,target=/root/.cache/biodata,type=volume"
+    ]
+}
