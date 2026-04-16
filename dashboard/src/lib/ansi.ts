@@ -47,8 +47,13 @@ export const eraseLineAndReturn = (): string => CARRIAGE_RETURN + CLEAR_LINE;
 export const CRLF = "\r\n";
 
 function formatTs(iso: string): string {
+  // `new Date(<garbage>)` does NOT throw — it returns an `Invalid Date`
+  // whose `toLocaleTimeString()` returns the literal string "Invalid Date".
+  // Check validity explicitly so the try/catch is not our only defense.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--:--";
   try {
-    return new Date(iso).toLocaleTimeString([], { hour12: false });
+    return d.toLocaleTimeString([], { hour12: false });
   } catch {
     return "--:--:--";
   }
