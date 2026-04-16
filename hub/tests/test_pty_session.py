@@ -18,8 +18,8 @@ import pytest
 from hub.services.pty_session import (
     SCROLLBACK_BYTES,
     SESSION_GRACE_SECONDS,
-    PtySession,
     PtyRegistry,
+    PtySession,
 )
 
 
@@ -72,10 +72,10 @@ class TestAttachDetach:
 
         s.attach(a)
         if s._attached is not None:
-            await s._attached(b"first")
+            await s._attached(b"first")  # type: ignore[misc]
         s.attach(b)
         if s._attached is not None:
-            await s._attached(b"second")
+            await s._attached(b"second")  # type: ignore[misc]
 
         assert calls_a == [b"first"]
         assert calls_b == [b"second"]

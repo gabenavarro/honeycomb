@@ -1,0 +1,27 @@
+# Do not format generated or vendored content.
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.vite/
+**/package-lock.json
+**/uv.lock
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.py
+**/*.pyi
+**/Dockerfile
+**/Dockerfile.*
+**/*.j2
+**/tsconfig*.json
+
+# Markdown files formatted intentionally — prettier's wrapping fights with tables
+# and codeblocks. Revisit if we adopt a markdown linter.
+**/README.md
+CLAUDE.md
+SECURITY.md
+CONTRIBUTING.md
+troubleshoot.md
+.claude/**/*.md
