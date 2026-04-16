@@ -22,6 +22,8 @@ async def registry(tmp_path):
 
 @pytest_asyncio.fixture
 async def client(registry):
+    from hub.tests.conftest import HIVE_TEST_TOKEN
+
     app.state.registry = registry
     app.state.devcontainer_mgr = MagicMock()
     app.state.claude_relay = MagicMock()
@@ -30,7 +32,9 @@ async def client(registry):
     from hub.services.health_checker import HealthChecker
 
     app.state.health_checker = HealthChecker(registry)
-    return TestClient(app, raise_server_exceptions=False)
+    tc = TestClient(app, raise_server_exceptions=False)
+    tc.headers.update({"Authorization": f"Bearer {HIVE_TEST_TOKEN}"})
+    return tc
 
 
 class TestProvisionAndStartFlow:

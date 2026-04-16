@@ -35,6 +35,7 @@ class HiveClient:
         container_id: str | None = None,
         heartbeat_interval: float = 5.0,
         agent_port: int | None = None,
+        auth_token: str | None = None,
     ) -> None:
         self.hub_url = (
             hub_url or os.environ.get("HIVE_HUB_URL", "http://host.docker.internal:8420")
@@ -44,6 +45,10 @@ class HiveClient:
         )
         self.heartbeat_interval = heartbeat_interval
         self.agent_port = agent_port or int(os.environ.get("HIVE_AGENT_PORT", "9100"))
+        # Bearer token for hub auth. Every hub endpoint requires it since
+        # M3, so an agent missing HIVE_AUTH_TOKEN will heartbeat into 401s
+        # and be marked unreachable by the health checker.
+        self.auth_token = auth_token or os.environ.get("HIVE_AUTH_TOKEN") or ""
         self._status = ContainerStatus.STARTING
         self._session_info: dict[str, Any] = {}
         self._http: httpx.AsyncClient | None = None
@@ -64,7 +69,15 @@ class HiveClient:
 
     async def start(self) -> None:
         """Start the HTTP client and begin heartbeat loop."""
-        self._http = httpx.AsyncClient(timeout=10.0)
+        headers = {}
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        else:
+            logger.warning(
+                "HIVE_AUTH_TOKEN is not set; hub heartbeats will fail with 401. "
+                "Set HIVE_AUTH_TOKEN on the container to match the hub's token."
+            )
+        self._http = httpx.AsyncClient(timeout=10.0, headers=headers)
         self._status = ContainerStatus.IDLE
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         logger.info("Hive client started — hub=%s, container=%s", self.hub_url, self.container_id)

@@ -37,9 +37,8 @@ def test_commands_counter_by_relay_path() -> None:
     assert after_agent == before_agent + 1
 
 
-def test_metrics_endpoint_returns_200_when_enabled(monkeypatch) -> None:
+def test_metrics_endpoint_returns_200_when_enabled(monkeypatch, auth_headers) -> None:
     monkeypatch.setenv("HIVE_METRICS_ENABLED", "true")
-    monkeypatch.setenv("HIVE_DB_PATH", "/tmp/test-metrics-enabled.db")
     from hub.config import reset_settings_cache
 
     reset_settings_cache()
@@ -47,15 +46,14 @@ def test_metrics_endpoint_returns_200_when_enabled(monkeypatch) -> None:
     from hub.main import app
 
     with TestClient(app) as client:
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=auth_headers)
         assert resp.status_code == 200
         assert "hive_containers" in resp.text
         assert resp.headers["content-type"].startswith("text/plain")
 
 
-def test_metrics_endpoint_returns_404_when_disabled(monkeypatch) -> None:
+def test_metrics_endpoint_returns_404_when_disabled(monkeypatch, auth_headers) -> None:
     monkeypatch.setenv("HIVE_METRICS_ENABLED", "false")
-    monkeypatch.setenv("HIVE_DB_PATH", "/tmp/test-metrics-disabled.db")
     from hub.config import reset_settings_cache
 
     reset_settings_cache()
@@ -63,5 +61,14 @@ def test_metrics_endpoint_returns_404_when_disabled(monkeypatch) -> None:
     from hub.main import app
 
     with TestClient(app) as client:
-        resp = client.get("/metrics")
+        resp = client.get("/metrics", headers=auth_headers)
         assert resp.status_code == 404
+
+
+def test_metrics_endpoint_requires_auth() -> None:
+    """/metrics is protected — unauthenticated access returns 401."""
+    from hub.main import app
+
+    with TestClient(app) as client:
+        resp = client.get("/metrics")
+        assert resp.status_code == 401

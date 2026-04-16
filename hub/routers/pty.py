@@ -26,6 +26,8 @@ from typing import Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 
+from hub.auth import authenticate_websocket
+
 logger = logging.getLogger("hub.routers.pty")
 
 router = APIRouter(tags=["pty"])
@@ -52,6 +54,10 @@ async def pty_ws(
                    record_id attaches to the same PTY (reattach). New
                    labels spawn new PTYs.
     """
+    token = getattr(websocket.app.state, "auth_token", "")
+    if not await authenticate_websocket(websocket, token):
+        return
+
     registry = websocket.app.state.registry
     pty_registry = websocket.app.state.pty_registry
 

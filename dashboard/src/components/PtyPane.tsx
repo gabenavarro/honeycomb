@@ -23,6 +23,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { getAuthToken } from "../lib/auth";
 
 type PtyStatus = "connecting" | "connected" | "reattached" | "disconnected" | "closed";
 
@@ -85,7 +86,9 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
 
   const label = labelFor(recordId, sessionKey);
 
-  // Build the WS URL from current viewport size + label.
+  // Build the WS URL from current viewport size + label. The bearer
+  // token is read at call time (not closed over) so a freshly-pasted
+  // token applies to the next reconnect without reloading the page.
   const buildUrl = useCallback(
     (cols: number, rows: number) => {
       const scheme = window.location.protocol === "https:" ? "wss" : "ws";
@@ -95,6 +98,8 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
         cmd: command,
         label,
       });
+      const token = getAuthToken();
+      if (token) params.set("token", token);
       return `${scheme}://${window.location.host}/ws/pty/${recordId}?${params.toString()}`;
     },
     [recordId, command, label],
