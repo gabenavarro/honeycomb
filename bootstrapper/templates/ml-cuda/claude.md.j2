@@ -1,0 +1,58 @@
+# {{ project_name }}
+
+{{ project_description }}
+
+## Project Structure
+
+- `models/` or `{{ project_slug }}/models/` — model architectures (nn.Module / LightningModule).
+- `data/` — data loading, preprocessing, augmentation pipelines.
+- `configs/` — training configs (YAML/JSON). Hydra or simple dataclass configs.
+- `scripts/` — training, evaluation, inference entry points.
+- `notebooks/` — exploration and analysis notebooks.
+- `tests/` — unit and integration tests.
+
+## ML Conventions
+
+- **Framework**: PyTorch + PyTorch Lightning for training loops.
+- **Models**: Subclass `LightningModule`. Keep forward/training_step/configure_optimizers clean.
+- **Data**: Use `LightningDataModule`. Separate transforms from data loading.
+- **Experiment tracking**: W&B (`wandb`) or TensorBoard. Log all hyperparameters.
+- **Checkpointing**: Save to `checkpoints/` with descriptive names. Use Lightning's `ModelCheckpoint` callback.
+- **Reproducibility**: Set seeds (`lightning.seed_everything`). Pin dependency versions.
+
+## HuggingFace Conventions
+
+- Use `transformers.AutoModel` / `AutoTokenizer` for model loading.
+- Use `datasets` library for data loading where applicable.
+- Use `accelerate` for distributed training setup.
+- Use `peft` for parameter-efficient fine-tuning (LoRA, QLoRA).
+- Cache HF models to `/root/.cache/huggingface` (persistent volume).
+
+## CUDA / GPU
+
+- **GPU**: NVIDIA RTX 6000 Pro (Blackwell architecture), CUDA 13.2.
+- Set `TORCH_CUDA_ARCH_LIST=Blackwell` for optimized compilation.
+- Use `--shm-size=16g` for DataLoader workers (configured in devcontainer).
+- Monitor GPU memory: `torch.cuda.memory_summary()` or `nvidia-smi`.
+- Use mixed precision (`torch.amp` or Lightning's `precision="16-mixed"`) by default.
+- For large models: consider gradient checkpointing, FSDP, or DeepSpeed.
+
+## Coding Conventions
+
+- Python 3.12+. Type hints on all function signatures.
+- Use `uv` for dependency management when available, otherwise `pip`.
+- Format with `ruff`. Lint with `ruff check`.
+- Docstrings on public functions and classes (Google style).
+
+## Testing
+
+- Use `pytest` for all tests.
+- Test model forward passes with small dummy inputs.
+- Test data pipelines independently from models.
+- Run tests before committing: `pytest -v`.
+
+## Git Workflow
+
+- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`.
+- Do NOT commit model weights, large data files, or wandb artifacts.
+- Use `.gitignore` for `checkpoints/`, `wandb/`, `*.pt`, `*.safetensors`, `data/raw/`.

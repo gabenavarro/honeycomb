@@ -1,0 +1,31 @@
+{
+    "project_type": "web-dev",
+    "description": "Skills for full-stack web development",
+    "extends": "base",
+    "skills": {
+        "methodology": {
+            "description": "Development methodology skills",
+            "items": [
+                "hive-orchestration",
+                "project-bootstrap",
+                "cross-repo-gitops",
+                "container-health",
+                "web-dev-workflow"
+            ]
+        }
+    },
+    "mcp_servers": {
+        "playwright": {
+            "command": "npx",
+            "args": ["-y", "@playwright/mcp"]
+        },
+        "context7": {
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp"]
+        },
+        "deepwiki": {
+            "command": "npx",
+            "args": ["-y", "deepwiki-mcp"]
+        }
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "project_type": "base",
+    "description": "Minimal skill set for general-purpose development",
+    "skills": {
+        "methodology": {
+            "description": "Development methodology skills (modeled on superpowers patterns)",
+            "items": [
+                "hive-orchestration",
+                "project-bootstrap",
+                "cross-repo-gitops",
+                "container-health"
+            ]
+        }
+    },
+    "mcp_servers": {
+        "context7": {
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp"]
+        },
+        "deepwiki": {
+            "command": "npx",
+            "args": ["-y", "deepwiki-mcp"]
+        }
+    }
+}
