@@ -77,15 +77,24 @@ class TestOutputEndpoint:
         exec_resp = app.post("/exec", json={"command": "echo hello"})
         cmd_id = exec_resp.json()["command_id"]
 
-        # Give the process a moment to complete
+        # Poll for output with a bounded timeout instead of a fixed sleep.
+        # Slow CI runners sometimes haven't produced output within 0.5s,
+        # which made this test flaky. 5s is generous for `echo hello`.
         import time
 
-        time.sleep(0.5)
+        deadline = time.monotonic() + 5.0
+        data: dict = {}
+        while time.monotonic() < deadline:
+            resp = app.get(f"/output/{cmd_id}")
+            assert resp.status_code == 200
+            data = resp.json()
+            if any("hello" in line for line in data.get("output", [])):
+                return
+            time.sleep(0.05)
 
-        resp = app.get(f"/output/{cmd_id}")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert any("hello" in line for line in data["output"])
+        raise AssertionError(
+            f"Timed out waiting for 'hello' in /output/{cmd_id}; last payload={data!r}"
+        )
 
 
 class TestKillEndpoint:
