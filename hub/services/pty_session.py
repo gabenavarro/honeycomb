@@ -225,6 +225,17 @@ class PtyRegistry:
         self._sessions: dict[tuple[int, str], PtySession] = {}
         self._lock = asyncio.Lock()
 
+    def _update_gauge(self) -> None:
+        """Snapshot len(sessions) into the Prometheus gauge.
+
+        Imported lazily so the pty_session module stays importable in
+        tests that don't want the metrics side effect on the process-
+        global registry.
+        """
+        from hub.services import metrics
+
+        metrics.pty_sessions.set(len(self._sessions))
+
     async def get_or_create(
         self,
         *,
@@ -277,6 +288,7 @@ class PtyRegistry:
             )
             session._reader_task = asyncio.create_task(_reader_loop(session))
             self._sessions[key] = session
+            self._update_gauge()
             logger.info(
                 "PTY session %s started (exec=%s cmd=%s)",
                 key,
@@ -292,6 +304,7 @@ class PtyRegistry:
         """Remove a session from the registry and close it."""
         async with self._lock:
             self._sessions.pop(session.key, None)
+            self._update_gauge()
         await session.close()
 
     async def drop_by_container(self, container_id: str) -> int:
@@ -303,6 +316,7 @@ class PtyRegistry:
                 if s.container_id == container_id:
                     victims.append(s)
                     del self._sessions[key]
+            self._update_gauge()
         for s in victims:
             await s.close()
         return len(victims)
@@ -311,6 +325,7 @@ class PtyRegistry:
         async with self._lock:
             sessions = list(self._sessions.values())
             self._sessions.clear()
+            self._update_gauge()
         for s in sessions:
             await s.close()
 
