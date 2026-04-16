@@ -53,6 +53,12 @@ class CommandRunner:
         self._outputs: dict[str, deque[str]] = {}
         self._completed: dict[str, bool] = {}
         self._line_callback = line_callback
+        # Strong references to the collector tasks. asyncio.create_task only
+        # holds weak refs, so a task can be GC'd mid-flight if nothing else
+        # retains it — that dropped the output on CI runners and was the
+        # root cause of the historical "Task was destroyed but it is pending!"
+        # warning. Tasks remove themselves via add_done_callback on exit.
+        self._tasks: set[asyncio.Task[None]] = set()
 
     async def run(self, command: str, command_id: str | None = None) -> dict[str, Any]:
         """Run a command and return immediately with a command_id for output streaming."""
@@ -68,7 +74,9 @@ class CommandRunner:
         )
         self._processes[cmd_id] = process
 
-        asyncio.create_task(self._collect_output(cmd_id, process))
+        task = asyncio.create_task(self._collect_output(cmd_id, process))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
         return {"command_id": cmd_id, "pid": process.pid}
 

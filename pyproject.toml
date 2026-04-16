@@ -45,9 +45,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["N802", "N803"]       # test helpers can use any casing
 "**/__init__.py" = ["F401"]            # re-exports
-# The worker-side HTTP listener is scheduled for deletion in M4
-# (reverse-tunnel transport). Don't bother cleaning it up here.
-"hive-agent/hive_agent/command_listener.py" = ["RUF006"]
 
 [tool.ruff.format]
 quote-style = "double"
