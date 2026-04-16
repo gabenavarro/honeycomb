@@ -100,22 +100,17 @@ class ClaudeRelay:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout_b, stderr_b = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
-        except asyncio.TimeoutError:
+            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
             proc.kill()
-            raise TimeoutError(
-                f"docker exec timed out after {timeout}s in {container_id}"
-            )
+            raise TimeoutError(f"docker exec timed out after {timeout}s in {container_id}")
         rc = proc.returncode or 0
         stdout = stdout_b.decode("utf-8", errors="replace")
         stderr = stderr_b.decode("utf-8", errors="replace")
         # "exec: bash: not found" may appear on stdout (docker client side)
         # or stderr (container shell side) depending on OS / docker version.
         bash_missing = "bash" in (stderr + stdout).lower() and (
-            "not found" in (stderr + stdout).lower()
-            or "no such file" in (stderr + stdout).lower()
+            "not found" in (stderr + stdout).lower() or "no such file" in (stderr + stdout).lower()
         )
         if rc in (126, 127) and bash_missing:
             # Retry with sh.
@@ -126,14 +121,10 @@ class ClaudeRelay:
                 stderr=asyncio.subprocess.PIPE,
             )
             try:
-                stdout_b, stderr_b = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout
-                )
-            except asyncio.TimeoutError:
+                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except TimeoutError:
                 proc.kill()
-                raise TimeoutError(
-                    f"docker exec (sh) timed out after {timeout}s in {container_id}"
-                )
+                raise TimeoutError(f"docker exec (sh) timed out after {timeout}s in {container_id}")
             rc = proc.returncode or 0
             stdout = stdout_b.decode("utf-8", errors="replace")
             stderr = stderr_b.decode("utf-8", errors="replace")

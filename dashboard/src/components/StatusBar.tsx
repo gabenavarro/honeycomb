@@ -6,11 +6,7 @@ import { getHealth, listContainers } from "../lib/api";
 import { useHiveWebSocket } from "../hooks/useWebSocket";
 import { backoffRefetch } from "../hooks/useSmartPoll";
 
-export function StatusBar({
-  activeContainerName,
-}: {
-  activeContainerName: string | null;
-}) {
+export function StatusBar({ activeContainerName }: { activeContainerName: string | null }) {
   const { connected } = useHiveWebSocket();
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -24,9 +20,7 @@ export function StatusBar({
   });
 
   const running = containers.filter((c) => c.container_status === "running").length;
-  const gpuOwner = containers.find(
-    (c) => c.has_gpu && c.container_status === "running",
-  );
+  const gpuOwner = containers.find((c) => c.has_gpu && c.container_status === "running");
 
   return (
     <footer
@@ -60,7 +54,7 @@ export function StatusBar({
       </div>
       <div className="flex items-center gap-3">
         {activeContainerName && <span>{activeContainerName}</span>}
-        <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` ·  Ctrl+W</span>
+        <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` · Ctrl+W</span>
       </div>
     </footer>
   );

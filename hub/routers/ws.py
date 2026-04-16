@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -58,9 +57,7 @@ class ConnectionManager:
     async def _send_one(self, ws: WebSocket, message: str) -> bool:
         """Send to a single client with a timeout. Returns False on failure."""
         try:
-            await asyncio.wait_for(
-                ws.send_text(message), timeout=BROADCAST_CLIENT_TIMEOUT_SECONDS
-            )
+            await asyncio.wait_for(ws.send_text(message), timeout=BROADCAST_CLIENT_TIMEOUT_SECONDS)
             return True
         except Exception:
             return False
@@ -87,7 +84,7 @@ class ConnectionManager:
             *(self._send_one(ws, message) for ws in targets),
             return_exceptions=False,
         )
-        for ws, ok in zip(targets, results):
+        for ws, ok in zip(targets, results, strict=False):
             if not ok:
                 self.disconnect(ws)
 
@@ -117,11 +114,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     ws_id = await manager.connect(websocket)
 
     # Send welcome
-    await manager.send_to(websocket, WSFrame(
-        channel="system",
-        event="connected",
-        data={"ws_id": ws_id},
-    ))
+    await manager.send_to(
+        websocket,
+        WSFrame(
+            channel="system",
+            event="connected",
+            data={"ws_id": ws_id},
+        ),
+    )
 
     try:
         while True:
@@ -129,11 +129,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await manager.send_to(websocket, WSFrame(
-                    channel="system",
-                    event="error",
-                    data={"message": "Invalid JSON"},
-                ))
+                await manager.send_to(
+                    websocket,
+                    WSFrame(
+                        channel="system",
+                        event="error",
+                        data={"message": "Invalid JSON"},
+                    ),
+                )
                 continue
 
             action = msg.get("action")
@@ -141,24 +144,33 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
             if action == "subscribe":
                 manager.subscribe(websocket, channels)
-                await manager.send_to(websocket, WSFrame(
-                    channel="system",
-                    event="subscribed",
-                    data={"channels": channels},
-                ))
+                await manager.send_to(
+                    websocket,
+                    WSFrame(
+                        channel="system",
+                        event="subscribed",
+                        data={"channels": channels},
+                    ),
+                )
             elif action == "unsubscribe":
                 manager.unsubscribe(websocket, channels)
-                await manager.send_to(websocket, WSFrame(
-                    channel="system",
-                    event="unsubscribed",
-                    data={"channels": channels},
-                ))
+                await manager.send_to(
+                    websocket,
+                    WSFrame(
+                        channel="system",
+                        event="unsubscribed",
+                        data={"channels": channels},
+                    ),
+                )
             else:
-                await manager.send_to(websocket, WSFrame(
-                    channel="system",
-                    event="error",
-                    data={"message": f"Unknown action: {action}"},
-                ))
+                await manager.send_to(
+                    websocket,
+                    WSFrame(
+                        channel="system",
+                        event="error",
+                        data={"message": f"Unknown action: {action}"},
+                    ),
+                )
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

@@ -23,8 +23,13 @@ async def has_claude_cli(container_id: str, *, timeout: float = 5.0) -> bool:
     can appear "missing" until the container is restarted.
     """
     cmd = [
-        "docker", "exec", "-i", container_id,
-        "sh", "-lc", "command -v claude >/dev/null 2>&1",
+        "docker",
+        "exec",
+        "-i",
+        container_id,
+        "sh",
+        "-lc",
+        "command -v claude >/dev/null 2>&1",
     ]
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -38,11 +43,9 @@ async def has_claude_cli(container_id: str, *, timeout: float = 5.0) -> bool:
 
     try:
         rc = await asyncio.wait_for(proc.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
-        logger.info(
-            "tool_probe: has_claude_cli timed out after %ss for %s", timeout, container_id
-        )
+        logger.info("tool_probe: has_claude_cli timed out after %ss for %s", timeout, container_id)
         return False
 
     return rc == 0

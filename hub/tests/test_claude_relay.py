@@ -62,15 +62,11 @@ class TestExecViaDocker:
         assert args[:5] == ("docker", "exec", "-i", "cid123", "bash")
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_sh_when_bash_missing_on_stderr(
-        self, relay: ClaudeRelay
-    ) -> None:
+    async def test_falls_back_to_sh_when_bash_missing_on_stderr(self, relay: ClaudeRelay) -> None:
         """Some container shells put the bash-missing message on stderr."""
         first_proc = MagicMock()
         first_proc.returncode = 127
-        first_proc.communicate = AsyncMock(
-            return_value=(b"", b"exec: bash: not found\n")
-        )
+        first_proc.communicate = AsyncMock(return_value=(b"", b"exec: bash: not found\n"))
         second_proc = MagicMock()
         second_proc.returncode = 0
         second_proc.communicate = AsyncMock(return_value=(b"sh-output\n", b""))
@@ -89,17 +85,17 @@ class TestExecViaDocker:
         assert second_args[4] == "sh"
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_sh_when_bash_missing_on_stdout(
-        self, relay: ClaudeRelay
-    ) -> None:
+    async def test_falls_back_to_sh_when_bash_missing_on_stdout(self, relay: ClaudeRelay) -> None:
         """Docker itself sometimes reports exec failures on stdout (e.g.
         Alpine via docker 28.x). Retry must also trigger on stdout hits."""
         first_proc = MagicMock()
         first_proc.returncode = 127
-        first_proc.communicate = AsyncMock(return_value=(
-            b"OCI runtime exec failed: exec: \"bash\": executable file not found in $PATH\n",
-            b"",
-        ))
+        first_proc.communicate = AsyncMock(
+            return_value=(
+                b'OCI runtime exec failed: exec: "bash": executable file not found in $PATH\n',
+                b"",
+            )
+        )
         second_proc = MagicMock()
         second_proc.returncode = 0
         second_proc.communicate = AsyncMock(return_value=(b"alpine\n", b""))

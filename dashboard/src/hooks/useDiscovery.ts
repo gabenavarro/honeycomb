@@ -35,13 +35,9 @@ export function useDiscovery(): DiscoveryResult {
     const containers = query.data?.containers ?? [];
     const workspaces = query.data?.workspaces ?? [];
     const containerFolders = new Set(
-      containers
-        .map((c) => c.inferred_workspace_folder)
-        .filter((x): x is string => Boolean(x)),
+      containers.map((c) => c.inferred_workspace_folder).filter((x): x is string => Boolean(x)),
     );
-    const filteredWorkspaces = workspaces.filter(
-      (w) => !containerFolders.has(w.workspace_folder),
-    );
+    const filteredWorkspaces = workspaces.filter((w) => !containerFolders.has(w.workspace_folder));
     return { containers, workspaces: filteredWorkspaces };
   }, [query.data]);
 

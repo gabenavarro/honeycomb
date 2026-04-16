@@ -22,11 +22,13 @@ SESSION_GRACE_SECONDS — long enough to outlast browser tab suspension.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import docker
 import docker.errors
@@ -142,9 +144,7 @@ class PtySession:
             return
         self.cols, self.rows = cols, rows
         try:
-            await asyncio.to_thread(
-                self.api.exec_resize, self.exec_id, height=rows, width=cols
-            )
+            await asyncio.to_thread(self.api.exec_resize, self.exec_id, height=rows, width=cols)
         except docker.errors.APIError as exc:
             logger.debug("exec_resize failed for %s: %s", self.exec_id, exc)
 
@@ -186,10 +186,8 @@ class PtySession:
         for s in (self._wrapper, self.sock):
             if s is None:
                 continue
-            try:
+            with contextlib.suppress(Exception):
                 s.close()
-            except Exception:
-                pass
         self._attached = None
         logger.info("PTY session %s closed", self.key)
 
@@ -261,15 +259,11 @@ class PtyRegistry:
                 stderr=True,
                 environment=env or {},
             )["Id"]
-            hijacked = api.exec_start(
-                exec_id, socket=True, tty=True, stream=True, demux=False
-            )
+            hijacked = api.exec_start(exec_id, socket=True, tty=True, stream=True, demux=False)
             raw_sock = _unwrap_sock(hijacked)
             # Apply initial dimensions.
-            try:
+            with contextlib.suppress(docker.errors.APIError):
                 api.exec_resize(exec_id, height=rows, width=cols)
-            except docker.errors.APIError:
-                pass
 
             session = PtySession(
                 key=key,
@@ -350,7 +344,8 @@ async def _reader_loop(session: PtySession) -> None:
                 except Exception as exc:
                     logger.info(
                         "Attached client callback raised for %s: %s — detaching",
-                        session.key, exc,
+                        session.key,
+                        exc,
                     )
                     session.detach(schedule_evict=True)
     finally:

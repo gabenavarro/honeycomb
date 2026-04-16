@@ -1,25 +1,25 @@
 {
-    "hooks": {
-        "SessionStart": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Session started at '$(date -Iseconds)",
-                "description": "Log session start"
-            }
-        ],
-        "Stop": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Session stopped at '$(date -Iseconds)",
-                "description": "Log session stop"
-            }
-        ],
-        "PreCompact": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Context compaction triggered'",
-                "description": "Log context compaction"
-            }
-        ]
-    }
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Session started at '$(date -Iseconds)",
+        "description": "Log session start"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Session stopped at '$(date -Iseconds)",
+        "description": "Log session stop"
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Context compaction triggered'",
+        "description": "Log context compaction"
+      }
+    ]
+  }
 }

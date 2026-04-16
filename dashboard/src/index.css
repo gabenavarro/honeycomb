@@ -11,16 +11,8 @@ body {
   margin: 0;
   background: #1e1e1e;
   color: #cccccc;
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe WPC",
-    "Segoe UI",
-    "HelveticaNeue-Light",
-    system-ui,
-    "Ubuntu",
-    "Droid Sans",
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "HelveticaNeue-Light",
+    system-ui, "Ubuntu", "Droid Sans", sans-serif;
   font-size: 13px;
 }
 

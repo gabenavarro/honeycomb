@@ -1,18 +1,18 @@
 {
-    "hooks": {
-        "SessionStart": [
-            {
-                "type": "command",
-                "command": "echo '[hive] CompBio session started' && python3 -c 'import scanpy; print(f\"scanpy {scanpy.__version__}\")' 2>/dev/null || true",
-                "description": "Log session start with scanpy version"
-            }
-        ],
-        "Stop": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Session stopped'",
-                "description": "Log session stop"
-            }
-        ]
-    }
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "echo '[hive] CompBio session started' && python3 -c 'import scanpy; print(f\"scanpy {scanpy.__version__}\")' 2>/dev/null || true",
+        "description": "Log session start with scanpy version"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Session stopped'",
+        "description": "Log session stop"
+      }
+    ]
+  }
 }

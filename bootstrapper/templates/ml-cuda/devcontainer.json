@@ -1,43 +1,43 @@
 {
-    "name": "{{ project_name | default('ML/CUDA Workspace') }}",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "target": "dev",
-        "context": "."
-    },
-    "runArgs": ["--gpus=all", "--shm-size=16g"],
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
-    "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
-    "remoteEnv": {
-        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
-        "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
-        "HIVE_AGENT_PORT": "9100",
-        "WANDB_API_KEY": "${localEnv:WANDB_API_KEY}",
-        "HF_TOKEN": "${localEnv:HF_TOKEN}",
-        "CUDA_VISIBLE_DEVICES": "0",
-        "TORCH_CUDA_ARCH_LIST": "Blackwell"
-    },
-    "forwardPorts": [9100, 6006, 8888],
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "anthropic.claude-code",
-                "ms-python.python",
-                "ms-toolsai.jupyter",
-                "ms-python.debugpy"
-            ],
-            "settings": {
-                "terminal.integrated.defaultProfile.linux": "bash",
-                "python.defaultInterpreterPath": "/usr/bin/python3"
-            }
-        }
-    },
-    "postCreateCommand": "nvidia-smi && python -c 'import torch; print(f\"PyTorch {torch.__version__}, CUDA {torch.version.cuda}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}\")'",
-    "mounts": [
-        "source=claude-auth,target=/root/.claude,type=volume",
-        "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume",
-        "source=claude-hive-${localWorkspaceFolderBasename}-hf-cache,target=/root/.cache/huggingface,type=volume",
-        "source=claude-hive-${localWorkspaceFolderBasename}-torch-cache,target=/root/.cache/torch,type=volume",
-        "source=claude-hive-${localWorkspaceFolderBasename}-wandb,target=/root/.wandb,type=volume"
-    ]
+  "name": "{{ project_name | default('ML/CUDA Workspace') }}",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "target": "dev",
+    "context": "."
+  },
+  "runArgs": ["--gpus=all", "--shm-size=16g"],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
+  "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+  "remoteEnv": {
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
+    "HIVE_AGENT_PORT": "9100",
+    "WANDB_API_KEY": "${localEnv:WANDB_API_KEY}",
+    "HF_TOKEN": "${localEnv:HF_TOKEN}",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "TORCH_CUDA_ARCH_LIST": "Blackwell"
+  },
+  "forwardPorts": [9100, 6006, 8888],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "ms-python.debugpy"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
+  },
+  "postCreateCommand": "nvidia-smi && python -c 'import torch; print(f\"PyTorch {torch.__version__}, CUDA {torch.version.cuda}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}\")'",
+  "mounts": [
+    "source=claude-auth,target=/root/.claude,type=volume",
+    "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume",
+    "source=claude-hive-${localWorkspaceFolderBasename}-hf-cache,target=/root/.cache/huggingface,type=volume",
+    "source=claude-hive-${localWorkspaceFolderBasename}-torch-cache,target=/root/.cache/torch,type=volume",
+    "source=claude-hive-${localWorkspaceFolderBasename}-wandb,target=/root/.wandb,type=volume"
+  ]
 }

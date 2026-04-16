@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from hub.services.discovery import (
     infer_project_type,
     scan_workspace_candidates,
@@ -96,7 +94,8 @@ class TestScanWorkspaceCandidates:
         root = tmp_path / "repos"
         root.mkdir()
         self._write_devcontainer(
-            root, "boring-folder-name",
+            root,
+            "boring-folder-name",
             content=json.dumps({"name": "My Nice Project"}),
         )
         cands = scan_workspace_candidates(set(), roots=[root])

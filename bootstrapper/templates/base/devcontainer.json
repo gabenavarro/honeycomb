@@ -1,31 +1,29 @@
 {
-    "name": "{{ project_name | default('Claude Hive Workspace') }}",
-    "build": {
-        "dockerfile": "Dockerfile",
-        "target": "dev",
-        "context": "."
-    },
-    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
-    "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
-    "remoteEnv": {
-        "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
-        "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
-        "HIVE_AGENT_PORT": "9100"
-    },
-    "forwardPorts": [9100],
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "anthropic.claude-code"
-            ],
-            "settings": {
-                "terminal.integrated.defaultProfile.linux": "bash"
-            }
-        }
-    },
-    "postCreateCommand": "echo 'Claude Hive devcontainer ready.'",
-    "mounts": [
-        "source=claude-auth,target=/root/.claude,type=volume",
-        "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume"
-    ]
+  "name": "{{ project_name | default('Claude Hive Workspace') }}",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "target": "dev",
+    "context": "."
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind",
+  "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+  "remoteEnv": {
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
+    "HIVE_AGENT_PORT": "9100"
+  },
+  "forwardPorts": [9100],
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code"],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "echo 'Claude Hive devcontainer ready.'",
+  "mounts": [
+    "source=claude-auth,target=/root/.claude,type=volume",
+    "source=claude-hive-${localWorkspaceFolderBasename}-uv-cache,target=/root/.cache/uv,type=volume"
+  ]
 }

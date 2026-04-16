@@ -1,9 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  purgeContainerSessions,
-  useSession,
-} from "../useSessionStore";
+import { purgeContainerSessions, useSession } from "../useSessionStore";
 
 describe("useSession", () => {
   beforeEach(() => {
@@ -60,9 +57,7 @@ describe("useSession", () => {
 
     // Second instance — simulates reopening the container.
     const second = renderHook(() => useSession(42, "shell"));
-    expect(second.result.current.state.lines.map((l) => l.text)).toEqual([
-      "persistent",
-    ]);
+    expect(second.result.current.state.lines.map((l) => l.text)).toEqual(["persistent"]);
     expect(second.result.current.state.draft).toBe("half-typed");
   });
 

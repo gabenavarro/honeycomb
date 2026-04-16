@@ -63,9 +63,7 @@ export default function App() {
       ? (v as Activity)
       : "containers";
   });
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() =>
-    readBool(LS_SIDEBAR_OPEN, true),
-  );
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => readBool(LS_SIDEBAR_OPEN, true));
   const [secondaryOpen, setSecondaryOpen] = useState<boolean>(() =>
     readBool(LS_SECONDARY_OPEN, true),
   );
@@ -131,36 +129,28 @@ export default function App() {
         .filter((c): c is ContainerRecord => Boolean(c)),
     [openTabs, containers],
   );
-  const active: ContainerRecord | undefined = containers.find(
-    (c) => c.id === activeTabId,
-  );
+  const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
 
-  const openContainer = useCallback(
-    (id: number) => {
-      setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
-      setActiveTabId(id);
-    },
-    [],
-  );
+  const openContainer = useCallback((id: number) => {
+    setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setActiveTabId(id);
+  }, []);
 
-  const closeTab = useCallback(
-    (id: number) => {
-      setOpenTabs((prev) => {
-        const next = prev.filter((x) => x !== id);
-        // When closing the active tab, hop to the neighbor on the right,
-        // then the left — same semantics as VSCode.
-        setActiveTabId((current) => {
-          if (current !== id) return current;
-          const wasIdx = prev.indexOf(id);
-          if (wasIdx === -1) return current;
-          if (next.length === 0) return null;
-          return next[Math.min(wasIdx, next.length - 1)];
-        });
-        return next;
+  const closeTab = useCallback((id: number) => {
+    setOpenTabs((prev) => {
+      const next = prev.filter((x) => x !== id);
+      // When closing the active tab, hop to the neighbor on the right,
+      // then the left — same semantics as VSCode.
+      setActiveTabId((current) => {
+        if (current !== id) return current;
+        const wasIdx = prev.indexOf(id);
+        if (wasIdx === -1) return current;
+        if (next.length === 0) return null;
+        return next[Math.min(wasIdx, next.length - 1)];
       });
-    },
-    [],
-  );
+      return next;
+    });
+  }, []);
 
   const newClaudeSession = useCallback((id: number) => {
     // Open the container and remember that Claude is the intended kind —
@@ -193,8 +183,7 @@ export default function App() {
 
   const selectedUnhealthy =
     active !== undefined &&
-    (active.container_status !== "running" ||
-      active.agent_status === "unreachable");
+    (active.container_status !== "running" || active.agent_status === "unreachable");
   const firstHealthy = useMemo(
     () =>
       openContainers.find(
@@ -205,7 +194,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1">
         <ActivityBar
           active={activity}
           onChange={(a) => {
@@ -223,7 +212,7 @@ export default function App() {
             className="flex w-72 shrink-0 flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
           >
             <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
-              <h2 className="text-[10px] font-semibold uppercase tracking-wider text-[#858585]">
+              <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
                 {activity === "containers"
                   ? "Containers"
                   : activity === "gitops"
@@ -242,10 +231,7 @@ export default function App() {
             </header>
             <div className="flex-1 overflow-y-auto">
               {activity === "containers" && (
-                <ContainerList
-                  selectedId={activeTabId}
-                  onSelect={openContainer}
-                />
+                <ContainerList selectedId={activeTabId} onSelect={openContainer} />
               )}
               {activity === "gitops" && <GitOpsPanel />}
               {activity === "settings" && <SettingsPane />}
@@ -254,7 +240,7 @@ export default function App() {
         )}
 
         {/* Editor area: tabs + active pane */}
-        <main className="flex flex-1 min-w-0 flex-col bg-[#1e1e1e]">
+        <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
           <ContainerTabs
             openContainers={openContainers}
             activeId={activeTabId}
@@ -262,7 +248,7 @@ export default function App() {
             onClose={closeTab}
           />
           {active ? (
-            <div className="flex flex-1 min-h-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col">
               {selectedUnhealthy && (
                 <div
                   role="alert"
@@ -287,7 +273,7 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div className="flex flex-1 min-h-0 min-w-0 p-2">
+              <div className="flex min-h-0 min-w-0 flex-1 p-2">
                 <TerminalPane
                   key={active.id}
                   containerId={active.id}
@@ -309,7 +295,7 @@ export default function App() {
             aria-label="Secondary panel"
             className="w-64 shrink-0 overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
           >
-            <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#858585]">
+            <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
               Resources
             </h2>
             <ResourceMonitor containerId={active.id} />
@@ -319,9 +305,7 @@ export default function App() {
 
       <StatusBar activeContainerName={active?.project_name ?? null} />
 
-      {showProvisioner && (
-        <Provisioner onClose={() => setShowProvisioner(false)} />
-      )}
+      {showProvisioner && <Provisioner onClose={() => setShowProvisioner(false)} />}
 
       <CommandPalette
         open={paletteOpen}
@@ -359,10 +343,9 @@ function EmptyEditor({
           : "No containers registered yet."}
       </p>
       <p className="text-[11px] text-[#606060]">
-        Press <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+K</kbd>{" "}
-        for the command palette ·{" "}
-        <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+B</kbd> to
-        toggle the sidebar.
+        Press <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+K</kbd> for the
+        command palette · <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+B</kbd>{" "}
+        to toggle the sidebar.
       </p>
       <button
         type="button"
@@ -380,8 +363,8 @@ function SettingsPane() {
     <div className="p-4 text-xs text-[#858585]">
       <p>Settings view — coming soon.</p>
       <p className="mt-2 text-[11px]">
-        For now, use <code className="text-[#c0c0c0]">HIVE_*</code> env vars and
-        edit <code className="text-[#c0c0c0]">settings.json</code> directly.
+        For now, use <code className="text-[#c0c0c0]">HIVE_*</code> env vars and edit{" "}
+        <code className="text-[#c0c0c0]">settings.json</code> directly.
       </p>
     </div>
   );

@@ -1,23 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Plus,
-  Loader2,
-  Search,
-  Edit3,
-  Folder,
-  Box,
-  Zap,
-  RefreshCw,
-  Check,
-} from "lucide-react";
+import { Plus, Loader2, Search, Edit3, Folder, Box, Zap, RefreshCw, Check } from "lucide-react";
 import { createContainer, registerDiscovered } from "../lib/api";
-import type {
-  ContainerCandidate,
-  ProjectType,
-  WorkspaceCandidate,
-  WSFrame,
-} from "../lib/types";
+import type { ContainerCandidate, ProjectType, WorkspaceCandidate, WSFrame } from "../lib/types";
 import { useHiveWebSocket } from "../hooks/useWebSocket";
 import { useDiscovery } from "../hooks/useDiscovery";
 import { useToasts } from "../hooks/useToasts";
@@ -95,11 +80,7 @@ export function Provisioner({ onClose }: Props) {
             }}
           />
         ) : (
-          <ManualTab
-            onClose={onClose}
-            prefill={prefill}
-            onClearPrefill={() => setPrefill(null)}
-          />
+          <ManualTab onClose={onClose} prefill={prefill} onClearPrefill={() => setPrefill(null)} />
         )}
       </div>
     </div>
@@ -175,9 +156,7 @@ function DiscoverTab({
     <div className="p-5">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-gray-200">
-            Discover DevContainers
-          </h2>
+          <h2 className="text-base font-semibold text-gray-200">Discover DevContainers</h2>
           <p className="mt-0.5 text-[11px] text-gray-500">
             Scanning{" "}
             <span className="font-mono text-gray-400">
@@ -200,9 +179,7 @@ function DiscoverTab({
       {isLoading && <p className="py-6 text-center text-xs text-gray-500">Scanning…</p>}
 
       {!isLoading && error && (
-        <p className="py-6 text-center text-xs text-red-400">
-          Discovery failed: {error.message}
-        </p>
+        <p className="py-6 text-center text-xs text-red-400">Discovery failed: {error.message}</p>
       )}
 
       {!isLoading && !error && totalCandidates === 0 && (
@@ -214,7 +191,7 @@ function DiscoverTab({
 
       {containers.length > 0 && (
         <section className="mb-4">
-          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
             Running containers ({containers.length})
           </h3>
           <ul className="divide-y divide-gray-800/50 rounded border border-gray-800">
@@ -242,7 +219,7 @@ function DiscoverTab({
 
       {workspaces.length > 0 && (
         <section>
-          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
             Workspaces ready to register ({workspaces.length})
           </h3>
           <ul className="divide-y divide-gray-800/50 rounded border border-gray-800">
@@ -305,7 +282,10 @@ function ContainerCandidateRow({
           <span className="font-mono">{candidate.container_id}</span> ·{" "}
           <span>{candidate.image || "(no tag)"}</span>
           {candidate.inferred_workspace_folder && (
-            <> · <span className="font-mono">{candidate.inferred_workspace_folder}</span></>
+            <>
+              {" "}
+              · <span className="font-mono">{candidate.inferred_workspace_folder}</span>
+            </>
           )}
         </div>
       </div>
@@ -337,9 +317,7 @@ function WorkspaceCandidateRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Folder size={12} className="shrink-0 text-amber-400" />
-          <span className="truncate font-medium text-gray-200">
-            {candidate.project_name}
-          </span>
+          <span className="truncate font-medium text-gray-200">{candidate.project_name}</span>
           <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-400">
             {candidate.inferred_project_type}
           </span>
@@ -379,13 +357,7 @@ function WorkspaceCandidateRow({
   );
 }
 
-function EmptyDiscover({
-  hasRoots,
-  onManual,
-}: {
-  hasRoots: boolean;
-  onManual: () => void;
-}) {
+function EmptyDiscover({ hasRoots, onManual }: { hasRoots: boolean; onManual: () => void }) {
   return (
     <div className="rounded border border-gray-800 bg-gray-950/50 p-6 text-center">
       <p className="text-sm text-gray-400">
@@ -424,9 +396,7 @@ function ManualTab({
   const [name, setName] = useState(prefill?.project_name ?? "");
   const [workspace, setWorkspace] = useState(prefill?.workspace_folder ?? "");
   const [description, setDescription] = useState("");
-  const [projectType, setProjectType] = useState<ProjectType>(
-    prefill?.project_type ?? "base",
-  );
+  const [projectType, setProjectType] = useState<ProjectType>(prefill?.project_type ?? "base");
   const [repoUrl, setRepoUrl] = useState("");
   const [buildLines, setBuildLines] = useState<string[]>([]);
   const [buildChannel, setBuildChannel] = useState<string | null>(null);
@@ -434,10 +404,7 @@ function ManualTab({
   // If the Discover tab prefills while this component is already mounted,
   // sync state. We key off the source_label so pressing Customize on the
   // same row twice still refreshes (e.g. user edited a field).
-  const prefillSignature = useMemo(
-    () => prefill?.source_label ?? null,
-    [prefill],
-  );
+  const prefillSignature = useMemo(() => prefill?.source_label ?? null, [prefill]);
   const lastSignature = useRef<string | null>(null);
   useEffect(() => {
     if (prefillSignature && prefillSignature !== lastSignature.current) {
@@ -496,15 +463,11 @@ function ManualTab({
   return (
     <form onSubmit={handleSubmit} className="p-5">
       {prefill && (
-        <div className="mb-3 flex items-center justify-between rounded bg-blue-500/5 border border-blue-500/30 px-3 py-1.5 text-[11px] text-blue-300">
+        <div className="mb-3 flex items-center justify-between rounded border border-blue-500/30 bg-blue-500/5 px-3 py-1.5 text-[11px] text-blue-300">
           <span className="flex items-center gap-1.5">
             <Check size={12} /> Prefilled from: {prefill.source_label}
           </span>
-          <button
-            type="button"
-            onClick={onClearPrefill}
-            className="text-blue-400 hover:underline"
-          >
+          <button type="button" onClick={onClearPrefill} className="text-blue-400 hover:underline">
             clear
           </button>
         </div>
@@ -638,12 +601,12 @@ function BuildingIndicator({ lines }: { lines: string[] }) {
   return (
     <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
       <div className="flex items-center gap-3">
-        <Loader2 size={18} className="animate-spin text-blue-400 shrink-0" />
-        <div className="flex-1 min-w-0">
+        <Loader2 size={18} className="shrink-0 animate-spin text-blue-400" />
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-blue-300">Building DevContainer</p>
-          <p className="mt-0.5 text-[11px] text-blue-400/70 truncate">{latest}</p>
+          <p className="mt-0.5 truncate text-[11px] text-blue-400/70">{latest}</p>
         </div>
-        <span className="text-[11px] text-gray-500 tabular-nums shrink-0">{timeStr}</span>
+        <span className="shrink-0 text-[11px] text-gray-500 tabular-nums">{timeStr}</span>
       </div>
       <pre
         ref={logRef}

@@ -35,7 +35,9 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--port", default=None, type=int, help="Port for the command listener (default: 9100)")
+@click.option(
+    "--port", default=None, type=int, help="Port for the command listener (default: 9100)"
+)
 @click.option("--hub-url", default=None, help="Hub URL (default: http://host.docker.internal:8420)")
 @click.option("--container-id", default=None, help="Container identifier (default: hostname)")
 @click.option("--heartbeat-interval", default=5.0, type=float, help="Heartbeat interval in seconds")

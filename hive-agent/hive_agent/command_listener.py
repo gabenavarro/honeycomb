@@ -14,8 +14,9 @@ import os
 import signal
 import uuid
 from collections import deque
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Deque
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -49,7 +50,7 @@ class CommandRunner:
 
     def __init__(self, line_callback: LineCallback | None = None) -> None:
         self._processes: dict[str, asyncio.subprocess.Process] = {}
-        self._outputs: dict[str, Deque[str]] = {}
+        self._outputs: dict[str, deque[str]] = {}
         self._completed: dict[str, bool] = {}
         self._line_callback = line_callback
 
@@ -138,7 +139,7 @@ class CommandRunner:
             proc.send_signal(signal.SIGTERM)
             try:
                 await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
             return True
         except ProcessLookupError:
@@ -172,18 +173,20 @@ def create_app(hive_client: HiveClient) -> Starlette:
                 "command_id": command_id,
                 "stream": stream,
                 "text": text,
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
             },
         )
 
     runner = CommandRunner(line_callback=_push_line)
 
     async def health(request: Request) -> JSONResponse:
-        return JSONResponse({
-            "status": "ok",
-            "container_id": hive_client.container_id,
-            "agent_status": hive_client.status.value,
-        })
+        return JSONResponse(
+            {
+                "status": "ok",
+                "container_id": hive_client.container_id,
+                "agent_status": hive_client.status.value,
+            }
+        )
 
     async def exec_command(request: Request) -> JSONResponse:
         body = await request.json()
@@ -197,11 +200,13 @@ def create_app(hive_client: HiveClient) -> Starlette:
 
     async def get_output(request: Request) -> JSONResponse:
         cmd_id = request.path_params["command_id"]
-        return JSONResponse({
-            "command_id": cmd_id,
-            "running": runner.is_running(cmd_id),
-            "output": runner.get_output(cmd_id),
-        })
+        return JSONResponse(
+            {
+                "command_id": cmd_id,
+                "running": runner.is_running(cmd_id),
+                "output": runner.get_output(cmd_id),
+            }
+        )
 
     async def stream_output(request: Request) -> StreamingResponse:
         cmd_id = request.path_params["command_id"]
@@ -221,11 +226,13 @@ def create_app(hive_client: HiveClient) -> Starlette:
 
     async def status(request: Request) -> JSONResponse:
         running_cmds = list(runner._processes.keys())
-        return JSONResponse({
-            "container_id": hive_client.container_id,
-            "status": hive_client.status.value,
-            "running_commands": running_cmds,
-        })
+        return JSONResponse(
+            {
+                "container_id": hive_client.container_id,
+                "status": hive_client.status.value,
+                "running_commands": running_cmds,
+            }
+        )
 
     routes = [
         Route("/health", health, methods=["GET"]),

@@ -43,12 +43,8 @@ async def discover_all(request: Request) -> DiscoveryResponse:
 
     # Workspace scan hits the filesystem; container scan hits Docker. They
     # don't share state, so run in parallel.
-    workspace_task = asyncio.to_thread(
-        scan_workspace_candidates, registered_folders
-    )
-    container_task = asyncio.create_task(
-        scan_container_candidates(registered_container_ids)
-    )
+    workspace_task = asyncio.to_thread(scan_workspace_candidates, registered_folders)
+    container_task = asyncio.create_task(scan_container_candidates(registered_container_ids))
     workspaces, containers = await asyncio.gather(workspace_task, container_task)
 
     return DiscoveryResponse(
@@ -77,9 +73,7 @@ async def discover_containers_endpoint(request: Request) -> list[ContainerCandid
 
 
 @router.post("/register", response_model=ContainerRecord, status_code=201)
-async def register_discovered(
-    request: Request, req: DiscoverRegisterRequest
-) -> ContainerRecord:
+async def register_discovered(request: Request, req: DiscoverRegisterRequest) -> ContainerRecord:
     """Register a discovered candidate.
 
     Two shapes:
@@ -103,12 +97,14 @@ async def register_discovered(
     if req.container_id:
         import docker
         import docker.errors
+
         try:
             client = docker.from_env()
             container = client.containers.get(req.container_id)
             resolved_container_id = container.short_id
             if not resolved_workspace:
                 from hub.services.discovery import _infer_workspace_from_container
+
                 resolved_workspace = _infer_workspace_from_container(container)
             if not resolved_workspace:
                 # Fall back to a /workspace/<name> pseudo-path so we still
@@ -173,7 +169,8 @@ async def register_discovered(
     # the containers.create flow. Defaults are off for discovered
     # registrations (see DiscoverRegisterRequest).
     if req.auto_provision:
-        from bootstrapper.provision import provision, TemplateError
+        from bootstrapper.provision import TemplateError, provision
+
         try:
             provision(
                 workspace=Path(resolved_workspace),
@@ -190,6 +187,7 @@ async def register_discovered(
 
     if req.auto_start and not resolved_container_id:
         import shutil
+
         if not shutil.which("devcontainer"):
             await registry.update(record.id, container_status=ContainerStatus.STOPPED.value)
         else:
@@ -210,7 +208,9 @@ async def register_discovered(
     # is false. Only probe if we have a live container_id.
     if record.container_id:
         from datetime import datetime as _dt
+
         from hub.services.tool_probe import has_claude_cli as _probe
+
         try:
             found = await _probe(record.container_id)
         except Exception as exc:

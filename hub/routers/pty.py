@@ -19,7 +19,7 @@ Server → Client control frames (text, "s" prefix):
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -119,10 +119,8 @@ async def pty_ws(
         await _send_ctrl(websocket, f"reattached:{since:.0f}" if since else "reattached:0")
         if scrollback:
             await _send_ctrl(websocket, f"replay:{len(scrollback)}")
-            try:
+            with contextlib.suppress(Exception):
                 await websocket.send_bytes(scrollback)
-            except Exception:
-                pass
     else:
         await _send_ctrl(websocket, "attached")
 
@@ -177,7 +175,5 @@ async def _handle_text_frame(text: str, session: Any, ws: WebSocket) -> None:
 
 async def _send_ctrl(ws: WebSocket, msg: str) -> None:
     """Send a control frame (text, "s" prefix). Benign on close races."""
-    try:
+    with contextlib.suppress(Exception):
         await ws.send_text("s" + msg)
-    except Exception:
-        pass

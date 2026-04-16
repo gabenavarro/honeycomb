@@ -40,10 +40,7 @@ export function ContainerStatusBadge({ status }: { status: ContainerStatus }) {
       role="status"
       aria-label={`Container status: ${status}`}
     >
-      <span
-        aria-hidden="true"
-        className={`h-2 w-2 rounded-full ${containerColors[status]}`}
-      />
+      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${containerColors[status]}`} />
       <span aria-hidden="true" className="text-[9px] text-gray-500">
         {containerShapes[status]}
       </span>
@@ -59,10 +56,7 @@ export function AgentStatusBadge({ status }: { status: AgentStatus }) {
       role="status"
       aria-label={`Agent status: ${status}`}
     >
-      <span
-        aria-hidden="true"
-        className={`h-2 w-2 rounded-full ${agentColors[status]}`}
-      />
+      <span aria-hidden="true" className={`h-2 w-2 rounded-full ${agentColors[status]}`} />
       <span aria-hidden="true" className="text-[9px] text-gray-500">
         {agentShapes[status]}
       </span>

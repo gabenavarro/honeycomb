@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import contextlib
 import logging
 from datetime import datetime
 from typing import Any
@@ -47,10 +47,8 @@ class ResourceMonitor:
     async def stop(self) -> None:
         if self._poll_task:
             self._poll_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._poll_task
-            except asyncio.CancelledError:
-                pass
             self._poll_task = None
 
     def _get_container_stats(self, container_id: str) -> dict[str, Any] | None:
@@ -68,14 +66,12 @@ class ResourceMonitor:
     def _parse_docker_stats(self, container_id: str, raw: dict[str, Any]) -> ResourceStats:
         """Parse raw docker stats into a ResourceStats model."""
         # CPU calculation
-        cpu_delta = (
-            raw.get("cpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)
-            - raw.get("precpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)
-        )
-        system_delta = (
-            raw.get("cpu_stats", {}).get("system_cpu_usage", 0)
-            - raw.get("precpu_stats", {}).get("system_cpu_usage", 0)
-        )
+        cpu_delta = raw.get("cpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0) - raw.get(
+            "precpu_stats", {}
+        ).get("cpu_usage", {}).get("total_usage", 0)
+        system_delta = raw.get("cpu_stats", {}).get("system_cpu_usage", 0) - raw.get(
+            "precpu_stats", {}
+        ).get("system_cpu_usage", 0)
         num_cpus = raw.get("cpu_stats", {}).get("online_cpus", 1)
         cpu_percent = (cpu_delta / system_delta * num_cpus * 100.0) if system_delta > 0 else 0.0
 
@@ -117,7 +113,7 @@ class ResourceMonitor:
                     "gpu_memory_mb": float(parts[1].strip()),
                     "gpu_memory_total_mb": float(parts[2].strip()),
                 }
-        except (FileNotFoundError, asyncio.TimeoutError):
+        except (TimeoutError, FileNotFoundError):
             pass
         return None
 

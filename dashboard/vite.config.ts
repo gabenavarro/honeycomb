@@ -7,11 +7,7 @@ import tailwindcss from "@tailwindcss/vite";
 // (page reload, HMR swap, browser tab-suspend). The handlers we attach
 // via `configure` run alongside Vite's, not before it, so the only
 // reliable way to suppress the noise is to filter at the logger level.
-const NOISY_PATTERNS = [
-  "EPIPE",
-  "ECONNRESET",
-  "ERR_STREAM_WRITE_AFTER_END",
-];
+const NOISY_PATTERNS = ["EPIPE", "ECONNRESET", "ERR_STREAM_WRITE_AFTER_END"];
 const NOISY_CONTEXT = /ws proxy (error|socket error)/i;
 
 function makeQuietLogger() {
@@ -31,9 +27,7 @@ function makeQuietLogger() {
 // Belt-and-suspenders: also attach no-op error listeners on the proxy
 // itself so unhandled `Error` events don't propagate into Node's
 // uncaughtException path (different failure mode from the log).
-function quietWsProxy(proxy: {
-  on: (event: string, cb: (...args: unknown[]) => void) => void;
-}) {
+function quietWsProxy(proxy: { on: (event: string, cb: (...args: unknown[]) => void) => void }) {
   const swallow = (...args: unknown[]) => {
     const err = args[0];
     if (err && typeof err === "object" && "code" in err) {
@@ -47,7 +41,11 @@ function quietWsProxy(proxy: {
   proxy.on("error", swallow);
   proxy.on(
     "proxyReqWs",
-    (_proxyReq: unknown, _req: unknown, socket: { on?: (ev: string, cb: (...a: unknown[]) => void) => void }) => {
+    (
+      _proxyReq: unknown,
+      _req: unknown,
+      socket: { on?: (ev: string, cb: (...a: unknown[]) => void) => void },
+    ) => {
       socket.on?.("error", swallow);
     },
   );

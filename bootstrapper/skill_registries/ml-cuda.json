@@ -1,42 +1,42 @@
 {
-    "project_type": "ml-cuda",
-    "description": "Skills for ML/DL with PyTorch, HuggingFace, Lightning on CUDA",
-    "extends": "base",
-    "skills": {
-        "methodology": {
-            "description": "Development methodology skills",
-            "items": [
-                "hive-orchestration",
-                "project-bootstrap",
-                "cross-repo-gitops",
-                "container-health",
-                "ml-cuda-workflow"
-            ]
-        },
-        "scientific": {
-            "description": "Scientific skills from K-Dense-AI/claude-scientific-skills",
-            "source": "claude-scientific-skills",
-            "items": [
-                "pytorch-lightning",
-                "transformers",
-                "scikit-learn",
-                "shap",
-                "umap-learn",
-                "scientific-visualization",
-                "matplotlib",
-                "seaborn",
-                "statistical-analysis"
-            ]
-        }
+  "project_type": "ml-cuda",
+  "description": "Skills for ML/DL with PyTorch, HuggingFace, Lightning on CUDA",
+  "extends": "base",
+  "skills": {
+    "methodology": {
+      "description": "Development methodology skills",
+      "items": [
+        "hive-orchestration",
+        "project-bootstrap",
+        "cross-repo-gitops",
+        "container-health",
+        "ml-cuda-workflow"
+      ]
     },
-    "mcp_servers": {
-        "context7": {
-            "command": "npx",
-            "args": ["-y", "@upstash/context7-mcp"]
-        },
-        "deepwiki": {
-            "command": "npx",
-            "args": ["-y", "deepwiki-mcp"]
-        }
+    "scientific": {
+      "description": "Scientific skills from K-Dense-AI/claude-scientific-skills",
+      "source": "claude-scientific-skills",
+      "items": [
+        "pytorch-lightning",
+        "transformers",
+        "scikit-learn",
+        "shap",
+        "umap-learn",
+        "scientific-visualization",
+        "matplotlib",
+        "seaborn",
+        "statistical-analysis"
+      ]
     }
+  },
+  "mcp_servers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "deepwiki": {
+      "command": "npx",
+      "args": ["-y", "deepwiki-mcp"]
+    }
+  }
 }

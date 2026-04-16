@@ -3,22 +3,22 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 # --- Container ---
 
-class ProjectType(str, Enum):
+
+class ProjectType(StrEnum):
     BASE = "base"
     ML_CUDA = "ml-cuda"
     WEB_DEV = "web-dev"
     COMPBIO = "compbio"
 
 
-class ContainerStatus(str, Enum):
+class ContainerStatus(StrEnum):
     RUNNING = "running"
     STOPPED = "stopped"
     STARTING = "starting"
@@ -26,7 +26,7 @@ class ContainerStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
-class AgentStatus(str, Enum):
+class AgentStatus(StrEnum):
     IDLE = "idle"
     BUSY = "busy"
     ERROR = "error"
@@ -35,7 +35,10 @@ class AgentStatus(str, Enum):
 
 class ContainerCreate(BaseModel):
     """Request to register and provision a new devcontainer."""
-    workspace_folder: str = Field(..., description="Absolute path to the project workspace on the host")
+
+    workspace_folder: str = Field(
+        ..., description="Absolute path to the project workspace on the host"
+    )
     project_type: ProjectType = Field(default=ProjectType.BASE)
     project_name: str = Field(..., min_length=1, max_length=200)
     project_description: str = Field(default="")
@@ -52,6 +55,7 @@ class ContainerCreate(BaseModel):
 
 class ContainerRecord(BaseModel):
     """A registered devcontainer in the hub's registry."""
+
     id: int
     workspace_folder: str
     project_type: ProjectType
@@ -75,6 +79,7 @@ class ContainerRecord(BaseModel):
 
 class ContainerUpdate(BaseModel):
     """Fields that can be updated on a container record."""
+
     project_name: str | None = None
     project_description: str | None = None
     git_repo_url: str | None = None
@@ -83,8 +88,10 @@ class ContainerUpdate(BaseModel):
 
 # --- Heartbeat ---
 
+
 class HeartbeatPayload(BaseModel):
     """Heartbeat sent from hive-agent inside a container."""
+
     container_id: str
     status: str
     agent_port: int = 9100
@@ -93,8 +100,10 @@ class HeartbeatPayload(BaseModel):
 
 # --- Events ---
 
+
 class EventPayload(BaseModel):
     """Event sent from hive-agent inside a container."""
+
     container_id: str
     event_type: str
     data: dict[str, Any] = Field(default_factory=dict)
@@ -102,14 +111,17 @@ class EventPayload(BaseModel):
 
 # --- Commands ---
 
+
 class CommandRequest(BaseModel):
     """Request to execute a command in a devcontainer."""
+
     command: str = Field(..., min_length=1)
     command_id: str | None = None
 
 
 class CommandResponse(BaseModel):
     """Response after dispatching a command."""
+
     command_id: str
     pid: int | None = None
     status: str = "dispatched"
@@ -128,6 +140,7 @@ class CommandResponse(BaseModel):
 
 class CommandOutput(BaseModel):
     """Output from a running or completed command."""
+
     command_id: str
     running: bool
     output: list[str]
@@ -135,8 +148,10 @@ class CommandOutput(BaseModel):
 
 # --- Resources ---
 
+
 class ResourceStats(BaseModel):
     """Resource usage stats for a container."""
+
     container_id: str
     cpu_percent: float = 0.0
     memory_mb: float = 0.0
@@ -150,8 +165,10 @@ class ResourceStats(BaseModel):
 
 # --- Git Ops ---
 
+
 class RepoStatus(BaseModel):
     """Status of a git repository."""
+
     workspace_folder: str
     repo_url: str | None = None
     branch: str = ""
@@ -165,6 +182,7 @@ class RepoStatus(BaseModel):
 
 class PullRequestSummary(BaseModel):
     """Summary of a pull request."""
+
     repo: str
     number: int
     title: str
@@ -178,8 +196,10 @@ class PullRequestSummary(BaseModel):
 
 # --- WebSocket ---
 
+
 class WSFrame(BaseModel):
     """A tagged WebSocket frame for multiplexed streaming."""
+
     channel: str  # container registry id or "system"
     event: str  # "output", "status", "heartbeat", "error"
     data: Any
@@ -187,8 +207,10 @@ class WSFrame(BaseModel):
 
 # --- Discovery ---
 
+
 class WorkspaceCandidate(BaseModel):
     """A workspace folder with a devcontainer config, not yet registered."""
+
     workspace_folder: str
     project_name: str
     inferred_project_type: str
@@ -199,6 +221,7 @@ class WorkspaceCandidate(BaseModel):
 
 class ContainerCandidate(BaseModel):
     """A running Docker container that could be registered with the hub."""
+
     container_id: str
     name: str
     image: str
@@ -212,6 +235,7 @@ class ContainerCandidate(BaseModel):
 
 class DiscoveryResponse(BaseModel):
     """Combined discovery payload returned by /api/discover."""
+
     workspaces: list[WorkspaceCandidate]
     containers: list[ContainerCandidate]
     discover_roots: list[str]
@@ -221,6 +245,7 @@ class DiscoverRegisterRequest(BaseModel):
     """Register a discovered candidate with minimal typing on the caller's
     side. Exactly one of `workspace_folder` or `container_id` should be
     provided; the other is derived."""
+
     workspace_folder: str | None = None
     container_id: str | None = None
     project_name: str

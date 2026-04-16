@@ -45,6 +45,7 @@ MAX_DISCOVER_DEPTH = 3
 @dataclass
 class WorkspaceCandidate:
     """A workspace folder with a devcontainer config, not yet registered."""
+
     workspace_folder: str
     project_name: str
     inferred_project_type: str  # "base" | "ml-cuda" | "web-dev" | "compbio"
@@ -56,6 +57,7 @@ class WorkspaceCandidate:
 @dataclass
 class ContainerCandidate:
     """A running Docker container that could be registered with the hub."""
+
     container_id: str  # short id
     name: str
     image: str
@@ -76,31 +78,40 @@ class ContainerCandidate:
 # in compound names like `pytorch_lightning` or `"next"` — `_` is a word
 # char so `\b` wouldn't match between `pytorch` and `_lightning`.
 _TYPE_SIGNALS: list[tuple[str, tuple[re.Pattern, ...]]] = [
-    ("ml-cuda", (
-        re.compile(
-            r"(?<![a-z])(cuda|nvidia|--gpus|pytorch|tensorflow|huggingface|torch|transformers)(?![a-z])",
-            re.I,
+    (
+        "ml-cuda",
+        (
+            re.compile(
+                r"(?<![a-z])(cuda|nvidia|--gpus|pytorch|tensorflow|huggingface|torch|transformers)(?![a-z])",
+                re.I,
+            ),
+            re.compile(r"pytorch[_\-]?lightning", re.I),
+            re.compile(r"nvcr\.io/nvidia/", re.I),
         ),
-        re.compile(r"pytorch[_\-]?lightning", re.I),
-        re.compile(r"nvcr\.io/nvidia/", re.I),
-    )),
-    ("compbio", (
-        re.compile(
-            r"(?<![a-z])(scanpy|biopython|scvi-tools|esm|pysam|bioconductor)(?![a-z])",
-            re.I,
+    ),
+    (
+        "compbio",
+        (
+            re.compile(
+                r"(?<![a-z])(scanpy|biopython|scvi-tools|esm|pysam|bioconductor)(?![a-z])",
+                re.I,
+            ),
+            re.compile(
+                r"(?<![a-z])(bcftools|samtools|seqkit|minimap2)(?![a-z])",
+                re.I,
+            ),
         ),
-        re.compile(
-            r"(?<![a-z])(bcftools|samtools|seqkit|minimap2)(?![a-z])",
-            re.I,
+    ),
+    (
+        "web-dev",
+        (
+            re.compile(
+                r"(?<![a-z])(next|nextjs|react|vite|fastapi|express|nuxt)(?![a-z])",
+                re.I,
+            ),
+            re.compile(r"\"node\":\s*\">=", re.I),
         ),
-    )),
-    ("web-dev", (
-        re.compile(
-            r"(?<![a-z])(next|nextjs|react|vite|fastapi|express|nuxt)(?![a-z])",
-            re.I,
-        ),
-        re.compile(r"\"node\":\s*\">=", re.I),
-    )),
+    ),
 ]
 
 
@@ -122,6 +133,7 @@ def infer_project_type(*text_sources: str) -> str:
 # Workspace discovery
 # ──────────────────────────────────────────────────────────────────────────
 
+
 def _discover_roots() -> list[Path]:
     """Parse HIVE_DISCOVER_ROOTS, falling back to conventional layouts.
 
@@ -129,7 +141,11 @@ def _discover_roots() -> list[Path]:
     spam warnings on hosts missing a particular convention.
     """
     raw = os.environ.get("HIVE_DISCOVER_ROOTS", "")
-    candidates = [s.strip() for s in raw.split(":") if s.strip()] if raw else list(DEFAULT_DISCOVER_ROOT_CANDIDATES)
+    candidates = (
+        [s.strip() for s in raw.split(":") if s.strip()]
+        if raw
+        else list(DEFAULT_DISCOVER_ROOT_CANDIDATES)
+    )
     roots: list[Path] = []
     for c in candidates:
         p = Path(os.path.expanduser(c)).resolve()
@@ -191,13 +207,12 @@ def scan_workspace_candidates(
                 dirnames[:] = []
                 continue
             # Prune common noise directories for speed.
+            dirnames[:] = [d for d in dirnames if not d.startswith(".") or d == ".devcontainer"]
             dirnames[:] = [
-                d for d in dirnames
-                if not d.startswith(".") or d == ".devcontainer"
-            ]
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in {"node_modules", "__pycache__", "target", "dist", "build", ".venv", "venv"}
+                d
+                for d in dirnames
+                if d
+                not in {"node_modules", "__pycache__", "target", "dist", "build", ".venv", "venv"}
             ]
 
             current = Path(dirpath)
@@ -229,14 +244,16 @@ def scan_workspace_candidates(
             )
             inferred = infer_project_type(signals)
 
-            candidates.append(WorkspaceCandidate(
-                workspace_folder=workspace,
-                project_name=_workspace_name(current),
-                inferred_project_type=inferred,
-                has_dockerfile=has_dockerfile,
-                has_claude_md=(current / "CLAUDE.md").is_file(),
-                devcontainer_path=str(devcontainer.resolve()),
-            ))
+            candidates.append(
+                WorkspaceCandidate(
+                    workspace_folder=workspace,
+                    project_name=_workspace_name(current),
+                    inferred_project_type=inferred,
+                    has_dockerfile=has_dockerfile,
+                    has_claude_md=(current / "CLAUDE.md").is_file(),
+                    devcontainer_path=str(devcontainer.resolve()),
+                )
+            )
 
     # Sort for stable output — useful for tests and for a predictable UI.
     candidates.sort(key=lambda c: c.workspace_folder)
@@ -246,6 +263,7 @@ def scan_workspace_candidates(
 # ──────────────────────────────────────────────────────────────────────────
 # Container discovery
 # ──────────────────────────────────────────────────────────────────────────
+
 
 async def _probe_hive_agent(ip: str, port: int, timeout: float = 1.5) -> bool:
     """Fast check: does hive-agent answer on this IP:port?"""
@@ -333,18 +351,21 @@ async def scan_container_candidates(
         probe_targets.append((c, ip, 9100))
 
     import asyncio as _asyncio
+
     async def _probe_one(container, ip: str | None, port: int) -> bool:
         if not ip:
             return False
         return await _probe_hive_agent(ip, port)
 
-    probe_results: list[bool] = list(await _asyncio.gather(
-        *(_probe_one(c, ip, port) for c, ip, port in probe_targets),
-        return_exceptions=False,
-    ))
+    probe_results: list[bool] = list(
+        await _asyncio.gather(
+            *(_probe_one(c, ip, port) for c, ip, port in probe_targets),
+            return_exceptions=False,
+        )
+    )
 
     candidates: list[ContainerCandidate] = []
-    for (container, _ip, _port), has_agent in zip(probe_targets, probe_results):
+    for (container, _ip, _port), has_agent in zip(probe_targets, probe_results, strict=False):
         workspace = _infer_workspace_from_container(container)
         name = _infer_container_project_name(container, workspace)
         # Image tag is usually the strongest signal for GPU images.
@@ -354,17 +375,19 @@ async def scan_container_candidates(
         except Exception:
             image = ""
         inferred = infer_project_type(image, name, (container.name or ""))
-        candidates.append(ContainerCandidate(
-            container_id=container.short_id,
-            name=container.name or container.short_id,
-            image=image,
-            status=container.status,
-            inferred_workspace_folder=workspace,
-            inferred_project_name=name,
-            inferred_project_type=inferred,
-            has_hive_agent=has_agent,
-            agent_port=9100 if has_agent else None,
-        ))
+        candidates.append(
+            ContainerCandidate(
+                container_id=container.short_id,
+                name=container.name or container.short_id,
+                image=image,
+                status=container.status,
+                inferred_workspace_folder=workspace,
+                inferred_project_name=name,
+                inferred_project_type=inferred,
+                has_hive_agent=has_agent,
+                agent_port=9100 if has_agent else None,
+            )
+        )
 
     candidates.sort(key=lambda c: c.name)
     return candidates
@@ -373,6 +396,7 @@ async def scan_container_candidates(
 # ──────────────────────────────────────────────────────────────────────────
 # Convenience for the startup auto-register path
 # ──────────────────────────────────────────────────────────────────────────
+
 
 async def registered_filter_sets(registry: Registry) -> tuple[set[str], set[str]]:
     """Return (registered_workspace_folders, registered_container_ids) for

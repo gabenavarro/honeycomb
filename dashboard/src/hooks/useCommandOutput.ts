@@ -21,10 +21,7 @@ type Handler = (frame: CommandOutputFrame) => void;
  * Subscribes on mount, unsubscribes on command completion or unmount.
  * `commandId` may be null — when it flips to a string, subscription begins.
  */
-export function useCommandOutput(
-  commandId: string | null,
-  handler: Handler,
-): void {
+export function useCommandOutput(commandId: string | null, handler: Handler): void {
   const { subscribe, unsubscribe, onChannel } = useHiveWebSocket();
   // Keep latest handler in a ref so the subscription effect doesn't re-run
   // every render; handler is invoked via the ref.

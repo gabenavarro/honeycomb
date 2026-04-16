@@ -78,87 +78,98 @@ export function ContainerList({ selectedId, onSelect }: Props) {
           <span>No containers registered.</span>
           <RefreshButton onClick={refresh} spinning={isFetching} />
         </div>
-        <p className="mt-2 text-xs text-gray-600">
-          Use the provisioning wizard to create one.
-        </p>
+        <p className="mt-2 text-xs text-gray-600">Use the provisioning wizard to create one.</p>
       </div>
     );
   }
 
   return (
-    <div onKeyDown={onKeyDown} tabIndex={0} role="listbox" aria-label="Containers" className="outline-none">
+    <div
+      onKeyDown={onKeyDown}
+      tabIndex={0}
+      role="listbox"
+      aria-label="Containers"
+      className="outline-none"
+    >
       <div className="flex items-center justify-between border-b border-gray-800 px-3 py-1.5 text-[10px] text-gray-600">
-        <span>{containers.length} container{containers.length === 1 ? "" : "s"} · {lastUpdated}</span>
+        <span>
+          {containers.length} container{containers.length === 1 ? "" : "s"} · {lastUpdated}
+        </span>
         <RefreshButton onClick={refresh} spinning={isFetching} />
       </div>
-    <ul className="divide-y divide-gray-800">
-      {containers.map((c: ContainerRecord, idx: number) => (
-        <li
-          key={c.id}
-          role="option"
-          aria-selected={selectedId === c.id}
-          tabIndex={-1}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              onSelect(c.id);
-            }
-          }}
-          className={`cursor-pointer px-3 py-2.5 transition-colors hover:bg-gray-800/50 ${
-            selectedId === c.id ? "bg-gray-800 border-l-2 border-blue-500" : ""
-          }`}
-          onClick={() => onSelect(c.id)}
-          data-idx={idx}
-        >
-          <div className="flex items-center justify-between">
-            <span className="truncate text-sm font-medium text-gray-200">
-              {c.project_name}
-            </span>
-            <div className="flex items-center gap-1">
-              {c.has_gpu && <GpuBadge />}
-              <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">
-                {typeLabels[c.project_type] ?? c.project_type}
-              </span>
+      <ul className="divide-y divide-gray-800">
+        {containers.map((c: ContainerRecord, idx: number) => (
+          <li
+            key={c.id}
+            role="option"
+            aria-selected={selectedId === c.id}
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect(c.id);
+              }
+            }}
+            className={`cursor-pointer px-3 py-2.5 transition-colors hover:bg-gray-800/50 ${
+              selectedId === c.id ? "border-l-2 border-blue-500 bg-gray-800" : ""
+            }`}
+            onClick={() => onSelect(c.id)}
+            data-idx={idx}
+          >
+            <div className="flex items-center justify-between">
+              <span className="truncate text-sm font-medium text-gray-200">{c.project_name}</span>
+              <div className="flex items-center gap-1">
+                {c.has_gpu && <GpuBadge />}
+                <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">
+                  {typeLabels[c.project_type] ?? c.project_type}
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <div className="flex gap-3">
-              <ContainerStatusBadge status={c.container_status} />
-              <AgentStatusBadge status={c.agent_status} />
-            </div>
-            <div className="flex gap-1">
-              {c.container_status === "stopped" ? (
+            <div className="mt-1 flex items-center justify-between">
+              <div className="flex gap-3">
+                <ContainerStatusBadge status={c.container_status} />
+                <AgentStatusBadge status={c.agent_status} />
+              </div>
+              <div className="flex gap-1">
+                {c.container_status === "stopped" ? (
+                  <button
+                    className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-green-400"
+                    title="Start"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startMut.mutate(c.id);
+                    }}
+                  >
+                    <Play size={12} />
+                  </button>
+                ) : c.container_status === "running" ? (
+                  <button
+                    className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-yellow-400"
+                    title="Stop"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      stopMut.mutate(c.id);
+                    }}
+                  >
+                    <Square size={12} />
+                  </button>
+                ) : null}
                 <button
-                  className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-green-400"
-                  title="Start"
-                  onClick={(e) => { e.stopPropagation(); startMut.mutate(c.id); }}
+                  className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-red-400"
+                  title="Remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteMut.mutate(c.id);
+                  }}
                 >
-                  <Play size={12} />
+                  <Trash2 size={12} />
                 </button>
-              ) : c.container_status === "running" ? (
-                <button
-                  className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-yellow-400"
-                  title="Stop"
-                  onClick={(e) => { e.stopPropagation(); stopMut.mutate(c.id); }}
-                >
-                  <Square size={12} />
-                </button>
-              ) : null}
-              <button
-                className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-red-400"
-                title="Remove"
-                onClick={(e) => { e.stopPropagation(); deleteMut.mutate(c.id); }}
-              >
-                <Trash2 size={12} />
-              </button>
+              </div>
             </div>
-          </div>
-          <p className="mt-1 truncate text-[11px] text-gray-600">
-            {c.workspace_folder}
-          </p>
-        </li>
-      ))}
-    </ul>
+            <p className="mt-1 truncate text-[11px] text-gray-600">{c.workspace_folder}</p>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

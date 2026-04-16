@@ -70,13 +70,7 @@ const THEME: ITheme = {
 
 const SCROLLBACK = 10_000;
 
-export function XTermOutput({
-  lines,
-  kind,
-  streaming,
-  waitingLabel,
-  fontSize = 12,
-}: Props) {
+export function XTermOutput({ lines, kind, streaming, waitingLabel, fontSize = 12 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -210,9 +204,7 @@ export function XTermOutput({
         i += 1;
         // \r + \x1b[2K erases the line, then we write the spinner row.
         // The next appendLines call will replace this line (see above).
-        termRef.current.write(
-          `${eraseLineAndReturn()}${yellow(frame)} ${gray(label)}`,
-        );
+        termRef.current.write(`${eraseLineAndReturn()}${yellow(frame)} ${gray(label)}`);
         spinnerActiveRef.current = true;
       };
 
@@ -237,12 +229,8 @@ export function XTermOutput({
     if (!term || lines.length > 0) return;
     const hint =
       kind === "claude"
-        ? gray(
-            "Claude session. Type a prompt below — ↑ for history, Tab for autocomplete.",
-          )
-        : gray(
-            "Shell session. Commands run via docker / devcontainer / hive-agent.",
-          );
+        ? gray("Claude session. Type a prompt below — ↑ for history, Tab for autocomplete.")
+        : gray("Shell session. Commands run via docker / devcontainer / hive-agent.");
     term.write(hint + CRLF);
   }, [kind, lines.length]);
 

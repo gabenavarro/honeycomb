@@ -70,9 +70,7 @@ function load(containerId: number, kind: SessionKind): SessionState {
       draft: parsed.draft ?? "",
       activeCommandId: parsed.activeCommandId ?? null,
       lastActive: parsed.lastActive ?? new Date().toISOString(),
-      history: Array.isArray(parsed.history)
-        ? parsed.history.slice(0, HISTORY_MAX)
-        : [],
+      history: Array.isArray(parsed.history) ? parsed.history.slice(0, HISTORY_MAX) : [],
     };
   } catch {
     return emptySession(containerId, kind);
@@ -86,10 +84,7 @@ function save(state: SessionState): void {
       lines: state.lines.slice(-MAX_LINES_PER_SESSION),
       history: state.history.slice(0, HISTORY_MAX),
     };
-    localStorage.setItem(
-      storageKey(state.containerId, state.kind),
-      JSON.stringify(trimmed),
-    );
+    localStorage.setItem(storageKey(state.containerId, state.kind), JSON.stringify(trimmed));
   } catch {
     // Storage quota exhausted or private mode — sessions remain in memory.
   }
@@ -105,10 +100,7 @@ export interface SessionHandle {
   copyTranscript: () => Promise<boolean>;
 }
 
-export function useSession(
-  containerId: number,
-  kind: SessionKind,
-): SessionHandle {
+export function useSession(containerId: number, kind: SessionKind): SessionHandle {
   const [state, setState] = useState<SessionState>(() => load(containerId, kind));
 
   useEffect(() => {
@@ -172,12 +164,7 @@ export function useSession(
   const copyTranscript = useCallback(async (): Promise<boolean> => {
     const text = state.lines
       .map((l) => {
-        const prefix =
-          l.type === "input"
-            ? kind === "claude"
-              ? "claude> "
-              : "$ "
-            : "";
+        const prefix = l.type === "input" ? (kind === "claude" ? "claude> " : "$ ") : "";
         return `${prefix}${l.text}`;
       })
       .join("\n");
