@@ -304,3 +304,7 @@ $RECYCLE.BIN/
 # Troubleshoot scratchpad — if it contains incident-specific tokens/paths, keep local
 # (Comment out the next line if you want to check troubleshoot.md into git.)
 # troubleshoot.md
+
+# Personal counterpart to the public SECURITY.md — holds specific contact
+# details and rotation checklists that should never leave the workstation.
+SECURITY.local.md
