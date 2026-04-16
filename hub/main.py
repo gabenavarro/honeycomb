@@ -10,18 +10,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 from fastapi import Request as FARequest
+from fastapi.middleware.cors import CORSMiddleware
 
 from hub.models.schemas import EventPayload, HeartbeatPayload, WSFrame
 from hub.routers import commands, containers, discover, gitops, pty, ws
+from hub.services.autodiscovery import discover_containers
 from hub.services.claude_relay import ClaudeRelay
 from hub.services.devcontainer_manager import DevContainerManager
-from hub.services.registry import Registry
-from hub.services.autodiscovery import discover_containers
 from hub.services.health_checker import HealthChecker
 from hub.services.pty_session import PtyRegistry
+from hub.services.registry import Registry
 from hub.services.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger("hub")
@@ -98,6 +97,7 @@ app.include_router(ws.router)
 
 # --- Heartbeat & Event endpoints (called by hive-agent in containers) ---
 
+
 @app.post("/api/heartbeat")
 async def receive_heartbeat(request: FARequest, payload: HeartbeatPayload) -> dict:
     """Receive a heartbeat from a hive-agent inside a container."""
@@ -116,11 +116,13 @@ async def receive_heartbeat(request: FARequest, payload: HeartbeatPayload) -> di
         )
 
     # Broadcast to WebSocket subscribers
-    await ws.manager.broadcast(WSFrame(
-        channel=payload.container_id,
-        event="heartbeat",
-        data=payload.model_dump(),
-    ))
+    await ws.manager.broadcast(
+        WSFrame(
+            channel=payload.container_id,
+            event="heartbeat",
+            data=payload.model_dump(),
+        )
+    )
 
     return {"ok": True}
 
@@ -141,21 +143,25 @@ async def receive_event(request: FARequest, payload: EventPayload) -> dict:
         logger.info("Event from %s: %s", payload.container_id, payload.event_type)
 
     # Always broadcast on the container channel.
-    await ws.manager.broadcast(WSFrame(
-        channel=payload.container_id,
-        event=payload.event_type,
-        data=payload.data,
-    ))
+    await ws.manager.broadcast(
+        WSFrame(
+            channel=payload.container_id,
+            event=payload.event_type,
+            data=payload.data,
+        )
+    )
 
     # Additionally fan out command_output on the per-command channel.
     if payload.event_type == "command_output":
         command_id = (payload.data or {}).get("command_id")
         if command_id:
-            await ws.manager.broadcast(WSFrame(
-                channel=f"cmd:{command_id}",
-                event="command_output",
-                data=payload.data,
-            ))
+            await ws.manager.broadcast(
+                WSFrame(
+                    channel=f"cmd:{command_id}",
+                    event="command_output",
+                    data=payload.data,
+                )
+            )
 
     return {"ok": True}
 
@@ -180,19 +186,24 @@ async def _probe_container_auth(devcontainer_mgr, record) -> dict:
     """Probe a single container's auth state. Each probe is bounded; overall
     call completes under (2 * probe timeout) seconds even if both hang.
     """
+
     async def _api_key_probe() -> bool:
-        rc, stdout, _ = await devcontainer_mgr._run_cmd(
-            ["docker", "exec", record.container_id,
-             "bash", "-c", 'echo $ANTHROPIC_API_KEY'],
+        _rc, stdout, _ = await devcontainer_mgr._run_cmd(
+            ["docker", "exec", record.container_id, "bash", "-c", "echo $ANTHROPIC_API_KEY"],
             timeout=AUTH_PROBE_TIMEOUT_SECONDS,
         )
         return bool(stdout.strip())
 
     async def _creds_probe() -> bool:
-        rc2, stdout2, _ = await devcontainer_mgr._run_cmd(
-            ["docker", "exec", record.container_id,
-             "bash", "-c",
-             'test -f /root/.claude/credentials.json -o -f /root/.claude/.credentials.json && echo yes || echo no'],
+        _rc2, stdout2, _ = await devcontainer_mgr._run_cmd(
+            [
+                "docker",
+                "exec",
+                record.container_id,
+                "bash",
+                "-c",
+                "test -f /root/.claude/credentials.json -o -f /root/.claude/.credentials.json && echo yes || echo no",
+            ],
             timeout=AUTH_PROBE_TIMEOUT_SECONDS,
         )
         return stdout2.strip() == "yes"
@@ -237,15 +248,17 @@ async def auth_status(request: FARequest) -> dict:
 
     for record in records:
         if record.container_status.value != "running" or not record.container_id:
-            statuses.append({
-                "container_id": record.container_id,
-                "project_name": record.project_name,
-                "auth": "not_running",
-            })
+            statuses.append(
+                {
+                    "container_id": record.container_id,
+                    "project_name": record.project_name,
+                    "auth": "not_running",
+                }
+            )
             continue
-        probes.append((record, asyncio.create_task(
-            _probe_container_auth(devcontainer_mgr, record)
-        )))
+        probes.append(
+            (record, asyncio.create_task(_probe_container_auth(devcontainer_mgr, record)))
+        )
 
     if probes:
         try:
@@ -253,7 +266,7 @@ async def auth_status(request: FARequest) -> dict:
                 asyncio.gather(*(t for _, t in probes), return_exceptions=True),
                 timeout=AUTH_PROBE_TOTAL_TIMEOUT_SECONDS,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "auth_status: aggregate probe timeout after %ds — returning partial results",
                 AUTH_PROBE_TOTAL_TIMEOUT_SECONDS,
@@ -267,11 +280,13 @@ async def auth_status(request: FARequest) -> dict:
                     continue
             else:
                 task.cancel()
-            statuses.append({
-                "container_id": record.container_id,
-                "project_name": record.project_name,
-                "auth": "probe_timeout",
-            })
+            statuses.append(
+                {
+                    "container_id": record.container_id,
+                    "project_name": record.project_name,
+                    "auth": "probe_timeout",
+                }
+            )
 
     return {"containers": statuses}
 
@@ -298,6 +313,7 @@ def cli() -> None:
     # Try to open dashboard in browser (silently ignore on headless/WSL)
     try:
         import subprocess
+
         subprocess.Popen(
             ["python3", "-c", f"import webbrowser; webbrowser.open('http://{host}:{port}')"],
             stdout=subprocess.DEVNULL,
@@ -336,8 +352,7 @@ def _check_prerequisites() -> None:
     # Check for shared auth volume
     auth_dir = Path.home() / ".claude"
     has_creds = auth_dir.exists() and (
-        (auth_dir / "credentials.json").exists()
-        or (auth_dir / ".credentials.json").exists()
+        (auth_dir / "credentials.json").exists() or (auth_dir / ".credentials.json").exists()
     )
     if has_creds:
         logger.info("Claude subscription credentials found on host")

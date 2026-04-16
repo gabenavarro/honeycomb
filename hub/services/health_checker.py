@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from datetime import datetime, timedelta
 
@@ -39,17 +40,18 @@ class HealthChecker:
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._check_loop())
-        logger.info("Health checker started (interval=%ss, timeout=%ss, grace=%ss)",
-                     self._check_interval, HEARTBEAT_TIMEOUT_SECONDS,
-                     INITIAL_HEARTBEAT_GRACE_SECONDS)
+        logger.info(
+            "Health checker started (interval=%ss, timeout=%ss, grace=%ss)",
+            self._check_interval,
+            HEARTBEAT_TIMEOUT_SECONDS,
+            INITIAL_HEARTBEAT_GRACE_SECONDS,
+        )
 
     async def stop(self) -> None:
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
 
     async def _check_loop(self) -> None:

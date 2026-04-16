@@ -7,7 +7,6 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 
 from gitops.runner import run_gh, run_git
 
@@ -66,9 +65,7 @@ async def get_ahead_behind(path: str) -> tuple[int, int, bool]:
     if rc_up != 0:
         return 0, 0, False
 
-    rc, output = await run_git(
-        ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], path
-    )
+    rc, output = await run_git(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"], path)
     if rc != 0:
         logger.debug("get_ahead_behind: rev-list failed for %s", path)
         return 0, 0, True
@@ -95,9 +92,7 @@ async def get_working_tree_status(path: str) -> tuple[bool, int, int, int]:
 
 async def get_last_commit(path: str) -> tuple[str, str]:
     """Get last commit message and date."""
-    rc, output = await run_git(
-        ["log", "-1", "--format=%s|%ci"], path
-    )
+    rc, output = await run_git(["log", "-1", "--format=%s|%ci"], path)
     if rc != 0 or not output.strip():
         return "", ""
     parts = output.strip().split("|", 1)

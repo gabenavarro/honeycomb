@@ -11,9 +11,8 @@ on a running Docker daemon. Probe semantics are narrow:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,9 +23,11 @@ def _fake_proc(returncode: int | None, *, hang: bool = False) -> MagicMock:
     proc = MagicMock()
     proc.returncode = returncode
     if hang:
+
         async def never_return() -> int:
             await asyncio.sleep(10)
             return 0
+
         proc.wait = AsyncMock(side_effect=never_return)
     else:
         proc.wait = AsyncMock(return_value=returncode or 0)

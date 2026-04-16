@@ -61,7 +61,9 @@ async def discover_containers(registry: Registry) -> int:
         registered += 1
         logger.info(
             "Auto-discovered container %s (%s) at %s",
-            cand.container_id, cand.inferred_project_name, workspace,
+            cand.container_id,
+            cand.inferred_project_name,
+            workspace,
         )
 
     if registered > 0:

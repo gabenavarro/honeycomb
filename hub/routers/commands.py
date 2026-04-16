@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -56,7 +57,10 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
             agent_error = str(exc) or exc.__class__.__name__
             logger.info(
                 "Agent unavailable at %s:%d for container %s (%s), trying next path",
-                agent_host, record.agent_port, record_id, agent_error,
+                agent_host,
+                record.agent_port,
+                record_id,
+                agent_error,
             )
 
     # Path 2: devcontainer exec — only when the workspace_folder is a real
@@ -71,7 +75,9 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
             if returncode != 0:
                 logger.warning(
                     "devcontainer exec failed (rc=%d) for container %s: %s",
-                    returncode, record_id, (stderr or "").strip()[:500],
+                    returncode,
+                    record_id,
+                    (stderr or "").strip()[:500],
                 )
             return CommandResponse(
                 command_id=req.command_id or "exec",
@@ -86,32 +92,24 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
             devcontainer_error = str(exc) or exc.__class__.__name__
             logger.info(
                 "devcontainer exec failed for container %s (%s), trying docker exec",
-                record_id, devcontainer_error,
+                record_id,
+                devcontainer_error,
             )
     else:
         devcontainer_error = (
-            f"No devcontainer.json at {record.workspace_folder} — "
-            "path skipped (use docker exec)."
+            f"No devcontainer.json at {record.workspace_folder} — path skipped (use docker exec)."
         )
 
     # Path 3: docker exec — works for any running container we have the
     # container_id for. Last resort but the most permissive.
     try:
-        returncode, stdout, stderr = await relay.exec_via_docker(
-            record.container_id, req.command
-        )
+        returncode, stdout, stderr = await relay.exec_via_docker(record.container_id, req.command)
     except Exception as exc:
-        logger.error(
-            "docker exec failed for container %s: %s", record_id, exc
-        )
+        logger.error("docker exec failed for container %s: %s", record_id, exc)
         # Mark the record as errored — if docker can't exec the container,
         # something is genuinely wrong (missing, not running, permission).
-        try:
-            await registry.update(
-                record.id, container_status="error"
-            )
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            await registry.update(record.id, container_status="error")
         detail = {
             "message": "All relay paths failed.",
             "agent_error": agent_error,
@@ -123,7 +121,9 @@ async def exec_command(request: Request, record_id: int, req: CommandRequest) ->
     if returncode != 0:
         logger.warning(
             "docker exec failed (rc=%d) for container %s: %s",
-            returncode, record_id, (stderr or "").strip()[:500],
+            returncode,
+            record_id,
+            (stderr or "").strip()[:500],
         )
 
     return CommandResponse(
@@ -162,7 +162,9 @@ async def get_command_output(request: Request, record_id: int, command_id: str) 
 
 
 @router.get("/{command_id}/stream")
-async def stream_command_output(request: Request, record_id: int, command_id: str) -> StreamingResponse:
+async def stream_command_output(
+    request: Request, record_id: int, command_id: str
+) -> StreamingResponse:
     """Stream output for a command in real-time."""
     registry = request.app.state.registry
     relay = request.app.state.claude_relay

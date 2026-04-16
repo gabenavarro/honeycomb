@@ -17,14 +17,7 @@
  * typed something; empty-input focus is silent.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
 import type { SessionKind } from "../hooks/useSessionStore";
 
@@ -86,10 +79,7 @@ export function TerminalInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
 
-  const builtIns = useMemo(
-    () => (kind === "shell" ? BUILTIN_SHELL : BUILTIN_CLAUDE),
-    [kind],
-  );
+  const builtIns = useMemo(() => (kind === "shell" ? BUILTIN_SHELL : BUILTIN_CLAUDE), [kind]);
 
   const suggestions = useMemo(() => {
     const q = value.trim();
@@ -274,7 +264,7 @@ export function TerminalInput({
         <ul
           role="listbox"
           aria-label="Command suggestions"
-          className="absolute bottom-full left-0 right-0 mb-1 max-h-44 overflow-y-auto rounded border border-[#454545] bg-[#252526] text-xs shadow-lg"
+          className="absolute right-0 bottom-full left-0 mb-1 max-h-44 overflow-y-auto rounded border border-[#454545] bg-[#252526] text-xs shadow-lg"
         >
           {suggestions.map((s, idx) => (
             <li
@@ -289,15 +279,13 @@ export function TerminalInput({
               }}
               onMouseEnter={() => setSuggestionIdx(idx)}
               className={`cursor-pointer truncate px-3 py-1 ${
-                idx === suggestionIdx
-                  ? "bg-[#094771] text-white"
-                  : "text-[#cccccc]"
+                idx === suggestionIdx ? "bg-[#094771] text-white" : "text-[#cccccc]"
               }`}
             >
               {s}
             </li>
           ))}
-          <li className="border-t border-[#3a3a3a] px-3 py-0.5 text-[10px] italic text-[#858585]">
+          <li className="border-t border-[#3a3a3a] px-3 py-0.5 text-[10px] text-[#858585] italic">
             Tab accept · ↑↓ nav · Esc dismiss · ↑ (empty) recall history
           </li>
         </ul>

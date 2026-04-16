@@ -1,0 +1,16 @@
+# Dashboard-scoped prettier ignores.
+# Root-level prettier ignores live in /.prettierignore — this file
+# duplicates the entries that are relevant when prettier is invoked
+# from inside dashboard/ (e.g. via `npm run format:check`).
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+package-lock.json
+tsconfig*.json
+
+# Markdown formatted intentionally.
+README.md

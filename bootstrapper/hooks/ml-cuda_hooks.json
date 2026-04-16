@@ -1,25 +1,25 @@
 {
-    "hooks": {
-        "SessionStart": [
-            {
-                "type": "command",
-                "command": "echo '[hive] ML/CUDA session started' && nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo 'GPU not available'",
-                "description": "Log session start with GPU info"
-            }
-        ],
-        "Stop": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Session stopped' && python3 -c 'import torch; print(f\"GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB\")' 2>/dev/null || true",
-                "description": "Log GPU memory on stop"
-            }
-        ],
-        "PreCompact": [
-            {
-                "type": "command",
-                "command": "echo '[hive] Context compaction — saving experiment state'",
-                "description": "Log compaction"
-            }
-        ]
-    }
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "echo '[hive] ML/CUDA session started' && nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo 'GPU not available'",
+        "description": "Log session start with GPU info"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Session stopped' && python3 -c 'import torch; print(f\"GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f}GB\")' 2>/dev/null || true",
+        "description": "Log GPU memory on stop"
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "command": "echo '[hive] Context compaction — saving experiment state'",
+        "description": "Log compaction"
+      }
+    ]
+  }
 }

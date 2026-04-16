@@ -13,19 +13,14 @@ interface Props {
   onClose: (id: number) => void;
 }
 
-export function ContainerTabs({
-  openContainers,
-  activeId,
-  onFocus,
-  onClose,
-}: Props) {
+export function ContainerTabs({ openContainers, activeId, onFocus, onClose }: Props) {
   if (openContainers.length === 0) return null;
 
   return (
     <div
       role="tablist"
       aria-label="Open containers"
-      className="flex shrink-0 items-center gap-0 border-b border-[#2b2b2b] bg-[#252526] overflow-x-auto"
+      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-[#2b2b2b] bg-[#252526]"
     >
       {openContainers.map((c) => {
         const active = c.id === activeId;
@@ -51,11 +46,11 @@ export function ContainerTabs({
             }}
             className={`group flex shrink-0 cursor-pointer items-center gap-2 border-r border-[#2b2b2b] px-3 py-1.5 text-xs transition-colors ${
               active
-                ? "bg-[#1e1e1e] text-[#e7e7e7] border-t-2 border-t-[#0078d4]"
+                ? "border-t-2 border-t-[#0078d4] bg-[#1e1e1e] text-[#e7e7e7]"
                 : "bg-[#2d2d2d] text-[#969696] hover:bg-[#353535]"
             }`}
           >
-            <span className="truncate max-w-[180px]">{c.project_name}</span>
+            <span className="max-w-[180px] truncate">{c.project_name}</span>
             {c.has_gpu && <GpuBadge />}
             <ContainerStatusBadge status={c.container_status} />
             <AgentStatusBadge status={c.agent_status} />

@@ -160,8 +160,11 @@ class TestRegistry:
     async def test_duplicate_workspace(self, registry: Registry) -> None:
         await registry.add(workspace_folder="/unique", project_type="base", project_name="First")
         import aiosqlite
+
         with pytest.raises(aiosqlite.IntegrityError):
-            await registry.add(workspace_folder="/unique", project_type="base", project_name="Second")
+            await registry.add(
+                workspace_folder="/unique", project_type="base", project_name="Second"
+            )
 
 
 class TestStateMachine:

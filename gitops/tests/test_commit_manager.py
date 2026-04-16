@@ -80,9 +80,7 @@ class TestStageCommitPush:
     @pytest.mark.asyncio
     async def test_commit_no_push(self, git_repo: str) -> None:
         (Path(git_repo) / "file.txt").write_text("content")
-        result = await stage_commit_push(
-            git_repo, "test: add file", push_after=False
-        )
+        result = await stage_commit_push(git_repo, "test: add file", push_after=False)
         assert result.success is True
         assert result.commit_hash != ""
 
@@ -101,6 +99,7 @@ class TestCreateBranch:
 
         # Verify we're on the new branch
         from gitops.repo_scanner import get_branch
+
         branch = await get_branch(git_repo)
         assert branch == "feature/test"
 

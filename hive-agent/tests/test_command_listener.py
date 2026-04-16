@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from starlette.testclient import TestClient
-
 from hive_agent.client import ContainerStatus, HiveClient
 from hive_agent.command_listener import CommandRunner, create_app
+from starlette.testclient import TestClient
 
 
 @pytest.fixture
@@ -80,6 +79,7 @@ class TestOutputEndpoint:
 
         # Give the process a moment to complete
         import time
+
         time.sleep(0.5)
 
         resp = app.get(f"/output/{cmd_id}")
@@ -104,6 +104,7 @@ class TestCommandRunner:
 
         # Wait for process to complete
         import asyncio
+
         await asyncio.sleep(0.5)
 
         output = runner.get_output("t1")
@@ -116,6 +117,7 @@ class TestCommandRunner:
         await runner.run("echo cleanup-test", command_id="t2")
 
         import asyncio
+
         await asyncio.sleep(0.5)
 
         runner.cleanup("t2")
@@ -127,6 +129,7 @@ class TestCommandRunner:
         await runner.run("sleep 60", command_id="t3")
 
         import asyncio
+
         await asyncio.sleep(0.2)
 
         assert runner.is_running("t3")

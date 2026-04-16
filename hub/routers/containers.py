@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -75,7 +76,8 @@ async def create_container(request: Request, req: ContainerCreate) -> ContainerR
 
     # Provision
     if req.auto_provision:
-        from bootstrapper.provision import provision, TemplateError
+        from bootstrapper.provision import TemplateError, provision
+
         try:
             provision(
                 workspace=Path(req.workspace_folder),
@@ -98,6 +100,7 @@ async def create_container(request: Request, req: ContainerCreate) -> ContainerR
     # Start
     if req.auto_start:
         import shutil
+
         if not shutil.which("devcontainer"):
             logger.warning(
                 "devcontainer CLI not installed — container registered and provisioned "
@@ -116,16 +119,18 @@ async def create_container(request: Request, req: ContainerCreate) -> ContainerR
             build_channel = f"build:{record.workspace_folder}"
 
             async def _emit_build_line(stream: str, text: str) -> None:
-                await ws_router.manager.broadcast(WSFrame(
-                    channel=build_channel,
-                    event="build_output",
-                    data={
-                        "record_id": record.id,
-                        "workspace_folder": record.workspace_folder,
-                        "stream": stream,
-                        "text": text,
-                    },
-                ))
+                await ws_router.manager.broadcast(
+                    WSFrame(
+                        channel=build_channel,
+                        event="build_output",
+                        data={
+                            "record_id": record.id,
+                            "workspace_folder": record.workspace_folder,
+                            "stream": stream,
+                            "text": text,
+                        },
+                    )
+                )
 
             await registry.update(record.id, container_status=ContainerStatus.STARTING.value)
             await _emit_build_line("system", f"Starting devcontainer for {req.workspace_folder}\n")
@@ -167,7 +172,9 @@ async def get_container(request: Request, record_id: int) -> ContainerRecord:
 
 
 @router.patch("/{record_id}", response_model=ContainerRecord)
-async def update_container(request: Request, record_id: int, req: ContainerUpdate) -> ContainerRecord:
+async def update_container(
+    request: Request, record_id: int, req: ContainerUpdate
+) -> ContainerRecord:
     """Update container record fields."""
     try:
         fields = req.model_dump(exclude_none=True)
@@ -202,8 +209,11 @@ async def delete_container(request: Request, record_id: int, force: bool = False
 async def start_container(request: Request, record_id: int) -> ContainerRecord:
     """Start a stopped devcontainer."""
     import shutil
+
     if not shutil.which("devcontainer"):
-        raise HTTPException(400, "devcontainer CLI not installed. Run: npm install -g @devcontainers/cli")
+        raise HTTPException(
+            400, "devcontainer CLI not installed. Run: npm install -g @devcontainers/cli"
+        )
 
     registry = request.app.state.registry
     devcontainer_mgr = request.app.state.devcontainer_mgr
@@ -214,20 +224,14 @@ async def start_container(request: Request, record_id: int) -> ContainerRecord:
 
     # Mark STARTING first so ERROR → RUNNING goes through the valid path
     # (ERROR → STARTING → RUNNING). No-op if already STARTING.
-    try:
-        record = await registry.update(
-            record.id, container_status=ContainerStatus.STARTING.value
-        )
-    except InvalidStateTransition:
-        pass
+    with contextlib.suppress(InvalidStateTransition):
+        record = await registry.update(record.id, container_status=ContainerStatus.STARTING.value)
 
     if record.container_id:
         await devcontainer_mgr.start(record.container_id)
     else:
         result = await devcontainer_mgr.up(record.workspace_folder)
-        record = await registry.update(
-            record.id, container_id=result.get("containerId", "")
-        )
+        record = await registry.update(record.id, container_id=result.get("containerId", ""))
 
     return await registry.update(record.id, container_status=ContainerStatus.RUNNING.value)
 

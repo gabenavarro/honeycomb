@@ -7,11 +7,7 @@ import tailwindcss from "@tailwindcss/vite";
 // (page reload, HMR swap, browser tab-suspend). The handlers we attach
 // via `configure` run alongside Vite's, not before it, so the only
 // reliable way to suppress the noise is to filter at the logger level.
-const NOISY_PATTERNS = [
-  "EPIPE",
-  "ECONNRESET",
-  "ERR_STREAM_WRITE_AFTER_END",
-];
+const NOISY_PATTERNS = ["EPIPE", "ECONNRESET", "ERR_STREAM_WRITE_AFTER_END"];
 const NOISY_CONTEXT = /ws proxy (error|socket error)/i;
 
 function makeQuietLogger() {
@@ -31,9 +27,7 @@ function makeQuietLogger() {
 // Belt-and-suspenders: also attach no-op error listeners on the proxy
 // itself so unhandled `Error` events don't propagate into Node's
 // uncaughtException path (different failure mode from the log).
-function quietWsProxy(proxy: {
-  on: (event: string, cb: (...args: unknown[]) => void) => void;
-}) {
+function quietWsProxy(proxy: { on: (event: string, cb: (...args: unknown[]) => void) => void }) {
   const swallow = (...args: unknown[]) => {
     const err = args[0];
     if (err && typeof err === "object" && "code" in err) {
@@ -45,9 +39,18 @@ function quietWsProxy(proxy: {
     console.warn("[vite:ws-proxy]", (err as Error | undefined)?.message ?? err);
   };
   proxy.on("error", swallow);
+  // http-proxy's `proxyReqWs` callback is `(_proxyReq, _req, socket) => void`,
+  // but its TS signature is the more general `(...args: unknown[]) => void`.
+  // The narrow signature below is correct at runtime — strict-typing the
+  // adapter is tracked for the dashboard typing pass (post-M1).
   proxy.on(
     "proxyReqWs",
-    (_proxyReq: unknown, _req: unknown, socket: { on?: (ev: string, cb: (...a: unknown[]) => void) => void }) => {
+    // @ts-expect-error — see comment above
+    (
+      _proxyReq: unknown,
+      _req: unknown,
+      socket: { on?: (ev: string, cb: (...a: unknown[]) => void) => void },
+    ) => {
       socket.on?.("error", swallow);
     },
   );
@@ -66,6 +69,8 @@ export default defineConfig({
       "/ws": {
         target: "ws://127.0.0.1:8420",
         ws: true,
+        // @ts-expect-error — vite expects ProxyServer; quietWsProxy takes a
+        // structural subset. Same follow-up as the proxyReqWs handler above.
         configure: quietWsProxy,
       },
     },

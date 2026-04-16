@@ -8,16 +8,23 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from gitops.commit_manager import stage_commit_push, CommitResult as GitCommitResult
+from gitops.commit_manager import stage_commit_push
 from gitops.pr_manager import (
-    PullRequest as GitPR,
     create_pr as git_create_pr,
+)
+from gitops.pr_manager import (
     get_pr_detail as git_get_pr_detail,
+)
+from gitops.pr_manager import (
     list_prs_across_repos,
+)
+from gitops.pr_manager import (
     merge_pr as git_merge_pr,
+)
+from gitops.pr_manager import (
     submit_review as git_submit_review,
 )
-from gitops.repo_scanner import RepoStatus as GitRepoStatus, scan_repos
+from gitops.repo_scanner import scan_repos
 
 logger = logging.getLogger("hub.routers.gitops")
 
@@ -143,9 +150,7 @@ async def submit_review(
 ) -> dict[str, Any]:
     """Submit a review on a PR (approve, request-changes, comment)."""
     try:
-        success = await git_submit_review(
-            owner, repo, number, action=req.action, body=req.body
-        )
+        success = await git_submit_review(owner, repo, number, action=req.action, body=req.body)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     if not success:

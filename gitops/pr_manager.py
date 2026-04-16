@@ -53,7 +53,8 @@ async def list_prs(
     """List PRs for a single repo."""
     rc, stdout, stderr = await run_gh(
         [
-            "pr", "list",
+            "pr",
+            "list",
             f"--state={state}",
             "--json=number,title,author,state,createdAt,updatedAt,url,reviewDecision,additions,deletions,changedFiles",
             f"--limit={limit}",
@@ -121,11 +122,17 @@ async def get_pr_detail(
     number: int,
 ) -> PRDetail | None:
     """Get full PR details including comments and review info."""
-    rc, stdout, stderr = await run_gh([
-        "pr", "view", str(number),
-        "--repo", f"{owner}/{repo}",
-        "--json", "number,title,body,author,state,reviewDecision,comments,reviews,files,url",
-    ])
+    rc, stdout, stderr = await run_gh(
+        [
+            "pr",
+            "view",
+            str(number),
+            "--repo",
+            f"{owner}/{repo}",
+            "--json",
+            "number,title,body,author,state,reviewDecision,comments,reviews,files,url",
+        ]
+    )
     if rc != 0:
         logger.warning("PR detail failed for %s/%s#%d: %s", owner, repo, number, stderr)
         return None

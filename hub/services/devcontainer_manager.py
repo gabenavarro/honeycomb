@@ -8,7 +8,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import docker
 import docker.errors
@@ -40,7 +41,7 @@ class DevContainerManager:
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             raise TimeoutError(f"Command timed out after {timeout}s: {' '.join(cmd)}")
         return proc.returncode or 0, stdout.decode(), stderr.decode()
@@ -123,7 +124,7 @@ class DevContainerManager:
                 ),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             raise TimeoutError(f"Command timed out after {timeout}s: {' '.join(cmd)}")
 
@@ -142,8 +143,10 @@ class DevContainerManager:
             cmd_args = command
 
         cmd = [
-            "devcontainer", "exec",
-            "--workspace-folder", workspace_folder,
+            "devcontainer",
+            "exec",
+            "--workspace-folder",
+            workspace_folder,
             *cmd_args,
         ]
         return await self._run_cmd(cmd, timeout=timeout)

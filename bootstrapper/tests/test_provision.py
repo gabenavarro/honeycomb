@@ -147,7 +147,7 @@ class TestGetSkillList:
 
 class TestProvision:
     def test_provision_base(self, tmp_path: Path) -> None:
-        result = provision(
+        provision(
             workspace=tmp_path,
             project_type="base",
             project_name="Test Project",
@@ -186,7 +186,7 @@ class TestProvision:
         (tmp_path / "Dockerfile").write_text(
             "FROM python:3.12 AS base\nRUN echo hi\nFROM base AS dev\nRUN echo dev\n"
         )
-        result = provision(
+        provision(
             workspace=tmp_path,
             project_type="ml-cuda",
             project_name="Existing Project",
@@ -204,7 +204,7 @@ class TestProvision:
         assert not (tmp_path / ".devcontainer" / "entrypoint.sh").exists()
 
     def test_provision_selective(self, tmp_path: Path) -> None:
-        result = provision(
+        provision(
             workspace=tmp_path,
             project_type="base",
             project_name="Minimal",

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-
-import httpx
 import pytest
 import respx
-
 from hive_agent.client import ContainerStatus, HiveClient
 
 
@@ -78,6 +74,7 @@ class TestHiveClient:
             assert route.called
             body = route.calls[0].request.content
             import json
+
             parsed = json.loads(body)
             assert parsed["container_id"] == "test-container"
             assert parsed["event_type"] == "command_completed"

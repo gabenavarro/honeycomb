@@ -123,14 +123,13 @@ def generate_devcontainer_json(
 
     # Simple Jinja-like replacement for devcontainer.json (not full Jinja since
     # devcontainer.json has its own ${} variable syntax we must preserve)
-    rendered = template_content.replace(
-        "{{ project_name | default('Claude Hive Workspace') }}", project_name
-    ).replace(
-        "{{ project_name | default('ML/CUDA Workspace') }}", project_name
-    ).replace(
-        "{{ project_name | default('Web Dev Workspace') }}", project_name
-    ).replace(
-        "{{ project_name | default('CompBio Workspace') }}", project_name
+    rendered = (
+        template_content.replace(
+            "{{ project_name | default('Claude Hive Workspace') }}", project_name
+        )
+        .replace("{{ project_name | default('ML/CUDA Workspace') }}", project_name)
+        .replace("{{ project_name | default('Web Dev Workspace') }}", project_name)
+        .replace("{{ project_name | default('CompBio Workspace') }}", project_name)
     )
 
     config = json.loads(rendered)
@@ -188,7 +187,9 @@ def provision(
         Dict of created file paths grouped by category.
     """
     if project_type not in VALID_PROJECT_TYPES:
-        raise ValueError(f"Invalid project type: {project_type}. Must be one of {VALID_PROJECT_TYPES}")
+        raise ValueError(
+            f"Invalid project type: {project_type}. Must be one of {VALID_PROJECT_TYPES}"
+        )
 
     workspace = Path(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
@@ -319,10 +320,16 @@ def provision(
         claude_dir = workspace / ".claude"
         claude_dir.mkdir(exist_ok=True)
         skills_manifest = claude_dir / "skills_manifest.json"
-        skills_manifest.write_text(json.dumps({
-            "project_type": project_type,
-            "skills": skills,
-        }, indent=4) + "\n")
+        skills_manifest.write_text(
+            json.dumps(
+                {
+                    "project_type": project_type,
+                    "skills": skills,
+                },
+                indent=4,
+            )
+            + "\n"
+        )
         created["skills"].append(str(skills_manifest))
         logger.info("Wrote skills manifest (%d skills) to %s", len(skills), skills_manifest)
 

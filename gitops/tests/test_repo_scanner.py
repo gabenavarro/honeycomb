@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from gitops.repo_scanner import (
-    RepoStatus,
     get_branch,
     get_last_commit,
     get_repo_url,
@@ -20,6 +19,7 @@ from gitops.repo_scanner import (
 def git_repo(tmp_path):
     """Create a temporary git repo for testing."""
     import subprocess
+
     repo = tmp_path / "test-repo"
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, capture_output=True)
@@ -81,16 +81,18 @@ class TestGetWorkingTreeStatus:
     @pytest.mark.asyncio
     async def test_untracked_file(self, git_repo: str) -> None:
         import pathlib
+
         (pathlib.Path(git_repo) / "new_file.txt").write_text("hello")
-        dirty, untracked, modified, staged = await get_working_tree_status(git_repo)
+        dirty, untracked, _modified, _staged = await get_working_tree_status(git_repo)
         assert dirty is True
         assert untracked == 1
 
     @pytest.mark.asyncio
     async def test_modified_file(self, git_repo: str) -> None:
         import pathlib
+
         (pathlib.Path(git_repo) / "README.md").write_text("modified")
-        dirty, untracked, modified, staged = await get_working_tree_status(git_repo)
+        dirty, _untracked, modified, _staged = await get_working_tree_status(git_repo)
         assert dirty is True
         assert modified == 1
 
@@ -98,9 +100,10 @@ class TestGetWorkingTreeStatus:
     async def test_staged_file(self, git_repo: str) -> None:
         import pathlib
         import subprocess
+
         (pathlib.Path(git_repo) / "README.md").write_text("staged change")
         subprocess.run(["git", "add", "README.md"], cwd=git_repo, capture_output=True)
-        dirty, untracked, modified, staged = await get_working_tree_status(git_repo)
+        dirty, _untracked, _modified, staged = await get_working_tree_status(git_repo)
         assert dirty is True
         assert staged == 1
 
@@ -131,6 +134,7 @@ class TestScanRepo:
     @pytest.mark.asyncio
     async def test_dirty_repo(self, git_repo: str) -> None:
         import pathlib
+
         (pathlib.Path(git_repo) / "dirty.txt").write_text("dirty")
         status = await scan_repo(git_repo)
         assert status.dirty is True

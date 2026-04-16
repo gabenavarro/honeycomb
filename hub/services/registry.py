@@ -29,23 +29,32 @@ class InvalidStateTransition(ValueError):
 #    explicitly (re)started after a failure, not marked healthy in place)
 ALLOWED_CONTAINER_TRANSITIONS: dict[ContainerStatus, set[ContainerStatus]] = {
     ContainerStatus.UNKNOWN: {
-        ContainerStatus.STARTING, ContainerStatus.RUNNING,
-        ContainerStatus.STOPPED, ContainerStatus.ERROR,
+        ContainerStatus.STARTING,
+        ContainerStatus.RUNNING,
+        ContainerStatus.STOPPED,
+        ContainerStatus.ERROR,
     },
     ContainerStatus.STARTING: {
-        ContainerStatus.RUNNING, ContainerStatus.ERROR,
-        ContainerStatus.STOPPED, ContainerStatus.UNKNOWN,
+        ContainerStatus.RUNNING,
+        ContainerStatus.ERROR,
+        ContainerStatus.STOPPED,
+        ContainerStatus.UNKNOWN,
     },
     ContainerStatus.RUNNING: {
-        ContainerStatus.STOPPED, ContainerStatus.STARTING,
-        ContainerStatus.ERROR, ContainerStatus.UNKNOWN,
+        ContainerStatus.STOPPED,
+        ContainerStatus.STARTING,
+        ContainerStatus.ERROR,
+        ContainerStatus.UNKNOWN,
     },
     ContainerStatus.STOPPED: {
-        ContainerStatus.STARTING, ContainerStatus.RUNNING,
-        ContainerStatus.ERROR, ContainerStatus.UNKNOWN,
+        ContainerStatus.STARTING,
+        ContainerStatus.RUNNING,
+        ContainerStatus.ERROR,
+        ContainerStatus.UNKNOWN,
     },
     ContainerStatus.ERROR: {
-        ContainerStatus.STARTING, ContainerStatus.STOPPED,
+        ContainerStatus.STARTING,
+        ContainerStatus.STOPPED,
         ContainerStatus.UNKNOWN,
     },
 }
@@ -60,6 +69,7 @@ def _coerce_status(value: Any) -> ContainerStatus | None:
         return ContainerStatus(value)
     except (ValueError, TypeError):
         return None
+
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS containers (
@@ -164,16 +174,22 @@ class Registry:
                (workspace_folder, project_type, project_name, project_description,
                 git_repo_url, has_gpu, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (workspace_folder, project_type, project_name, project_description,
-             git_repo_url, int(has_gpu), now, now),
+            (
+                workspace_folder,
+                project_type,
+                project_name,
+                project_description,
+                git_repo_url,
+                int(has_gpu),
+                now,
+                now,
+            ),
         )
         await self.db.commit()
         return await self.get(cursor.lastrowid)  # type: ignore[arg-type]
 
     async def get(self, record_id: int) -> ContainerRecord:
-        cursor = await self.db.execute(
-            "SELECT * FROM containers WHERE id = ?", (record_id,)
-        )
+        cursor = await self.db.execute("SELECT * FROM containers WHERE id = ?", (record_id,))
         row = await cursor.fetchone()
         if row is None:
             raise KeyError(f"Container record {record_id} not found")
@@ -223,23 +239,21 @@ class Registry:
 
         fields["updated_at"] = datetime.now().isoformat()
         set_clause = ", ".join(f"{k} = ?" for k in fields)
-        values = list(fields.values()) + [record_id]
-        await self.db.execute(
-            f"UPDATE containers SET {set_clause} WHERE id = ?", values
-        )
+        values = [*list(fields.values()), record_id]
+        await self.db.execute(f"UPDATE containers SET {set_clause} WHERE id = ?", values)
         await self.db.commit()
         return await self.get(record_id)
 
-    async def update_by_container_id(self, container_id: str, **fields: Any) -> ContainerRecord | None:
+    async def update_by_container_id(
+        self, container_id: str, **fields: Any
+    ) -> ContainerRecord | None:
         record = await self.get_by_container_id(container_id)
         if record is None:
             return None
         return await self.update(record.id, **fields)
 
     async def delete(self, record_id: int) -> bool:
-        cursor = await self.db.execute(
-            "DELETE FROM containers WHERE id = ?", (record_id,)
-        )
+        cursor = await self.db.execute("DELETE FROM containers WHERE id = ?", (record_id,))
         await self.db.commit()
         return cursor.rowcount > 0
 

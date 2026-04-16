@@ -223,14 +223,8 @@ export function useHiveWebSocket() {
     () => false,
   );
 
-  const subscribe = useCallback(
-    (channels: string[]) => sock.subscribe(channels),
-    [sock],
-  );
-  const unsubscribe = useCallback(
-    (channels: string[]) => sock.unsubscribe(channels),
-    [sock],
-  );
+  const subscribe = useCallback((channels: string[]) => sock.subscribe(channels), [sock]);
+  const unsubscribe = useCallback((channels: string[]) => sock.unsubscribe(channels), [sock]);
   const onChannel = useCallback(
     (channel: string, cb: Listener) => sock.addListener(channel, cb),
     [sock],

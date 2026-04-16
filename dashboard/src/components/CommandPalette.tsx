@@ -206,17 +206,13 @@ export function CommandPalette({
               <div className="min-w-0 flex-1">
                 <div className="truncate">{cmd.title}</div>
                 {cmd.subtitle && (
-                  <div className="truncate text-[10px] text-[#858585]">
-                    {cmd.subtitle}
-                  </div>
+                  <div className="truncate text-[10px] text-[#858585]">{cmd.subtitle}</div>
                 )}
               </div>
               <div className="ml-3 flex shrink-0 items-center gap-2 text-[10px] text-[#858585]">
                 <span>{cmd.group}</span>
                 {cmd.shortcut && (
-                  <kbd className="rounded border border-[#555] px-1.5 py-0.5">
-                    {cmd.shortcut}
-                  </kbd>
+                  <kbd className="rounded border border-[#555] px-1.5 py-0.5">{cmd.shortcut}</kbd>
                 )}
               </div>
             </li>

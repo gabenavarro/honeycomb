@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from hub.models.schemas import (
     CommandRequest,
     ContainerCreate,
-    ContainerStatus,
     HeartbeatPayload,
     ProjectType,
     WSFrame,

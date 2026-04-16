@@ -34,8 +34,14 @@ class TestPullRequestDataclass:
 
     def test_defaults(self) -> None:
         pr = PullRequest(
-            repo="r", number=1, title="t", author="a",
-            state="OPEN", created_at="", updated_at="", url="",
+            repo="r",
+            number=1,
+            title="t",
+            author="a",
+            state="OPEN",
+            created_at="",
+            updated_at="",
+            url="",
         )
         assert pr.review_status == ""
         assert pr.additions == 0

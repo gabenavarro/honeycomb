@@ -8,9 +8,9 @@ import pytest
 import pytest_asyncio
 
 from hub.services.health_checker import (
-    HealthChecker,
     HEARTBEAT_TIMEOUT_SECONDS,
     INITIAL_HEARTBEAT_GRACE_SECONDS,
+    HealthChecker,
 )
 from hub.services.registry import Registry
 
@@ -73,7 +73,9 @@ class TestHealthChecker:
             agent_status="idle",
         )
         # Set heartbeat to past
-        checker._last_heartbeat["c2"] = datetime.now() - timedelta(seconds=HEARTBEAT_TIMEOUT_SECONDS + 5)
+        checker._last_heartbeat["c2"] = datetime.now() - timedelta(
+            seconds=HEARTBEAT_TIMEOUT_SECONDS + 5
+        )
 
         await checker._check_all()
 

@@ -27,7 +27,7 @@ async def stage_files(
 ) -> tuple[bool, str]:
     """Stage files for commit. If files is None, stages all modified/untracked."""
     if files:
-        rc, output = await run_git(["add", "--"] + files, cwd)
+        rc, output = await run_git(["add", "--", *files], cwd)
     else:
         rc, output = await run_git(["add", "-A"], cwd)
     return rc == 0, output
@@ -135,10 +135,7 @@ async def batch_commit(
     import asyncio
 
     results = await asyncio.gather(
-        *[
-            stage_commit_push(ws, message, files=files, push_after=push_after)
-            for ws in workspaces
-        ],
+        *[stage_commit_push(ws, message, files=files, push_after=push_after) for ws in workspaces],
         return_exceptions=True,
     )
     commit_results: list[CommitResult] = []
@@ -146,11 +143,13 @@ async def batch_commit(
         if isinstance(r, CommitResult):
             commit_results.append(r)
         else:
-            commit_results.append(CommitResult(
-                workspace_folder=workspaces[i],
-                success=False,
-                error=str(r),
-            ))
+            commit_results.append(
+                CommitResult(
+                    workspace_folder=workspaces[i],
+                    success=False,
+                    error=str(r),
+                )
+            )
     return commit_results
 
 

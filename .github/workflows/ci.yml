@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: pre-commit (lint, format, scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: pre-commit/action@v3.0.1
+
+  hub-py:
+    name: hub — ruff, mypy, pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "hub/pyproject.toml"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hub (with dev extras)
+        run: uv pip install --system -e "./hub[dev]"
+      - name: Install repo-wide tools
+        run: uv pip install --system ruff mypy
+      - name: Ruff
+        run: ruff check hub
+      - name: Mypy
+        run: mypy hub
+      - name: Pytest
+        run: pytest hub/tests -q
+
+  hive-agent-py:
+    name: hive-agent — ruff, mypy, pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "hive-agent/pyproject.toml"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install hive-agent (with dev extras)
+        run: uv pip install --system -e "./hive-agent[dev]"
+      - name: Install repo-wide tools
+        run: uv pip install --system ruff mypy
+      - name: Ruff
+        run: ruff check hive-agent
+      - name: Mypy
+        run: mypy hive-agent
+      - name: Pytest
+        run: pytest hive-agent/tests -q
+
+  dashboard:
+    name: dashboard — lint, typecheck, vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Typecheck
+        run: npx tsc -b --noEmit
+      - name: Prettier check
+        run: npx prettier --check .
+      - name: Vitest
+        run: npx vitest run
+
+  secrets-scan:
+    name: secrets — gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-build-base:
+    name: docker — build base template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build base dev image
+        run: |
+          docker build \
+            -t honeycomb-base:dev \
+            -f bootstrapper/templates/base/Dockerfile \
+            --target dev \
+            bootstrapper/templates/base

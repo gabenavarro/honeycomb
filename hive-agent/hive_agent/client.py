@@ -6,10 +6,11 @@ Sends heartbeats, reports container status, and relays Claude Code CLI session s
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import socket
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -17,7 +18,7 @@ import httpx
 logger = logging.getLogger("hive_agent.client")
 
 
-class ContainerStatus(str, Enum):
+class ContainerStatus(StrEnum):
     IDLE = "idle"
     BUSY = "busy"
     ERROR = "error"
@@ -35,8 +36,12 @@ class HiveClient:
         heartbeat_interval: float = 5.0,
         agent_port: int | None = None,
     ) -> None:
-        self.hub_url = (hub_url or os.environ.get("HIVE_HUB_URL", "http://host.docker.internal:8420")).rstrip("/")
-        self.container_id = container_id or os.environ.get("HIVE_CONTAINER_ID", socket.gethostname())
+        self.hub_url = (
+            hub_url or os.environ.get("HIVE_HUB_URL", "http://host.docker.internal:8420")
+        ).rstrip("/")
+        self.container_id = container_id or os.environ.get(
+            "HIVE_CONTAINER_ID", socket.gethostname()
+        )
         self.heartbeat_interval = heartbeat_interval
         self.agent_port = agent_port or int(os.environ.get("HIVE_AGENT_PORT", "9100"))
         self._status = ContainerStatus.STARTING
@@ -69,10 +74,8 @@ class HiveClient:
         self._status = ContainerStatus.STOPPING
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
             self._heartbeat_task = None
         if self._http:
             await self._http.aclose()

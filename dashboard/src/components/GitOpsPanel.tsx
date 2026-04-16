@@ -25,30 +25,19 @@ function RepoRow({ repo }: { repo: RepoStatus }) {
     <div className="flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-800/50">
       <div className="flex items-center gap-2">
         <GitBranch size={12} className="text-gray-600" />
-        <span className="font-medium text-gray-300">
-          {repo.workspace_folder.split("/").pop()}
-        </span>
+        <span className="font-medium text-gray-300">{repo.workspace_folder.split("/").pop()}</span>
         <span className="text-gray-600">{repo.branch}</span>
       </div>
       <div className="flex items-center gap-3 text-[11px]">
-        {repo.dirty && (
-          <span className="text-yellow-500">modified</span>
-        )}
+        {repo.dirty && <span className="text-yellow-500">modified</span>}
         {!repo.has_upstream ? (
-          <span
-            className="text-gray-500 italic"
-            title="Branch has no upstream configured"
-          >
+          <span className="text-gray-500 italic" title="Branch has no upstream configured">
             no upstream
           </span>
         ) : (
           <>
-            {repo.ahead > 0 && (
-              <span className="text-green-400">+{repo.ahead}</span>
-            )}
-            {repo.behind > 0 && (
-              <span className="text-red-400">-{repo.behind}</span>
-            )}
+            {repo.ahead > 0 && <span className="text-green-400">+{repo.ahead}</span>}
+            {repo.behind > 0 && <span className="text-red-400">-{repo.behind}</span>}
           </>
         )}
         {repo.open_pr_count > 0 && (
@@ -131,9 +120,9 @@ function PRRow({ pr }: { pr: PullRequestSummary }) {
 
   return (
     <div className="flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-800/50">
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <GitPullRequest size={12} className="text-purple-400 shrink-0" />
+          <GitPullRequest size={12} className="shrink-0 text-purple-400" />
           <span className="truncate font-medium text-gray-300">{pr.title}</span>
           <a
             href={pr.url}
@@ -208,13 +197,13 @@ export function GitOpsPanel() {
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Repos */}
       <div className="border-b border-gray-800">
-        <h3 className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <h3 className="px-3 py-2 text-xs font-medium tracking-wider text-gray-500 uppercase">
           Repositories ({repos.length})
         </h3>
-        <div className="max-h-48 overflow-y-auto divide-y divide-gray-800/50">
+        <div className="max-h-48 divide-y divide-gray-800/50 overflow-y-auto">
           {repos.map((r: RepoStatus) => (
             <RepoRow key={r.workspace_folder} repo={r} />
           ))}
@@ -226,16 +215,14 @@ export function GitOpsPanel() {
 
       {/* Pull Requests */}
       <div className="flex-1 overflow-hidden">
-        <h3 className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+        <h3 className="px-3 py-2 text-xs font-medium tracking-wider text-gray-500 uppercase">
           Pull Requests ({prs.length})
         </h3>
-        <div className="h-full overflow-y-auto divide-y divide-gray-800/50">
+        <div className="h-full divide-y divide-gray-800/50 overflow-y-auto">
           {prs.map((pr: PullRequestSummary) => (
             <PRRow key={`${pr.repo}-${pr.number}`} pr={pr} />
           ))}
-          {prs.length === 0 && (
-            <p className="px-3 py-2 text-xs text-gray-600">No open PRs</p>
-          )}
+          {prs.length === 0 && <p className="px-3 py-2 text-xs text-gray-600">No open PRs</p>}
         </div>
       </div>
     </div>

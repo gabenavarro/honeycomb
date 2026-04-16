@@ -77,13 +77,13 @@ export function ActivityBar({
                 aria-pressed={isActive}
                 className={`relative flex h-10 w-10 items-center justify-center rounded transition-colors ${
                   isActive
-                    ? "bg-[#2a2d2e] text-[#e7e7e7] before:absolute before:left-0 before:top-2 before:h-6 before:w-0.5 before:bg-[#0078d4]"
+                    ? "bg-[#2a2d2e] text-[#e7e7e7] before:absolute before:top-2 before:left-0 before:h-6 before:w-0.5 before:bg-[#0078d4]"
                     : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
                 }`}
               >
                 {item.icon}
                 {badge !== null && (
-                  <span className="absolute right-1 top-1 rounded-full bg-[#0078d4] px-1 text-[8px] font-bold leading-none text-white">
+                  <span className="absolute top-1 right-1 rounded-full bg-[#0078d4] px-1 text-[8px] leading-none font-bold text-white">
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}

@@ -15,14 +15,15 @@ async def run_git(
 ) -> tuple[int, str]:
     """Run a git command and return (returncode, combined_output)."""
     proc = await asyncio.create_subprocess_exec(
-        "git", *args,
+        "git",
+        *args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=cwd,
     )
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return 1, f"git {' '.join(args)} timed out after {timeout}s"
     return proc.returncode or 0, stdout.decode()
@@ -43,7 +44,7 @@ async def run_gh(
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return 1, "", f"gh {' '.join(args)} timed out after {timeout}s"
     return proc.returncode or 0, stdout.decode(), stderr.decode()

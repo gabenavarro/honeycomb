@@ -1,0 +1,104 @@
+# Root pyproject.toml for Honeycomb.
+#
+# This file is NOT a Python package — it carries repo-wide tool config
+# (ruff, mypy, pytest defaults) that applies across hub/, hive-agent/,
+# gitops/, and bootstrapper/. Each of hub/ and hive-agent/ still has
+# its own pyproject.toml for distribution.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    "dashboard/node_modules",
+    "dashboard/dist",
+    ".venv",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line too long — formatter handles it
+    "SIM108", # ternary rewrites are not always clearer
+    "B008",   # FastAPI's Depends() in defaults is idiomatic
+    # The rules below trigger on pre-M1 code only. A dedicated cleanup
+    # pass will re-enable them (tracked in the plan as post-M1 polish);
+    # keeping them off for this milestone keeps the CI signal focused
+    # on *new* regressions.
+    "B904",   # raise X from err  (29 call-sites to touch; trivial but noisy)
+    "E741",   # ambiguous variable names (4 call-sites)
+    "N817",   # camelcase-imported-as-acronym (2 call-sites)
+    "N818",   # error-suffix-on-exception-name (1 call-site)
+    "RUF002", # ambiguous unicode in docstring (1 call-site)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["N802", "N803"]       # test helpers can use any casing
+"**/__init__.py" = ["F401"]            # re-exports
+# The worker-side HTTP listener is scheduled for deletion in M4
+# (reverse-tunnel transport). Don't bother cleaning it up here.
+"hive-agent/hive_agent/command_listener.py" = ["RUF006"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+no_implicit_optional = true
+check_untyped_defs = true
+# Strict mode is not yet enforceable repo-wide. The current mypy config is
+# intentionally permissive — its job in M1 is to block *new* broken typing,
+# not to force a cleanup of the pre-M1 tree. Tighten (warn_unreachable,
+# warn_unused_ignores, strict = true) in a dedicated typing milestone.
+strict = false
+warn_unreachable = false
+warn_unused_ignores = false
+warn_redundant_casts = false
+exclude = [
+    "^dashboard/",
+    "^\\.venv/",
+    "^venv/",
+    "^build/",
+    "^dist/",
+]
+
+[[tool.mypy.overrides]]
+# Docker SDK has incomplete stubs; don't fail CI on its internals.
+module = ["docker.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aiosqlite.*", "jinja2.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Docker-py returns `object` from several collection methods. A proper
+# fix is either casts or a stub shim; out of scope for M1. Revisit when
+# we rewrite these modules (discover.py is partly redone in M4).
+module = ["hub.services.discovery", "hub.routers.discover", "hub.main"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+asyncio_mode = "auto"
+testpaths = ["hub/tests", "hive-agent/tests", "gitops/tests", "bootstrapper/tests"]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:docker.*",
+    # ResourceWarning leaks from hive-agent's subprocess-based tests; the
+    # listener is being replaced in M4, so don't elevate these to test
+    # failures in the meantime.
+    "ignore::ResourceWarning",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]

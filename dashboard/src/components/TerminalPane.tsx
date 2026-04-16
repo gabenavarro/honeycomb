@@ -39,11 +39,7 @@ interface Props {
   hasClaudeCli: boolean;
 }
 
-export function TerminalPane({
-  containerId,
-  containerName,
-  hasClaudeCli,
-}: Props) {
+export function TerminalPane({ containerId, containerName, hasClaudeCli }: Props) {
   const [kind, setKind] = useState<SessionKind>(() => {
     const stored = localStorage.getItem(`hive:terminal-last-kind:${containerId}`);
     return stored === "claude" ? "claude" : "shell";
@@ -63,7 +59,7 @@ export function TerminalPane({
         activeKind={kind}
         onSelect={setKind}
       />
-      <div className="relative flex flex-1 min-w-0 overflow-hidden">
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <ShellPaneSlot
           recordId={containerId}
           containerName={containerName}
@@ -136,10 +132,7 @@ function SubTab({
   icon: React.ReactNode;
   label: string;
 }) {
-  const { isStreaming, hasLines, lastActive } = useSessionSummary(
-    containerId,
-    kind,
-  );
+  const { isStreaming, hasLines, lastActive } = useSessionSummary(containerId, kind);
   const accent =
     kind === "claude"
       ? active
@@ -166,16 +159,10 @@ function SubTab({
       {icon}
       {label}
       {isStreaming && (
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-yellow-400"
-          aria-label="streaming"
-        />
+        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400" aria-label="streaming" />
       )}
       {!isStreaming && hasLines && (
-        <span
-          className="h-1.5 w-1.5 rounded-full bg-gray-600"
-          aria-label="has history"
-        />
+        <span className="h-1.5 w-1.5 rounded-full bg-gray-600" aria-label="has history" />
       )}
     </button>
   );
@@ -195,7 +182,7 @@ function ShellPaneSlot({
 }) {
   return (
     <div
-      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "invisible pointer-events-none" : ""}`}
+      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "pointer-events-none invisible" : ""}`}
       aria-hidden={hidden}
     >
       <PtyPane
@@ -231,7 +218,7 @@ function ClaudePaneSlot({
 
   return (
     <div
-      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "invisible pointer-events-none" : ""}`}
+      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "pointer-events-none invisible" : ""}`}
       aria-hidden={hidden}
     >
       <div className="flex items-center gap-1 border-b border-gray-800/70 px-2 py-1 text-[10px] text-gray-600">
@@ -250,7 +237,9 @@ function ClaudePaneSlot({
           title="Live Claude REPL over PTY. Slash commands (/login, /resume, /compact) work."
         />
         <span className="ml-auto text-gray-700">
-          {mode === "interactive" ? "/login, /resume, /compact all work" : "prompt → response, one shot"}
+          {mode === "interactive"
+            ? "/login, /resume, /compact all work"
+            : "prompt → response, one shot"}
         </span>
       </div>
       {mode === "quick" ? (
@@ -407,9 +396,7 @@ function SessionPane({
         },
       ]);
       const command =
-        kind === "claude"
-          ? `claude -p ${JSON.stringify(input)} --output-format text`
-          : input;
+        kind === "claude" ? `claude -p ${JSON.stringify(input)} --output-format text` : input;
       execMut.mutate(command);
       session.setDraft("");
     },
@@ -422,7 +409,7 @@ function SessionPane({
 
   return (
     <div
-      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "invisible pointer-events-none" : ""}`}
+      className={`absolute inset-0 flex min-w-0 flex-col ${hidden ? "pointer-events-none invisible" : ""}`}
       aria-hidden={hidden}
     >
       <div className="flex items-center justify-end gap-1 border-b border-gray-800/70 px-2 py-1 text-[10px] text-gray-600">
@@ -463,13 +450,10 @@ function SessionPane({
       </div>
 
       {showClaudeGate && (
-        <ClaudeInstallGate
-          containerId={containerId}
-          containerName={containerName}
-        />
+        <ClaudeInstallGate containerId={containerId} containerName={containerName} />
       )}
 
-      <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden px-2 py-1">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden px-2 py-1">
         <XTermOutput
           lines={session.state.lines}
           kind={kind}
@@ -487,7 +471,7 @@ function SessionPane({
         value={session.state.draft}
         onChange={session.setDraft}
         onSubmit={runInput}
-        disabled={execMut.isPending || (showClaudeGate)}
+        disabled={execMut.isPending || showClaudeGate}
         history={session.state.history}
       />
     </div>
