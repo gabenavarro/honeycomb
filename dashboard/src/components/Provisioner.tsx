@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Loader2, Search, Edit3, Folder, Box, Zap, RefreshCw, Check } from "lucide-react";
-import { createContainer, registerDiscovered } from "../lib/api";
-import type { ContainerCandidate, ProjectType, WorkspaceCandidate, WSFrame } from "../lib/types";
-import { useHiveWebSocket } from "../hooks/useWebSocket";
+import { Box, Check, Edit3, Folder, Loader2, Plus, RefreshCw, Search, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { useDiscovery } from "../hooks/useDiscovery";
 import { useToasts } from "../hooks/useToasts";
+import { useHiveWebSocket } from "../hooks/useWebSocket";
+import { createContainer, registerDiscovered } from "../lib/api";
+import type { ContainerCandidate, ProjectType, WorkspaceCandidate, WSFrame } from "../lib/types";
 
 const projectTypes: { value: ProjectType; label: string; desc: string }[] = [
   { value: "base", label: "Base", desc: "General-purpose development" },
@@ -38,52 +40,61 @@ export function Provisioner({ onClose }: Props) {
   const [prefill, setPrefill] = useState<Prefill | null>(null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-2xl rounded-lg border border-gray-700 bg-gray-900 shadow-xl">
-        {/* Tab bar */}
-        <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2">
-          <div className="flex gap-1">
-            <TabButton
-              active={tab === "discover"}
-              onClick={() => setTab("discover")}
-              icon={<Search size={12} />}
-              label="Discover"
-            />
-            <TabButton
-              active={tab === "manual"}
-              onClick={() => setTab("manual")}
-              icon={<Edit3 size={12} />}
-              label="Manual"
-            />
+    <Dialog.Root open onOpenChange={(next) => (next ? undefined : onClose())}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
+        <Dialog.Content
+          className="fixed top-1/2 left-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-lg border border-gray-700 bg-gray-900 shadow-xl outline-none"
+          aria-describedby={undefined}
+        >
+          <Dialog.Title className="sr-only">Register a devcontainer</Dialog.Title>
+          {/* Tab bar */}
+          <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2">
+            <div className="flex gap-1">
+              <TabButton
+                active={tab === "discover"}
+                onClick={() => setTab("discover")}
+                icon={<Search size={12} />}
+                label="Discover"
+              />
+              <TabButton
+                active={tab === "manual"}
+                onClick={() => setTab("manual")}
+                icon={<Edit3 size={12} />}
+                label="Manual"
+              />
+            </div>
+            <Dialog.Close
+              className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4]"
+              aria-label="Close dialog"
+            >
+              ✕
+            </Dialog.Close>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300"
-            aria-label="Close dialog"
-          >
-            ✕
-          </button>
-        </div>
 
-        {tab === "discover" ? (
-          <DiscoverTab
-            onClose={onClose}
-            onPickWorkspace={(ws) => {
-              setPrefill({
-                workspace_folder: ws.workspace_folder,
-                project_name: ws.project_name,
-                project_type: ws.inferred_project_type,
-                source_label: `Workspace: ${ws.workspace_folder}`,
-              });
-              setTab("manual");
-            }}
-          />
-        ) : (
-          <ManualTab onClose={onClose} prefill={prefill} onClearPrefill={() => setPrefill(null)} />
-        )}
-      </div>
-    </div>
+          {tab === "discover" ? (
+            <DiscoverTab
+              onClose={onClose}
+              onPickWorkspace={(ws) => {
+                setPrefill({
+                  workspace_folder: ws.workspace_folder,
+                  project_name: ws.project_name,
+                  project_type: ws.inferred_project_type,
+                  source_label: `Workspace: ${ws.workspace_folder}`,
+                });
+                setTab("manual");
+              }}
+            />
+          ) : (
+            <ManualTab
+              onClose={onClose}
+              prefill={prefill}
+              onClearPrefill={() => setPrefill(null)}
+            />
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
