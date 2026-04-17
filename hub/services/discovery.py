@@ -308,11 +308,41 @@ def _infer_container_project_name(container, workspace: str | None) -> str:
     return container.name or container.short_id
 
 
+# Docker ``ps`` status values we surface in Discover. Dead containers are
+# removed, not restartable, and noisy — exclude them. "restarting" looks
+# like a transient — include it so the user isn't surprised by a flip.
+_DISCOVERABLE_STATUSES: tuple[str, ...] = (
+    "running",
+    "paused",
+    "restarting",
+    "created",
+    "exited",
+)
+
+# Display sort: running-first, then other active states, then stopped.
+# Names break ties so the list is stable across refreshes.
+_STATUS_SORT_ORDER: dict[str, int] = {
+    "running": 0,
+    "restarting": 1,
+    "paused": 2,
+    "created": 3,
+    "exited": 4,
+}
+
+
 async def scan_container_candidates(
     registered_container_ids: set[str],
     agent_registry: object | None = None,
 ) -> list[ContainerCandidate]:
-    """Return running Docker containers that are not already registered.
+    """Return Docker containers on the host that aren't already registered.
+
+    Historically this filtered to ``status: running`` only, which was
+    confusing for operators who had created-but-stopped containers in
+    Docker Desktop's UI (whose "in use" green dot does *not* mean
+    running). We now include every non-dead status and let the UI badge
+    them — registration against a stopped container records
+    ``container_status=stopped`` in the registry so the user can start
+    it from the dashboard.
 
     ``has_hive_agent`` is sourced from the :class:`AgentRegistry` since
     M4 — a container only shows as "agent: yes" when a hive-agent has
@@ -326,7 +356,10 @@ async def scan_container_candidates(
         return []
 
     try:
-        running = client.containers.list(filters={"status": "running"})
+        # ``all=True`` bypasses the default running-only filter. We
+        # then drop "dead" + "removing" ourselves since those are not
+        # useful registration targets.
+        containers = client.containers.list(all=True)
     except docker.errors.DockerException as exc:
         logger.warning("docker ps failed: %s", exc)
         return []
@@ -340,7 +373,9 @@ async def scan_container_candidates(
             return False
 
     candidates: list[ContainerCandidate] = []
-    for container in running:
+    for container in containers:
+        if container.status not in _DISCOVERABLE_STATUSES:
+            continue
         if container.short_id in registered_container_ids:
             continue
         workspace = _infer_workspace_from_container(container)
@@ -370,7 +405,9 @@ async def scan_container_candidates(
             )
         )
 
-    candidates.sort(key=lambda c: c.name)
+    candidates.sort(
+        key=lambda c: (_STATUS_SORT_ORDER.get(c.status, len(_STATUS_SORT_ORDER)), c.name)
+    )
     return candidates
 
 

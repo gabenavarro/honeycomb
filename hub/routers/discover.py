@@ -99,6 +99,7 @@ async def register_discovered(request: Request, req: DiscoverRegisterRequest) ->
     # its workspace folder if the caller didn't supply one.
     resolved_workspace = req.workspace_folder
     resolved_container_id: str | None = None
+    resolved_container_running: bool = False
 
     if req.container_id:
         import docker
@@ -108,6 +109,7 @@ async def register_discovered(request: Request, req: DiscoverRegisterRequest) ->
             client = docker.from_env()
             container = client.containers.get(req.container_id)
             resolved_container_id = container.short_id
+            resolved_container_running = container.status == "running"
             if not resolved_workspace:
                 from hub.services.discovery import _infer_workspace_from_container
 
@@ -158,16 +160,25 @@ async def register_discovered(request: Request, req: DiscoverRegisterRequest) ->
         has_gpu=has_gpu,
     )
 
-    # Link the discovered container, transition to running via STARTING
-    # per the state machine.
+    # Link the discovered container with a state that matches Docker's
+    # current view. Running → go through STARTING then RUNNING per the
+    # state machine; anything else → STOPPED so the user can start it
+    # from the dashboard without the hub pretending it's already live.
     if resolved_container_id:
         try:
-            await registry.update(record.id, container_status=ContainerStatus.STARTING.value)
-            record = await registry.update(
-                record.id,
-                container_id=resolved_container_id,
-                container_status=ContainerStatus.RUNNING.value,
-            )
+            if resolved_container_running:
+                await registry.update(record.id, container_status=ContainerStatus.STARTING.value)
+                record = await registry.update(
+                    record.id,
+                    container_id=resolved_container_id,
+                    container_status=ContainerStatus.RUNNING.value,
+                )
+            else:
+                record = await registry.update(
+                    record.id,
+                    container_id=resolved_container_id,
+                    container_status=ContainerStatus.STOPPED.value,
+                )
         except InvalidStateTransition as exc:
             logger.warning("State machine rejected transition during register: %s", exc)
 
@@ -211,8 +222,11 @@ async def register_discovered(request: Request, req: DiscoverRegisterRequest) ->
 
     # Probe for Claude CLI presence. Non-fatal — missing CLI is the
     # common case and the UI renders an install gate when has_claude_cli
-    # is false. Only probe if we have a live container_id.
-    if record.container_id:
+    # is false. Only probe when both (a) we have a container_id and (b)
+    # the container is currently running — ``docker exec`` on a stopped
+    # container returns a confusing 409 and flips the probe to false
+    # for reasons unrelated to whether the CLI is installed.
+    if record.container_id and record.container_status == ContainerStatus.RUNNING:
         from datetime import datetime as _dt
 
         from hub.services.tool_probe import has_claude_cli as _probe
