@@ -34,6 +34,39 @@ function buildWsUrl(): string {
 
 type Listener = (frame: WSFrame) => void;
 
+/** Event fired when a subscribed listener throws during dispatch. A
+ * companion component ``WebSocketListenerErrorWatcher`` subscribes to
+ * this and surfaces a warning toast — decoupling the singleton from
+ * the React toast context keeps the socket initialisable outside of
+ * React (SSR, tests, etc.). */
+const LISTENER_ERROR_EVENT = "hive:ws:listenerError";
+
+function safeInvoke(cb: Listener, frame: WSFrame): void {
+  try {
+    cb(frame);
+  } catch (err) {
+    console.warn("[hive-ws] listener threw while handling frame", { channel: frame.channel, err });
+    try {
+      window.dispatchEvent(
+        new CustomEvent(LISTENER_ERROR_EVENT, { detail: { channel: frame.channel, error: err } }),
+      );
+    } catch {
+      // ignore — dispatch failure should never cascade into the socket.
+    }
+  }
+}
+
+export function onWebSocketListenerError(
+  cb: (detail: { channel: string; error: unknown }) => void,
+): () => void {
+  const handler = (ev: Event) => {
+    const detail = (ev as CustomEvent<{ channel: string; error: unknown }>).detail;
+    if (detail) cb(detail);
+  };
+  window.addEventListener(LISTENER_ERROR_EVENT, handler);
+  return () => window.removeEventListener(LISTENER_ERROR_EVENT, handler);
+}
+
 class HiveSocket {
   private ws: WebSocket | null = null;
   private connected = false;
@@ -182,11 +215,11 @@ class HiveSocket {
   private dispatch(frame: WSFrame): void {
     const channelListeners = this.listeners.get(frame.channel);
     if (channelListeners) {
-      for (const cb of channelListeners) cb(frame);
+      for (const cb of channelListeners) safeInvoke(cb, frame);
     }
     const wildcards = this.listeners.get("*");
     if (wildcards) {
-      for (const cb of wildcards) cb(frame);
+      for (const cb of wildcards) safeInvoke(cb, frame);
     }
   }
 

@@ -57,6 +57,15 @@ function parseRepo(repoFull: string): { owner: string; repo: string } | null {
   return { owner: parts[parts.length - 2], repo: parts[parts.length - 1] };
 }
 
+// Match the query-key shape used in ``GitOpsPanel`` and ``App``. Both
+// call ``listPRs("open")`` but the key is just ``["prs"]`` — keep the
+// optimistic helpers using the same literal.
+const PRS_KEY = ["prs"] as const;
+
+interface PRMutationContext {
+  previous: PullRequestSummary[] | undefined;
+}
+
 function PRRow({ pr }: { pr: PullRequestSummary }) {
   const { toast } = useToasts();
   const queryClient = useQueryClient();
@@ -69,17 +78,49 @@ function PRRow({ pr }: { pr: PullRequestSummary }) {
         ? "text-red-400"
         : "text-gray-400";
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["prs"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: PRS_KEY });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Optimistic helpers (M9). The pattern is the TanStack-Query analogue
+  // of React 19's ``useOptimistic``: snapshot → mutate cache → roll back
+  // on error → always invalidate on settle so the server becomes the
+  // source of truth within one refetch.
+  // ──────────────────────────────────────────────────────────────────
+  const snapshot = (): PRMutationContext => {
+    const previous = queryClient.getQueryData<PullRequestSummary[]>(PRS_KEY);
+    return { previous };
+  };
+  const rollback = (_err: unknown, ctx: PRMutationContext | undefined, label: string) => {
+    if (ctx?.previous !== undefined) {
+      queryClient.setQueryData(PRS_KEY, ctx.previous);
+    }
+    const message = _err instanceof Error ? _err.message : String(_err);
+    toast("error", `${label} failed`, message);
+  };
 
   const approveMut = useMutation({
     mutationFn: () => {
       if (!parsed) throw new Error(`Cannot parse repo: ${pr.repo}`);
       return reviewPR(parsed.owner, parsed.repo, pr.number, "approve");
     },
+    onMutate: (): PRMutationContext => {
+      const ctx = snapshot();
+      // Flip this PR's review_status to APPROVED so the UI reflects the
+      // intent instantly; the server confirms on settle.
+      queryClient.setQueryData<PullRequestSummary[]>(PRS_KEY, (old) =>
+        (old ?? []).map((row) =>
+          row.repo === pr.repo && row.number === pr.number
+            ? { ...row, review_status: "APPROVED" }
+            : row,
+        ),
+      );
+      return ctx;
+    },
     onSuccess: () => {
       toast("success", `Approved #${pr.number}`);
-      invalidate();
     },
+    onError: (err, _vars, ctx) => rollback(err, ctx, `Approve #${pr.number}`),
+    onSettled: invalidate,
   });
 
   const mergeMut = useMutation({
@@ -87,10 +128,21 @@ function PRRow({ pr }: { pr: PullRequestSummary }) {
       if (!parsed) throw new Error(`Cannot parse repo: ${pr.repo}`);
       return mergePR(parsed.owner, parsed.repo, pr.number, "squash", true);
     },
+    onMutate: (): PRMutationContext => {
+      const ctx = snapshot();
+      // A squash-merge removes the PR from "open" immediately on the
+      // server side — mirror that locally so the row disappears rather
+      // than lingering while the refetch runs.
+      queryClient.setQueryData<PullRequestSummary[]>(PRS_KEY, (old) =>
+        (old ?? []).filter((row) => !(row.repo === pr.repo && row.number === pr.number)),
+      );
+      return ctx;
+    },
     onSuccess: () => {
       toast("success", `Merged #${pr.number}`, "Branch deleted (squash).");
-      invalidate();
     },
+    onError: (err, _vars, ctx) => rollback(err, ctx, `Merge #${pr.number}`),
+    onSettled: invalidate,
   });
 
   const commentMut = useMutation({
@@ -100,8 +152,10 @@ function PRRow({ pr }: { pr: PullRequestSummary }) {
     },
     onSuccess: () => {
       toast("success", `Comment added to #${pr.number}`);
-      invalidate();
     },
+    onError: (err) =>
+      toast("error", `Comment on #${pr.number} failed`, (err as Error).message ?? String(err)),
+    onSettled: invalidate,
   });
 
   const busy = approveMut.isPending || mergeMut.isPending || commentMut.isPending;

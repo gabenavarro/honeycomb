@@ -1,6 +1,21 @@
-/** API client for the Claude Hive hub. */
+/** API client for the Claude Hive hub.
+ *
+ * Every response is fed through a zod schema (M9). On a schema mismatch
+ * we log to the console and return the raw payload — the dashboard
+ * keeps rendering instead of a cascade of undefined-property errors. */
 
 import { clearAuthToken, getAuthToken, UnauthorizedError } from "./auth";
+import {
+  CommandResponseSchema,
+  ContainerRecordListSchema,
+  ContainerRecordSchema,
+  DiscoveryResponseSchema,
+  HubHealthSchema,
+  PullRequestListSchema,
+  RepoStatusListSchema,
+  ResourceStatsSchema,
+  validateResponse,
+} from "./schemas";
 import type {
   CommandResponse,
   ContainerCreate,
@@ -12,10 +27,11 @@ import type {
   RepoStatus,
   ResourceStats,
 } from "./types";
+import { z } from "zod";
 
 const BASE = "/api";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, schema?: z.ZodType<T>): Promise<T> {
   const token = getAuthToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -36,22 +52,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await res.text();
     throw new Error(`${res.status}: ${body}`);
   }
-  return res.json();
+  const json = (await res.json()) as unknown;
+  if (schema) return validateResponse(schema, path, json);
+  return json as T;
 }
 
 // --- Health ---
-export const getHealth = () => request<HubHealth>("/health");
+export const getHealth = () => request<HubHealth>("/health", undefined, HubHealthSchema);
 
 // --- Containers ---
-export const listContainers = () => request<ContainerRecord[]>("/containers");
+export const listContainers = () =>
+  request<ContainerRecord[]>("/containers", undefined, ContainerRecordListSchema);
 
-export const getContainer = (id: number) => request<ContainerRecord>(`/containers/${id}`);
+export const getContainer = (id: number) =>
+  request<ContainerRecord>(`/containers/${id}`, undefined, ContainerRecordSchema);
 
 export const createContainer = (data: ContainerCreate) =>
-  request<ContainerRecord>("/containers", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  request<ContainerRecord>(
+    "/containers",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    ContainerRecordSchema,
+  );
 
 export const deleteContainer = (id: number, force = false) =>
   request<{ deleted: boolean }>(`/containers/${id}?force=${force}`, {
@@ -59,13 +83,13 @@ export const deleteContainer = (id: number, force = false) =>
   });
 
 export const startContainer = (id: number) =>
-  request<ContainerRecord>(`/containers/${id}/start`, { method: "POST" });
+  request<ContainerRecord>(`/containers/${id}/start`, { method: "POST" }, ContainerRecordSchema);
 
 export const stopContainer = (id: number) =>
-  request<ContainerRecord>(`/containers/${id}/stop`, { method: "POST" });
+  request<ContainerRecord>(`/containers/${id}/stop`, { method: "POST" }, ContainerRecordSchema);
 
 export const rebuildContainer = (id: number) =>
-  request<ContainerRecord>(`/containers/${id}/rebuild`, { method: "POST" });
+  request<ContainerRecord>(`/containers/${id}/rebuild`, { method: "POST" }, ContainerRecordSchema);
 
 export interface InstallClaudeCliResult {
   installed: boolean;
@@ -79,29 +103,45 @@ export const installClaudeCli = (id: number) =>
   });
 
 export const getResources = (id: number) =>
-  request<ResourceStats | null>(`/containers/${id}/resources`);
+  request<ResourceStats | null>(
+    `/containers/${id}/resources`,
+    undefined,
+    // The resources endpoint returns null when stats aren't available
+    // yet — tolerate that without a schema warning.
+    ResourceStatsSchema.nullable(),
+  );
 
 // --- Commands ---
 export const execCommand = (containerId: number, command: string) =>
-  request<CommandResponse>(`/containers/${containerId}/commands`, {
-    method: "POST",
-    body: JSON.stringify({ command }),
-  });
+  request<CommandResponse>(
+    `/containers/${containerId}/commands`,
+    {
+      method: "POST",
+      body: JSON.stringify({ command }),
+    },
+    CommandResponseSchema,
+  );
 
 // --- Discovery ---
-export const discoverAll = () => request<DiscoveryResponse>("/discover");
+export const discoverAll = () =>
+  request<DiscoveryResponse>("/discover", undefined, DiscoveryResponseSchema);
 
 export const registerDiscovered = (data: DiscoverRegisterRequest) =>
-  request<ContainerRecord>("/discover/register", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
+  request<ContainerRecord>(
+    "/discover/register",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    ContainerRecordSchema,
+  );
 
 // --- GitOps ---
-export const listRepos = () => request<RepoStatus[]>("/gitops/repos");
+export const listRepos = () =>
+  request<RepoStatus[]>("/gitops/repos", undefined, RepoStatusListSchema);
 
 export const listPRs = (state = "open") =>
-  request<PullRequestSummary[]>(`/gitops/prs?state=${state}`);
+  request<PullRequestSummary[]>(`/gitops/prs?state=${state}`, undefined, PullRequestListSchema);
 
 export const mergePR = (
   owner: string,
