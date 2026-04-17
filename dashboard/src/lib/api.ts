@@ -226,6 +226,18 @@ export function containerFileDownloadUrl(id: number, path: string): string {
   return `/api/containers/${id}/fs/download?path=${encodeURIComponent(path)}`;
 }
 
+export interface ContainerSessionInfo {
+  session_id: string;
+  container_id: string;
+  cols: number;
+  rows: number;
+  attached: boolean;
+  detached_for_seconds: number | null;
+}
+
+export const listContainerSessions = (id: number) =>
+  request<{ sessions: ContainerSessionInfo[] }>(`/containers/${id}/sessions`);
+
 export const commitChanges = (
   workspace_folder: string,
   message: string,

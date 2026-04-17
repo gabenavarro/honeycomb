@@ -24,6 +24,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { getAuthToken } from "../lib/auth";
+import { scanForAttention } from "../hooks/useAttention";
 import { useToasts } from "../hooks/useToasts";
 
 type PtyStatus = "connecting" | "connected" | "reattached" | "disconnected" | "closed";
@@ -229,7 +230,20 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
         }
         // Binary = PTY stdout. The ArrayBuffer comes straight from
         // docker; xterm.js handles it via Uint8Array.
-        term.write(new Uint8Array(ev.data));
+        const bytes = new Uint8Array(ev.data);
+        term.write(bytes);
+        // M20: scan decoded output for interactive-prompt markers so
+        // the container tab can flash a "needs attention" icon. ANSI
+        // sequences confuse the regex, so strip them crudely — a real
+        // terminal parser would be overkill for tail-end prompt text.
+        try {
+          // eslint-disable-next-line no-control-regex -- ANSI CSI sequences
+          const ansiRe = /\u001b\[[0-9;?]*[A-Za-z]/g;
+          const text = new TextDecoder().decode(bytes).replace(ansiRe, "");
+          scanForAttention(recordId, text);
+        } catch {
+          // ignore decoder failures — they don't hurt anything.
+        }
       };
 
       const handleControl = (msg: string) => {

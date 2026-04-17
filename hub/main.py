@@ -253,10 +253,15 @@ async def lifespan(app: FastAPI):
     logger.info("hub_stopped")
 
 
+# Single source of truth for the hub's advertised version. Bump on
+# every milestone merge so ``/api/health`` reports a value the
+# dashboard can compare against to detect a stale long-lived hub.
+HUB_VERSION = "0.2.0"
+
 app = FastAPI(
     title="Claude Hive Hub",
     description="Centralized orchestrator for devcontainer-based Claude Code environments",
-    version="0.1.0",
+    version=HUB_VERSION,
     lifespan=lifespan,
 )
 
@@ -443,7 +448,7 @@ async def health(request: FARequest) -> dict:
     containers_list = await registry.list_all()
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": HUB_VERSION,
         "registered_containers": len(containers_list),
     }
 
