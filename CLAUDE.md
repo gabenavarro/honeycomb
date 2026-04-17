@@ -75,11 +75,13 @@ Claude Hive works **with** the devcontainer ecosystem, not around it:
 
 - **Backend**: Python 3.12+, FastAPI, Docker SDK for Python, `devcontainer` CLI, `gh` CLI
 - **Frontend**: React 19, Vite, xterm.js (terminal emulation), TanStack Query
-- **Communication**: Multiplexed WebSocket (hub ↔ dashboard) with per-container channels, persistent-PTY WebSockets at `/ws/pty/{record_id}`, three-path command relay (hub → workers: `hive-agent` HTTP → `devcontainer exec` → `docker exec`), Docker SDK for inspection
+- **Communication**: Multiplexed WebSocket (hub ↔ dashboard) with per-container channels + `problems`/`logs:hub`/`cmd:{id}`/`build:{path}` broadcast channels, persistent-PTY WebSockets at `/ws/pty/{record_id}`, three-path command relay (hub → workers: agent reverse-tunnel WebSocket at `/api/agent/connect` → `devcontainer exec` → `docker exec`), Docker SDK for inspection
 - **Container Runtime**: Docker with devcontainer CLI for orchestration
-- **Bootstrapping**: DevContainer Features + Jinja2 templates
-- **Worker Agent**: `hive-agent` — lightweight Python process installed in the dev stage of every worker container. Connects back to the hub via HTTP. Provides heartbeat, status reporting, and accepts commands without requiring `devcontainer exec` for every interaction.
-- **Auth**: None for dashboard (local-only, bound to `127.0.0.1`). GitHub PAT for `gh` CLI across containers.
+- **Bootstrapping**: DevContainer Features + Jinja2 `SandboxedEnvironment` templates
+- **Worker Agent**: `hive-agent` — lightweight Python process installed in the dev stage of every worker container. Since M4 it dials the hub over an authenticated WebSocket (`wss://hub/api/agent/connect?token=…&container=…`) rather than binding a local HTTP listener. Heartbeats, command dispatch, and output streaming all flow over the same socket.
+- **Auth**: Bearer token gating every HTTP + WebSocket endpoint (M3). Token is generated on first start and persisted at `~/.config/honeycomb/token`. Dashboards pass it as a Bearer header and as `?token=` on WebSocket upgrades. GitHub PAT still handles `gh` CLI across containers.
+- **Storage**: SQLAlchemy async + Alembic migrations over SQLite (M7); migrations apply on boot, legacy databases are backed up automatically. Settings overrides for `log_level`, `discover_roots`, `metrics_enabled` persist to `~/.config/honeycomb/settings.json` and layer on top of env-driven defaults.
+- **Observability**: structlog with request-id + container-id binding; a subset of events fans out to the `logs:hub` WebSocket channel so dashboards can tail the hub. Prometheus `/metrics` endpoint exposes container/status/relay-path/PTY counts when `metrics_enabled`.
 
 ## Project Structure
 
@@ -197,7 +199,7 @@ claude-hive/
 
 - **Python**: Use `uv` for dependency management. Type hints required. Pydantic v2 for all data models. Async-first (FastAPI async endpoints).
 - **TypeScript/React**: Functional components only. Use TanStack Query for server state. Tailwind CSS for styling.
-- **Docker**: Multi-stage builds. Pin base image versions. Non-root users in production images.
+- **Docker**: Multi-stage builds (`base` → `dev` / `prod`). Pin base image versions. The `dev` stage runs as a non-root `app` user (M6). Prod stages inherit the same non-root default; explicitly re-assert `USER app` there before adding runtime entrypoints.
 - **Testing**: pytest for Python, Vitest for TypeScript. Integration tests use testcontainers-python.
 - **Git**: Conventional commits. Feature branches off `main`. PRs require passing CI.
 

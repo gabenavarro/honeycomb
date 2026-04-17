@@ -19,13 +19,14 @@ test.beforeEach(async ({ context }) => {
       // ignore
     }
   });
-  // Register the catch-all first so the more-specific handler below
-  // runs earlier — Playwright evaluates route handlers in *reverse*
-  // registration order.
-  await context.route("**/api/**", (route) => route.fulfill({ status: 401, body: "Unauthorized" }));
-  await context.route("**/api/containers", (route) => {
-    const auth = route.request().headers()["authorization"];
-    if (auth === `Bearer ${GOOD_TOKEN}`) {
+  // Single dispatching handler — removes any ambiguity about Playwright's
+  // route evaluation order and keeps the auth-gated response shape in
+  // one place.
+  await context.route("**/api/**", (route) => {
+    const url = route.request().url();
+    const auth = route.request().headers()["authorization"] ?? "";
+    const hasBearer = auth.startsWith("Bearer ") && auth.length > "Bearer ".length;
+    if (url.endsWith("/api/containers") && hasBearer) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
