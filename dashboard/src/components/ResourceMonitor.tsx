@@ -1,16 +1,46 @@
 import { useQuery } from "@tanstack/react-query";
 import { Cpu, HardDrive, MonitorDot } from "lucide-react";
+
 import { getResources } from "../lib/api";
 
 interface Props {
   containerId: number;
 }
 
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+interface BarProps {
+  value: number;
+  max: number;
+  color: string;
+  label: string;
+  valueText: string;
+}
+
+/** Semantic progress bar used by CPU / memory / GPU rows.
+ *
+ * Since M8 the bar carries the correct WAI-ARIA role
+ * (``role="progressbar"``) plus ``aria-valuenow`` / ``aria-valuemin``
+ * / ``aria-valuemax`` so screen readers announce the percentage, and
+ * ``aria-label`` + ``aria-valuetext`` for human-readable context. The
+ * fill div stays an inner ``<div>`` without its own role so the
+ * semantic wrapper is what assistive tech picks up.
+ */
+function Bar({ value, max, color, label, valueText }: BarProps) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
-    <div className="h-1.5 w-full rounded-full bg-gray-800">
-      <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+    <div
+      className="h-1.5 w-full rounded-full bg-gray-800"
+      role="progressbar"
+      aria-label={label}
+      aria-valuenow={Math.round(pct)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={valueText}
+    >
+      <div
+        className={`h-full rounded-full ${color}`}
+        style={{ width: `${pct}%` }}
+        aria-hidden="true"
+      />
     </div>
   );
 }
@@ -38,7 +68,7 @@ export function ResourceMonitor({ containerId }: Props) {
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px]">
           <span className="flex items-center gap-1 text-gray-500">
-            <Cpu size={10} /> CPU
+            <Cpu size={10} aria-hidden="true" /> CPU
           </span>
           <span className="text-gray-400">{stats.cpu_percent.toFixed(1)}%</span>
         </div>
@@ -52,6 +82,8 @@ export function ResourceMonitor({ containerId }: Props) {
                 ? "bg-yellow-500"
                 : "bg-blue-500"
           }
+          label="CPU utilisation"
+          valueText={`${stats.cpu_percent.toFixed(1)} percent`}
         />
       </div>
 
@@ -59,7 +91,7 @@ export function ResourceMonitor({ containerId }: Props) {
       <div className="space-y-1">
         <div className="flex items-center justify-between text-[11px]">
           <span className="flex items-center gap-1 text-gray-500">
-            <HardDrive size={10} /> Memory
+            <HardDrive size={10} aria-hidden="true" /> Memory
           </span>
           <span className="text-gray-400">
             {stats.memory_mb.toFixed(0)} / {stats.memory_limit_mb.toFixed(0)} MB
@@ -75,6 +107,8 @@ export function ResourceMonitor({ containerId }: Props) {
                 ? "bg-yellow-500"
                 : "bg-emerald-500"
           }
+          label="Memory utilisation"
+          valueText={`${stats.memory_mb.toFixed(0)} of ${stats.memory_limit_mb.toFixed(0)} megabytes, ${stats.memory_percent.toFixed(1)} percent`}
         />
       </div>
 
@@ -83,7 +117,7 @@ export function ResourceMonitor({ containerId }: Props) {
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[11px]">
             <span className="flex items-center gap-1 text-gray-500">
-              <MonitorDot size={10} /> GPU
+              <MonitorDot size={10} aria-hidden="true" /> GPU
             </span>
             <span className="text-gray-400">
               {stats.gpu_utilization.toFixed(0)}% — {stats.gpu_memory_mb?.toFixed(0)} /{" "}
@@ -94,6 +128,8 @@ export function ResourceMonitor({ containerId }: Props) {
             value={stats.gpu_utilization}
             max={100}
             color={stats.gpu_utilization > 95 ? "bg-red-500" : "bg-amber-500"}
+            label="GPU utilisation"
+            valueText={`${stats.gpu_utilization.toFixed(0)} percent`}
           />
         </div>
       )}

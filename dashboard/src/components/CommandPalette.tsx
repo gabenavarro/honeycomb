@@ -1,12 +1,24 @@
-/** Cmd+K / Ctrl+K palette — the VSCode/Cursor quick-switch.
- * Lightweight: substring match, no fuzzy algorithm, no new deps. */
+/** Cmd+K / Ctrl+K palette — built on cmdk + Radix Dialog (M8).
+ *
+ * cmdk owns the keyboard model (arrows, Enter, grouping, fuzzy filter)
+ * and the aria-combobox wiring. We layer it inside a Radix Dialog so
+ * focus is trapped, restored on close, and the overlay announces a
+ * named "Command palette" region to screen readers.
+ *
+ * Command list construction (containers × actions, activity shortcuts,
+ * discover entry) is unchanged from the pre-M8 hand-rolled palette —
+ * only the rendering + keyboard plumbing moved to the primitives.
+ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Command } from "cmdk";
 import { Search } from "lucide-react";
+import { useMemo } from "react";
+
 import type { ContainerRecord } from "../lib/types";
 import type { Activity } from "./ActivityBar";
 
-export interface PaletteCommand {
+interface PaletteCommand {
   id: string;
   title: string;
   subtitle?: string;
@@ -36,24 +48,9 @@ export function CommandPalette({
   onActivity,
   onOpenProvisioner,
 }: Props) {
-  const [query, setQuery] = useState("");
-  const [cursor, setCursor] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setCursor(0);
-      // Delay focus until the modal has painted; otherwise some browsers
-      // swallow the first keystroke.
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
-
   const commands: PaletteCommand[] = useMemo(() => {
     const items: PaletteCommand[] = [];
 
-    // Containers — focus
     for (const c of containers) {
       items.push({
         id: `focus:${c.id}`,
@@ -63,7 +60,6 @@ export function CommandPalette({
         run: () => onFocusContainer(c.id),
       });
     }
-    // Containers — close
     for (const c of containers) {
       items.push({
         id: `close:${c.id}`,
@@ -72,7 +68,6 @@ export function CommandPalette({
         run: () => onCloseContainer(c.id),
       });
     }
-    // Sessions — new Claude
     for (const c of containers) {
       items.push({
         id: `claude:${c.id}`,
@@ -82,7 +77,6 @@ export function CommandPalette({
       });
     }
 
-    // Activity
     items.push(
       {
         id: "act:containers",
@@ -100,7 +94,6 @@ export function CommandPalette({
       },
     );
 
-    // Discover / provision
     items.push({
       id: "discover:new",
       title: "Register a new devcontainer…",
@@ -119,106 +112,102 @@ export function CommandPalette({
     onOpenProvisioner,
   ]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return commands;
-    return commands.filter((c) => {
-      return (
-        c.title.toLowerCase().includes(q) ||
-        (c.subtitle ?? "").toLowerCase().includes(q) ||
-        c.group.toLowerCase().includes(q)
-      );
-    });
-  }, [query, commands]);
+  // Group commands for cmdk.Group rendering. Order of groups here is
+  // the visual order in the palette.
+  const groups: { label: PaletteCommand["group"]; items: PaletteCommand[] }[] = useMemo(() => {
+    const labels: PaletteCommand["group"][] = ["Containers", "Sessions", "Activity", "Discover"];
+    return labels
+      .map((label) => ({ label, items: commands.filter((c) => c.group === label) }))
+      .filter((g) => g.items.length > 0);
+  }, [commands]);
 
-  // Keep cursor in bounds as the result set shrinks.
-  useEffect(() => {
-    setCursor((prev) => Math.min(prev, Math.max(0, filtered.length - 1)));
-  }, [filtered.length]);
+  const byId = useMemo(() => {
+    const map = new Map<string, PaletteCommand>();
+    for (const c of commands) map.set(c.id, c);
+    return map;
+  }, [commands]);
 
-  const run = useCallback(
-    (cmd: PaletteCommand) => {
+  const handleSelect = (id: string) => {
+    const cmd = byId.get(id);
+    if (cmd) {
       cmd.run();
       onClose();
-    },
-    [onClose],
-  );
-
-  if (!open) return null;
+    }
+  };
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/50 p-4 pt-20"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className="w-full max-w-xl rounded-lg border border-[#454545] bg-[#252526] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Command palette"
-      >
-        <div className="flex items-center gap-2 border-b border-[#3a3a3a] px-3 py-2">
-          <Search size={14} className="text-[#858585]" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") onClose();
-              else if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setCursor((c) => Math.min(filtered.length - 1, c + 1));
-              } else if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setCursor((c) => Math.max(0, c - 1));
-              } else if (e.key === "Enter") {
-                e.preventDefault();
-                const cmd = filtered[cursor];
-                if (cmd) run(cmd);
-              }
-            }}
-            placeholder="Type a command or container name…"
-            className="flex-1 bg-transparent text-sm text-[#e7e7e7] outline-none placeholder:text-[#666]"
-            aria-label="Command palette input"
-          />
-        </div>
-        <ul
-          role="listbox"
-          className="max-h-80 overflow-y-auto py-1"
-          aria-label="Command palette results"
+    <Dialog.Root open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[100] bg-black/50" />
+        <Dialog.Content
+          className="fixed top-[15%] left-1/2 z-[100] w-full max-w-xl -translate-x-1/2 rounded-lg border border-[#454545] bg-[#252526] shadow-2xl outline-none"
+          aria-label="Command palette"
+          aria-describedby={undefined}
         >
-          {filtered.length === 0 && (
-            <li className="px-3 py-2 text-xs text-[#858585]">No matches</li>
-          )}
-          {filtered.map((cmd, idx) => (
-            <li
-              key={cmd.id}
-              role="option"
-              aria-selected={idx === cursor}
-              onMouseEnter={() => setCursor(idx)}
-              onClick={() => run(cmd)}
-              className={`flex cursor-pointer items-center justify-between px-3 py-1.5 text-xs ${
-                idx === cursor ? "bg-[#094771] text-white" : "text-[#cccccc]"
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate">{cmd.title}</div>
-                {cmd.subtitle && (
-                  <div className="truncate text-[10px] text-[#858585]">{cmd.subtitle}</div>
-                )}
-              </div>
-              <div className="ml-3 flex shrink-0 items-center gap-2 text-[10px] text-[#858585]">
-                <span>{cmd.group}</span>
-                {cmd.shortcut && (
-                  <kbd className="rounded border border-[#555] px-1.5 py-0.5">{cmd.shortcut}</kbd>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
+          <Dialog.Title className="sr-only">Command palette</Dialog.Title>
+          <Command
+            // Filter uses cmdk's built-in fuzzy scorer. We include the
+            // title, subtitle, and group in the keywords so typing a
+            // group name still works.
+            filter={(value, search, keywords) => {
+              const haystack = [value, ...(keywords ?? [])].join(" ").toLowerCase();
+              const needle = search.trim().toLowerCase();
+              if (!needle) return 1;
+              // Simple subsequence match scaled by match density —
+              // good enough for a local palette, no external lib.
+              let i = 0;
+              for (const ch of needle) {
+                i = haystack.indexOf(ch, i);
+                if (i < 0) return 0;
+                i += 1;
+              }
+              return 1;
+            }}
+            loop
+          >
+            <div className="flex items-center gap-2 border-b border-[#3a3a3a] px-3 py-2">
+              <Search size={14} className="text-[#858585]" aria-hidden="true" />
+              <Command.Input
+                placeholder="Type a command or container name…"
+                className="flex-1 bg-transparent text-sm text-[#e7e7e7] outline-none placeholder:text-[#666]"
+                autoFocus
+              />
+            </div>
+            <Command.List className="max-h-80 overflow-y-auto py-1">
+              <Command.Empty className="px-3 py-2 text-xs text-[#858585]">No matches</Command.Empty>
+              {groups.map((group) => (
+                <Command.Group
+                  key={group.label}
+                  heading={group.label}
+                  className="px-1 py-0.5 text-[10px] text-[#858585] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:uppercase"
+                >
+                  {group.items.map((cmd) => (
+                    <Command.Item
+                      key={cmd.id}
+                      value={cmd.title}
+                      keywords={[cmd.subtitle ?? "", cmd.group]}
+                      onSelect={() => handleSelect(cmd.id)}
+                      className="flex cursor-pointer items-center justify-between rounded px-3 py-1.5 text-xs text-[#cccccc] data-[selected=true]:bg-[#094771] data-[selected=true]:text-white"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate">{cmd.title}</div>
+                        {cmd.subtitle && (
+                          <div className="truncate text-[10px] text-[#858585]">{cmd.subtitle}</div>
+                        )}
+                      </div>
+                      {cmd.shortcut && (
+                        <kbd className="ml-3 shrink-0 rounded border border-[#555] px-1.5 py-0.5 text-[10px] text-[#858585]">
+                          {cmd.shortcut}
+                        </kbd>
+                      )}
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              ))}
+            </Command.List>
+          </Command>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

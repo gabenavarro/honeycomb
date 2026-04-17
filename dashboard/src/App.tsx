@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { listContainers, listPRs } from "./lib/api";
 import { ContainerList } from "./components/ContainerList";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { TerminalPane } from "./components/TerminalPane";
 import { ResourceMonitor } from "./components/ResourceMonitor";
 import { GitOpsPanel } from "./components/GitOpsPanel";
@@ -276,12 +277,20 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                  <TerminalPane
-                    key={active.id}
-                    containerId={active.id}
-                    containerName={active.project_name}
-                    hasClaudeCli={active.has_claude_cli}
-                  />
+                  {/* ErrorBoundary keyed on active.id so remounting the
+                      child when the user switches tabs also clears any
+                      stuck error state from the previous container. */}
+                  <ErrorBoundary
+                    key={`eb-${active.id}`}
+                    label={`the ${active.project_name} terminal`}
+                  >
+                    <TerminalPane
+                      key={active.id}
+                      containerId={active.id}
+                      containerName={active.project_name}
+                      hasClaudeCli={active.has_claude_cli}
+                    />
+                  </ErrorBoundary>
                 </div>
               </div>
             ) : (

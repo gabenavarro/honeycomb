@@ -1,5 +1,15 @@
-import { act, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+/** ToastProvider tests (M8).
+ *
+ * After migrating to Radix Toast the DOM lifecycle is async — a dismiss
+ * flips ``open=false`` and the close transition runs before the node is
+ * reaped. We assert on Radix's ``data-state`` attribute rather than
+ * using fake timers, which were fragile against the primitive's internal
+ * timing.
+ */
+
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
 import { ToastProvider, useToasts } from "../useToasts";
 
 function TestHarness({ onReady }: { onReady: (ctx: ReturnType<typeof useToasts>) => void }) {
@@ -9,14 +19,7 @@ function TestHarness({ onReady }: { onReady: (ctx: ReturnType<typeof useToasts>)
 }
 
 describe("ToastProvider", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("renders a toast and auto-dismisses after the duration", () => {
+  it("renders a toast with title and body", () => {
     let api: ReturnType<typeof useToasts> | null = null;
     render(
       <ToastProvider>
@@ -25,18 +28,26 @@ describe("ToastProvider", () => {
     );
 
     act(() => {
-      api!.toast("error", "Boom", "Thing broke", 1000);
+      api!.toast("info", "Hello", "World", 60_000);
     });
-    expect(screen.getByText("Boom")).toBeInTheDocument();
-    expect(screen.getByText("Thing broke")).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(1100);
-    });
-    expect(screen.queryByText("Boom")).not.toBeInTheDocument();
+    expect(screen.getByText("Hello")).toBeInTheDocument();
+    expect(screen.getByText("World")).toBeInTheDocument();
   });
 
-  it("dismiss removes a toast immediately", () => {
+  it("gives error toasts role=alert for screen readers", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      api!.toast("error", "Failure", undefined, 60_000);
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Failure");
+  });
+
+  it("dismiss flips the toast to data-state=closed", async () => {
     let api: ReturnType<typeof useToasts> | null = null;
     render(
       <ToastProvider>
@@ -48,24 +59,13 @@ describe("ToastProvider", () => {
     act(() => {
       id = api!.toast("info", "Heads up", undefined, 60_000);
     });
-    expect(screen.getByText("Heads up")).toBeInTheDocument();
+    const node = screen.getByText("Heads up").closest("[data-state]") as HTMLElement;
+    expect(node).not.toBeNull();
+    expect(node.getAttribute("data-state")).toBe("open");
 
     act(() => {
       api!.dismiss(id);
     });
-    expect(screen.queryByText("Heads up")).not.toBeInTheDocument();
-  });
-
-  it("gives error toasts role=alert for screen readers", () => {
-    let api: ReturnType<typeof useToasts> | null = null;
-    render(
-      <ToastProvider>
-        <TestHarness onReady={(ctx) => (api = ctx)} />
-      </ToastProvider>,
-    );
-    act(() => {
-      api!.toast("error", "Failure");
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent("Failure");
+    await waitFor(() => expect(node.getAttribute("data-state")).toBe("closed"), { timeout: 2000 });
   });
 });

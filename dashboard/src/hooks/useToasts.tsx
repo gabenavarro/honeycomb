@@ -1,29 +1,42 @@
-/** Minimal toast system for surfacing mutation errors and backend events.
+/** Toast notifications, backed by Radix Toast since M8.
  *
- * No extra dependency: a tiny context holds a queue; a portal-free overlay
- * renders in the corner. Meant for dashboard-wide, transient messages
- * (mutation errors, success confirmations, state-change notices).
+ * The public API (``useToasts()`` returning ``{toast, dismiss}``) is
+ * unchanged from the hand-rolled pre-M8 system — every call site
+ * continues to work. The wins from Radix:
+ *
+ * * ``<Toast.Viewport>`` is a real ARIA live region; screen readers
+ *   announce new toasts without us manually wiring ``aria-live``.
+ * * Hover-pause, swipe-to-dismiss, and Esc-closes-last are handled by
+ *   the primitive.
+ * * Focus management is correct when a toast is actionable — the
+ *   button inside gets the focus trap treatment automatically.
+ *
+ * Kind → ARIA role mapping: ``error`` stays an ``alert`` (assertive);
+ * everything else is a ``status`` (polite). Radix forwards ``type``
+ * to the DOM: ``foreground`` for alerts, ``background`` for polite.
  */
 
+import * as Toast from "@radix-ui/react-toast";
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 
 export type ToastKind = "error" | "success" | "info" | "warning";
 
-export interface Toast {
+export interface ToastItem {
   id: number;
   kind: ToastKind;
   title: string;
   body?: string;
   durationMs: number;
+  open: boolean;
 }
 
 interface ToastContextValue {
@@ -34,80 +47,73 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextIdRef = useRef(1);
-  const timersRef = useRef<Map<number, number>>(new Map());
 
   const dismiss = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-    const timer = timersRef.current.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      timersRef.current.delete(id);
-    }
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, open: false } : t)));
   }, []);
 
-  const toast = useCallback(
-    (kind: ToastKind, title: string, body?: string, durationMs = 5000) => {
-      const id = nextIdRef.current++;
-      setToasts((prev) => [...prev, { id, kind, title, body, durationMs }]);
-      if (durationMs > 0) {
-        const timer = window.setTimeout(() => dismiss(id), durationMs);
-        timersRef.current.set(id, timer);
-      }
-      return id;
-    },
-    [dismiss],
-  );
+  const toast = useCallback((kind: ToastKind, title: string, body?: string, durationMs = 5000) => {
+    const id = nextIdRef.current++;
+    setToasts((prev) => [...prev, { id, kind, title, body, durationMs, open: true }]);
+    return id;
+  }, []);
 
+  // When Radix finishes its close transition (open=false for a bit
+  // plus SWIPE_THRESHOLD_DURATION), reap the record so the list stays
+  // bounded.
   useEffect(() => {
-    const timers = timersRef.current;
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      timers.clear();
-    };
-  }, []);
+    if (!toasts.some((t) => !t.open)) return;
+    const timer = window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.open));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [toasts]);
 
   const value = useMemo(() => ({ toast, dismiss }), [toast, dismiss]);
 
   return (
     <ToastContext.Provider value={value}>
-      {children}
-      <ToastOverlay toasts={toasts} onDismiss={dismiss} />
-    </ToastContext.Provider>
-  );
-}
-
-function ToastOverlay({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
-  return (
-    <div
-      className="fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2"
-      role="region"
-      aria-label="Notifications"
-    >
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          role={t.kind === "error" ? "alert" : "status"}
-          className={`rounded-md border px-3 py-2 text-xs shadow-lg ${kindClasses(t.kind)}`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <div className="font-medium">{t.title}</div>
-              {t.body && <div className="mt-0.5 text-[11px] opacity-80">{t.body}</div>}
+      <Toast.Provider swipeDirection="right">
+        {children}
+        {toasts.map((t) => (
+          <Toast.Root
+            key={t.id}
+            type={t.kind === "error" ? "foreground" : "background"}
+            open={t.open}
+            duration={t.durationMs > 0 ? t.durationMs : undefined}
+            onOpenChange={(open) => {
+              if (!open) dismiss(t.id);
+            }}
+            className={`data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in rounded-md border px-3 py-2 text-xs shadow-lg ${kindClasses(
+              t.kind,
+            )}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <Toast.Title className="font-medium">{t.title}</Toast.Title>
+                {t.body && (
+                  <Toast.Description className="mt-0.5 text-[11px] opacity-80">
+                    {t.body}
+                  </Toast.Description>
+                )}
+              </div>
+              <Toast.Close
+                className="opacity-60 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                aria-label="Dismiss notification"
+              >
+                ×
+              </Toast.Close>
             </div>
-            <button
-              type="button"
-              onClick={() => onDismiss(t.id)}
-              className="opacity-60 hover:opacity-100"
-              aria-label="Dismiss notification"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
+          </Toast.Root>
+        ))}
+        <Toast.Viewport
+          className="fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2 outline-none"
+          label="Notifications"
+        />
+      </Toast.Provider>
+    </ToastContext.Provider>
   );
 }
 

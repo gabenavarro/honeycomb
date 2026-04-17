@@ -1,12 +1,25 @@
 @import "tailwindcss";
 
-/* VSCode / Cursor dark palette
-   - editor bg   #1e1e1e
-   - sidebar bg  #252526
-   - accent      #0078d4 (Cursor uses a similar blue)
-   - activity rail #181818
-   UI font is the VSCode default; terminal contents stay monospace via
-   the pane's own font-mono class. */
+/* ─── Colour theme ─────────────────────────────────────────────
+ * Default VSCode/Cursor dark palette.
+ *   editor bg      #1e1e1e
+ *   sidebar bg     #252526
+ *   accent         #0078d4 (same as the VSCode "statusBarItem" blue)
+ *   activity rail  #181818
+ *
+ * M8 additionally exposes a light palette behind
+ * ``prefers-color-scheme: light``. The swap is palette-only — no
+ * component logic depends on the mode today. The dashboard
+ * currently hard-codes hex values in many Tailwind arbitrary
+ * classes, so only chrome-level surfaces flip here. A fuller light
+ * pass is scoped for M10 (VSCode bones) where the settings UI
+ * lets users override.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background: #1e1e1e;
@@ -16,11 +29,44 @@ body {
   font-size: 13px;
 }
 
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fafafa;
+    color: #111827;
+  }
+}
+
 #root {
   min-height: 100vh;
 }
 
-/* Scrollbars: thin and unobtrusive, like VSCode. */
+/* ─── Focus ring (a11y win, M8) ────────────────────────────────
+ * Global ``:focus-visible`` outline replaces the default
+ * user-agent focus ring which components frequently override to
+ * ``outline: none`` (often without replacement). The value below
+ * uses ``accent`` so it picks up the selection colour on light
+ * schemes too. ``focus:outline-none focus-visible:ring-*`` classes
+ * applied on individual components take precedence.
+ */
+:focus-visible {
+  outline: 2px solid #0078d4;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+button,
+a,
+[role="button"] {
+  /* Every interactive control should stay keyboard-navigable. */
+  &:focus {
+    outline: none;
+  }
+}
+
+/* ─── Scrollbars: thin and unobtrusive, VSCode-style. ──────────*/
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
