@@ -33,6 +33,7 @@ from hub.routers import (
     keybindings,
     problems,
     pty,
+    sessions,
     ws,
 )
 from hub.routers import (
@@ -350,6 +351,7 @@ app.include_router(gitops.router)
 app.include_router(keybindings.router)
 app.include_router(problems.router)
 app.include_router(pty.router)
+app.include_router(sessions.router)
 app.include_router(settings_router.router)
 app.include_router(ws.router)
 app.include_router(agent.router)
