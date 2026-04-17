@@ -15,10 +15,11 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, Image as ImageIcon, X } from "lucide-react";
+import { Download, FileText, Image as ImageIcon, Notebook, X } from "lucide-react";
 
 import { readContainerFile, containerFileDownloadUrl } from "../lib/api";
 import type { FileContent } from "../lib/types";
+import { NotebookViewer } from "./NotebookViewer";
 
 interface Props {
   containerId: number;
@@ -41,11 +42,14 @@ export function FileViewer({ containerId, path, onClose }: Props) {
   });
 
   const downloadUrl = containerFileDownloadUrl(containerId, path);
+  const isNotebook = path.toLowerCase().endsWith(".ipynb");
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#1e1e1e]">
       <header className="flex items-center gap-2 border-b border-[#2b2b2b] px-3 py-1.5 text-[11px]">
-        {data?.mime_type.startsWith("image/") ? (
+        {isNotebook ? (
+          <Notebook size={11} className="text-orange-400" />
+        ) : data?.mime_type.startsWith("image/") ? (
           <ImageIcon size={11} className="text-purple-400" />
         ) : (
           <FileText size={11} className="text-blue-400" />
@@ -83,13 +87,29 @@ export function FileViewer({ containerId, path, onClose }: Props) {
             Failed to read: {error instanceof Error ? error.message : String(error)}
           </p>
         )}
-        {data && <FileBody data={data} downloadUrl={downloadUrl} />}
+        {data && <FileBody data={data} downloadUrl={downloadUrl} isNotebook={isNotebook} />}
       </div>
     </div>
   );
 }
 
-function FileBody({ data, downloadUrl }: { data: FileContent; downloadUrl: string }) {
+function FileBody({
+  data,
+  downloadUrl,
+  isNotebook,
+}: {
+  data: FileContent;
+  downloadUrl: string;
+  isNotebook: boolean;
+}) {
+  // M19 — .ipynb files dispatch to the NotebookViewer. We detect on
+  // extension rather than MIME because ``file --mime-type`` typically
+  // reports ``application/json`` for notebooks, which already has a
+  // perfectly good plain renderer below — the extension is the
+  // unambiguous signal.
+  if (isNotebook && data.content !== null && data.content !== undefined) {
+    return <NotebookViewer source={data.content} />;
+  }
   if (data.truncated) {
     return (
       <div className="p-4 text-xs text-[#858585]">

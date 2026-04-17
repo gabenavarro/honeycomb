@@ -284,7 +284,36 @@ unreachable   on missed heartbeats (health_checker)
 | Typed localStorage hook  | [dashboard/src/hooks/useLocalStorage.ts](../dashboard/src/hooks/useLocalStorage.ts)                                          |
 | Split editor             | [dashboard/src/components/SplitEditor.tsx](../dashboard/src/components/SplitEditor.tsx)                                      |
 
-## 6. Further reading
+## 6. Extensibility — explicit "no rewrite" stance (M19)
+
+When the roadmap picked up user-requested features in M13–M19 (UI
+polish, session caching, filesystem browse, Jupyter notebook viewer),
+one question asked was whether a framework change would be warranted.
+The answer is no:
+
+- The stack (React 19 + Vite 8 + Tailwind v4 + xterm.js 6 + Radix +
+  cmdk + TanStack Query v5) is current-gen and specifically chosen for
+  multi-pane composability. Every feature added in M13–M19 is either a
+  bug fix, an additive primitive, or a component drop — none required
+  framework-level changes.
+- The Jupyter viewer is the single largest "new capability" on the
+  list. It lives in ~120 LOC (`NotebookViewer.tsx`) + 1 CSS import
+  from `react-ipynb-renderer`. Execution support (kernel gateway,
+  cell-run WebSocket) is a separate roadmap if demand sustains.
+- Treating a component add as justification for a rewrite would be
+  organizational debt, not technical progress.
+
+The extensibility surface that matters going forward:
+
+| Surface                           | Where to extend                                         |
+| --------------------------------- | ------------------------------------------------------- |
+| Sidebar activities                | Add to `ActivityBar` + new view under `src/components/` |
+| File MIME dispatch                | `FileViewer.FileBody` — new extension / MIME branch     |
+| Session kind (shell / claude / …) | `PtyPane` command + `useSession` kind                   |
+| PTY transport alternatives        | `PtyRegistry.get_or_create` + `hub/routers/pty.py`      |
+| New WS broadcast channel          | `hub/routers/ws.py` + client `useHiveWebSocket`         |
+
+## 7. Further reading
 
 - [README.md](../README.md) — quick start, API reference, contracts,
   keyboard shortcuts.
