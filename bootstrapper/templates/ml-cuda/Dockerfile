@@ -1,7 +1,16 @@
 # =============================================================================
 # ML/CUDA base — PyTorch, HuggingFace, Lightning on Blackwell/CUDA 13.2
 # =============================================================================
-FROM nvidia/cuda:13.2.0-devel-ubuntu24.04 AS base
+# The base stays on NVIDIA's CUDA image (required for GPU access). All
+# other M6 hardening is applied: no ``curl | sh`` anywhere, uv copied
+# from the official image, Node + gh via signed apt repos, hive-agent
+# install fails loudly.
+# =============================================================================
+
+ARG CUDA_IMAGE=nvidia/cuda:13.2.0-devel-ubuntu24.04
+ARG UV_VERSION=0.11.7
+
+FROM ${CUDA_IMAGE} AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG PYTHON_VERSION=3.12
@@ -16,43 +25,49 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gnupg \
     software-properties-common \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python
-RUN add-apt-repository ppa:deadsnakes/ppa \
+# Python from deadsnakes. The PPA is signed by an Ubuntu keyserver
+# identity (``add-apt-repository`` fetches the key); subsequent apt
+# updates verify signatures.
+RUN add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-venv \
-    python${PYTHON_VERSION}-dev \
+        python${PYTHON_VERSION} \
+        python${PYTHON_VERSION}-venv \
+        python${PYTHON_VERSION}-dev \
     && ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python3 \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pip
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3
-
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs \
+# Node.js via NodeSource's signed apt repository. Stores the keyring
+# once, then every ``apt update`` verifies signatures — materially
+# different from ``curl … | bash`` sourcing an install script.
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && chmod go+r /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install GitHub CLI
+# GitHub CLI via signed apt repository.
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+        -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-    && apt-get update && apt-get install -y gh \
+        > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
+# uv from the official image — no curl | sh.
+COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
 
-# Install Claude Code CLI
+# Claude Code CLI.
 RUN npm install -g @anthropic-ai/claude-code
 
-# ML core dependencies
-RUN pip install --no-cache-dir \
+# ML core dependencies via uv (bypasses PEP 668 explicitly).
+RUN uv pip install --system \
     torch \
     torchvision \
     torchaudio \
@@ -75,6 +90,11 @@ RUN pip install --no-cache-dir \
     scikit-learn \
     jupyterlab
 
+RUN groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home app \
+    && echo "app ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/app \
+    && chmod 440 /etc/sudoers.d/app
+
 WORKDIR /workspace
 
 # =============================================================================
@@ -82,7 +102,7 @@ WORKDIR /workspace
 # =============================================================================
 FROM base AS dev
 
-RUN pip install --no-cache-dir hive-agent 2>/dev/null || true
+RUN uv pip install --system hive-agent
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

@@ -18,7 +18,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import FileSystemLoader
+from jinja2.sandbox import SandboxedEnvironment
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("bootstrapper.provision")
 
@@ -37,6 +39,36 @@ class TemplateError(RuntimeError):
     produces a container without GPU tooling that looks superficially correct
     to the user until training fails mysteriously.
     """
+
+
+class TemplateContext(BaseModel):
+    """Everything a template is allowed to see.
+
+    Pre-M6 :mod:`jinja2.Environment` was used with no sandbox and no
+    autoescape, and the render kwargs were loose ``str`` values built
+    from whatever the caller passed. A user-supplied
+    ``project_description`` containing ``{{ os.system('id') }}`` would
+    have been executed at template time. Since M6 we pass a typed
+    context through :class:`SandboxedEnvironment` so the same payload
+    renders literally into the document.
+
+    Fields are bounded at the schema level; :func:`slugify` is applied
+    inside the renderer so callers don't need to remember the
+    convention.
+    """
+
+    project_name: str = Field(..., min_length=1, max_length=200)
+    project_description: str = Field(default="", max_length=10_000)
+    # Computed after validation to match the CLAUDE.md templates'
+    # existing ``{{ project_slug }}`` placeholder.
+    project_slug: str = Field(default="")
+
+    def dump_for_template(self) -> dict[str, str]:
+        return {
+            "project_name": self.project_name,
+            "project_description": self.project_description,
+            "project_slug": self.project_slug or slugify(self.project_name),
+        }
 
 
 def slugify(name: str) -> str:
@@ -81,8 +113,17 @@ def render_claude_md(
 ) -> str:
     """Render a CLAUDE.md from the Jinja2 template for the given project type.
 
-    Raises TemplateError if the template for project_type is missing. The
-    base template is used only when project_type == "base".
+    Uses :class:`jinja2.sandbox.SandboxedEnvironment` with autoescape
+    off (the output is Markdown, not HTML — escaping angle brackets
+    would corrupt code blocks). The sandbox still blocks attribute
+    access to dunder methods and reflective traversal, so an attacker
+    controlling ``project_description`` cannot reach into Python from
+    inside the template. See ``hub/tests/test_provision_security.py``
+    for the regression matrix.
+
+    Raises :class:`TemplateError` if the template for ``project_type``
+    is missing. The base template is used only when
+    ``project_type == "base"``.
     """
     template_dir = TEMPLATES_DIR / project_type
     template_path = template_dir / "claude.md.j2"
@@ -91,16 +132,21 @@ def render_claude_md(
             f"Missing claude.md.j2 for project type '{project_type}' at {template_path}."
         )
 
-    env = Environment(
-        loader=FileSystemLoader(str(template_dir)),
-        keep_trailing_newline=True,
-    )
-    template = env.get_template("claude.md.j2")
-    return template.render(
+    context = TemplateContext(
         project_name=project_name,
         project_description=project_description,
-        project_slug=slugify(project_name),
     )
+    env = SandboxedEnvironment(
+        loader=FileSystemLoader(str(template_dir)),
+        keep_trailing_newline=True,
+        # ``autoescape=False`` is deliberate: the destination is a
+        # plain-text Markdown document. HTML-escaping would turn
+        # angle brackets in code samples into ``&lt;`` / ``&gt;`` and
+        # break the rendered CLAUDE.md.
+        autoescape=False,
+    )
+    template = env.get_template("claude.md.j2")
+    return template.render(**context.dump_for_template())
 
 
 def generate_devcontainer_json(

@@ -80,20 +80,49 @@ a ``max_length``. The most important one is
 ``CommandRequest.command`` (64 KiB), which used to be unbounded and
 could have been abused to ship megabytes through the command relay.
 
+## Template rendering (since M6)
+
+``bootstrapper/provision.py`` now renders every CLAUDE.md through
+:class:`jinja2.sandbox.SandboxedEnvironment`, with the context bound
+to a typed :class:`TemplateContext` Pydantic model. An attacker who
+controls the ``project_description`` can no longer reach into Python
+— a payload like ``{{ ''.__class__.__mro__ }}`` renders as literal
+text in the resulting Markdown. The regression matrix lives in
+``bootstrapper/tests/test_provision_security.py``; drift from the
+rendered templates is caught by
+``bootstrapper/tests/test_template_goldens.py``.
+
+## Dockerfile hardening (since M6)
+
+The four Dockerfile templates (``base``, ``ml-cuda``, ``web-dev``,
+``compbio``) drop the ``curl -LsSf https://astral.sh/uv/install.sh | sh``
+pattern in favour of:
+
+* Python, git, and system deps from apt (``*-bookworm-slim`` base, or
+  ``nvidia/cuda:13.2.0-devel-ubuntu24.04`` for the GPU template).
+* ``uv`` copied from the pinned official image
+  (``ghcr.io/astral-sh/uv:0.11.7``) — no install script, no dynamic
+  download at build time.
+* GitHub CLI and Node.js (on the GPU base) installed through signed
+  apt repositories: the keyring is downloaded once, then every
+  ``apt update`` verifies signatures. This is materially different
+  from ``curl | bash`` sourcing an install script.
+* A non-root ``app`` user exists in every image (uid 1000, passwordless
+  sudo). Default ``USER root`` is kept for backward compat with the
+  ``claude-auth`` volume mount at ``/root/.claude``; devcontainer
+  templates can opt into ``remoteUser: app`` if the workspace doesn't
+  rely on root privileges.
+* The dev-stage ``hive-agent`` install fails loudly (no more
+  ``|| true`` masking a container that can't talk to the hub).
+
+``claude-hive-feature/install.sh`` picked up ``set -euo pipefail``,
+idempotent edits to ``/etc/environment`` and shell profiles, and the
+same fail-loud ``hive-agent`` install.
+
 ## Known gaps in the current codebase
 
-These are tracked and scheduled, not forgotten. Do not deploy Honeycomb on
-an untrusted network until the referenced milestone has merged.
-
-- `bootstrapper/provision.py` uses a non-sandboxed Jinja2 environment for
-  user-supplied project descriptions. (M6)
-- Dockerfile templates install `uv` via `curl | sh` and run every stage as
-  `root`. (M6)
-
-Until those milestones are merged: keep `HIVE_HOST=127.0.0.1`, keep your
-bearer token secret, do not share Honeycomb containers across network
-boundaries you do not trust, and do not paste untrusted strings into the
-project-description field of the provisioner.
+No security milestones remain open in the roadmap. Remaining work is
+dashboard UX + operability (M7 – M12).
 
 ## Reporting a vulnerability
 
