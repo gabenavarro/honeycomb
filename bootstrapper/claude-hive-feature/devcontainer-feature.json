@@ -19,6 +19,11 @@
       "type": "string",
       "default": "http://host.docker.internal:8420",
       "description": "URL of the Claude Hive hub"
+    },
+    "hiveAgentSource": {
+      "type": "string",
+      "default": "git+https://github.com/gabenavarro/honeycomb.git@main#subdirectory=hive-agent",
+      "description": "pip-installable source for hive-agent. Override when vendoring a fork or pinning to a specific SHA."
     }
   },
   "installsAfter": [],

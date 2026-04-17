@@ -18,9 +18,17 @@
 
 ARG NODE_IMAGE=node:22-bookworm-slim
 # Bump UV_VERSION in lockstep with the host dev env so host + container
-# resolve the same package versions. The value is consumed by the
-# COPY --from below and by any ARG-aware CI check.
+# resolve the same package versions. BuildKit doesn't expand ARGs in
+# ``COPY --from=image:tag`` directly, so we alias the uv image as a
+# named stage first and then ``COPY --from=uv_source``.
 ARG UV_VERSION=0.11.7
+
+# hive-agent is installed from the Honeycomb repo (it isn't published
+# on PyPI — the whole project is still a single-repo passion project).
+# Override HIVE_AGENT_SOURCE to pin a fork or a specific commit.
+ARG HIVE_AGENT_SOURCE=git+https://github.com/gabenavarro/honeycomb.git@main#subdirectory=hive-agent
+
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv_source
 
 FROM ${NODE_IMAGE} AS base
 
@@ -56,7 +64,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 # uv from the official image — versioned, signed, no install script.
 # The two binaries (``uv`` + ``uvx``) land on PATH in one step.
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+COPY --from=uv_source /uv /uvx /usr/local/bin/
 
 # Claude Code CLI.
 RUN npm install -g @anthropic-ai/claude-code
@@ -66,8 +74,8 @@ RUN npm install -g @anthropic-ai/claude-code
 # ``USER app`` here because the shared ``claude-auth`` Docker volume
 # mounts at ``/root/.claude`` and the hub reaches in as root via
 # ``docker exec``; switching by default would break both paths.
-RUN groupadd --gid 1000 app \
-    && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home app \
+RUN groupadd --gid 1001 app \
+    && useradd --uid 1001 --gid 1001 --shell /bin/bash --create-home app \
     && echo "app ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/app \
     && chmod 440 /etc/sudoers.d/app
 
@@ -84,7 +92,8 @@ FROM base AS dev
 # silent failure. ``uv pip install --system`` bypasses Debian's
 # externally-managed-environment guard explicitly rather than via
 # ``pip --break-system-packages``, and uv already lives in the image.
-RUN uv pip install --system hive-agent
+ARG HIVE_AGENT_SOURCE
+RUN uv pip install --system --break-system-packages "${HIVE_AGENT_SOURCE}"
 
 # Start hive-agent on container startup (it dials the hub back via
 # WebSocket — see M4).

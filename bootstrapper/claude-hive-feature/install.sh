@@ -40,12 +40,13 @@ fi
 # --- hive-agent --------------------------------------------------------------
 # Prefer uv (present on every M6+ base image); fall back to pip only if
 # uv isn't installed. Either path fails loudly — no ``|| true``.
+HIVE_AGENT_SOURCE="${HIVEAGENTSOURCE:-git+https://github.com/gabenavarro/honeycomb.git@main#subdirectory=hive-agent}"
 if ! command -v hive-agent >/dev/null 2>&1; then
-    log "Installing hive-agent..."
+    log "Installing hive-agent from ${HIVE_AGENT_SOURCE}..."
     if command -v uv >/dev/null 2>&1; then
-        uv pip install --system hive-agent
+        uv pip install --system --break-system-packages "${HIVE_AGENT_SOURCE}"
     else
-        python3 -m pip install --break-system-packages hive-agent
+        python3 -m pip install --break-system-packages "${HIVE_AGENT_SOURCE}"
     fi
 else
     log "hive-agent already present, skipping."

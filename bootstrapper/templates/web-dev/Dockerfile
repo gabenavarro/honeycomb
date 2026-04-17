@@ -8,6 +8,9 @@
 
 ARG NODE_IMAGE=node:22-bookworm-slim
 ARG UV_VERSION=0.11.7
+ARG HIVE_AGENT_SOURCE=git+https://github.com/gabenavarro/honeycomb.git@main#subdirectory=hive-agent
+
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv_source
 
 FROM ${NODE_IMAGE} AS base
 
@@ -40,8 +43,8 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
-# uv from the official image.
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+# uv from the official image (via aliased stage — see base/Dockerfile).
+COPY --from=uv_source /uv /uvx /usr/local/bin/
 
 # Claude Code CLI + Playwright (brings its own Chromium download).
 RUN npm install -g @anthropic-ai/claude-code \
@@ -61,8 +64,8 @@ RUN uv pip install --system \
     pytest \
     ruff
 
-RUN groupadd --gid 1000 app \
-    && useradd --uid 1000 --gid 1000 --shell /bin/bash --create-home app \
+RUN groupadd --gid 1001 app \
+    && useradd --uid 1001 --gid 1001 --shell /bin/bash --create-home app \
     && echo "app ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/app \
     && chmod 440 /etc/sudoers.d/app
 
@@ -73,7 +76,8 @@ WORKDIR /workspace
 # =============================================================================
 FROM base AS dev
 
-RUN uv pip install --system hive-agent
+ARG HIVE_AGENT_SOURCE
+RUN uv pip install --system --break-system-packages "${HIVE_AGENT_SOURCE}"
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
