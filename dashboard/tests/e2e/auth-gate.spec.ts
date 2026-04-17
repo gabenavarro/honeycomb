@@ -23,17 +23,29 @@ test.beforeEach(async ({ context }) => {
   // route evaluation order and keeps the auth-gated response shape in
   // one place.
   await context.route("**/api/**", (route) => {
-    const url = route.request().url();
     const auth = route.request().headers()["authorization"] ?? "";
     const hasBearer = auth.startsWith("Bearer ") && auth.length > "Bearer ".length;
-    if (url.endsWith("/api/containers") && hasBearer) {
+    if (!hasBearer) {
+      return route.fulfill({ status: 401, body: "Unauthorized" });
+    }
+    // Once the gate has persisted a token, every subsequent API call
+    // must return a successful (though empty) shape. Returning 401
+    // anywhere here would trigger ``clearAuthToken`` on the client and
+    // reopen the gate, which is exactly the regression the spec is
+    // here to prevent.
+    const url = route.request().url();
+    if (url.includes("/api/problems")) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
+        body: JSON.stringify({ problems: [] }),
       });
     }
-    return route.fulfill({ status: 401, body: "Unauthorized" });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
   });
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
 });
