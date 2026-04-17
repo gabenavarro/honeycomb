@@ -23,11 +23,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
+import os
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import docker
@@ -35,15 +38,33 @@ import docker.errors
 
 logger = logging.getLogger("hub.pty_session")
 
-# Keep a detached session open this long before killing the PTY. Chrome
-# / Firefox suspend background tabs after ~5 min; matching that lets a
-# user come back to a running `npm install` without losing it.
+# Default grace window when the hub didn't supply one. Since M15 callers
+# normally pass ``HiveSettings.pty_grace_seconds`` through ``PtyRegistry``
+# so the value tracks configuration. 300 s is the pre-M15 default kept
+# here for tests that construct ``PtySession`` directly.
 SESSION_GRACE_SECONDS = 300
 
 # Ring buffer for each session. 64 KB fits a ~1000-line scrollback tail
 # at 64 chars/line — enough for an "I was gone, what did I miss?" replay
 # without inflating hub memory for idle long-lived sessions.
 SCROLLBACK_BYTES = 64 * 1024
+
+# Disk log cap per session — matches the in-memory ring buffer. Writing
+# more than this to disk buys nothing because replay still trims to the
+# buffer cap.
+SCROLLBACK_LOG_MAX_BYTES = SCROLLBACK_BYTES
+
+
+def _scrollback_path(dir_path: Path, key: tuple[int, str]) -> Path:
+    """Stable, filesystem-safe filename per (record_id, label) key.
+
+    Hashing the label avoids collisions with punctuation/UUID characters
+    while keeping the record_id in the name for operator legibility.
+    """
+    record_id, label = key
+    digest = hashlib.sha1(label.encode("utf-8")).hexdigest()[:12]
+    return dir_path / f"{record_id}-{digest}.log"
+
 
 # Max chunk we read from the docker socket per loop iteration. Larger
 # chunks reduce syscalls at the cost of perceived latency on noisy
@@ -113,6 +134,12 @@ class PtySession:
     _detached_at: float | None = None
     # reader task handle; cancelled on close.
     _reader_task: asyncio.Task[None] | None = None
+    # Per-session grace window. Defaults to the module-level constant so
+    # pre-M15 constructors keep working; the registry passes the
+    # ``HiveSettings.pty_grace_seconds`` value when creating sessions.
+    grace_seconds: int = SESSION_GRACE_SECONDS
+    # Dual-write target for the scrollback. None = disk-backing disabled.
+    _disk_log_path: Path | None = None
 
     @property
     def closed(self) -> bool:
@@ -124,6 +151,19 @@ class PtySession:
         while self._buffer_size > SCROLLBACK_BYTES and self._buffer:
             dropped = self._buffer.popleft()
             self._buffer_size -= len(dropped)
+        # Dual-write to disk so a hub restart can seed the next session
+        # with the same scrollback. Appending, then re-trimming to the
+        # in-memory cap keeps the log bounded without tracking offsets.
+        # Errors here must never propagate — a failed write loses cache,
+        # nothing user-visible breaks.
+        if self._disk_log_path is not None:
+            try:
+                _append_and_trim(self._disk_log_path, chunk)
+            except OSError as exc:
+                logger.debug("Scrollback disk-write failed for %s: %s", self.key, exc)
+                # Disable further attempts so we don't log the same error
+                # every few KB.
+                self._disk_log_path = None
 
     def snapshot_scrollback(self) -> bytes:
         return b"".join(self._buffer)
@@ -164,11 +204,14 @@ class PtySession:
         pass False for `kill()` semantics (caller wants immediate close)."""
         self._attached = None
         self._detached_at = time.time()
-        if schedule_evict and not self._closed.is_set():
+        if schedule_evict and not self._closed.is_set() and self.grace_seconds > 0:
             loop = asyncio.get_event_loop()
             self._evict_handle = loop.call_later(
-                SESSION_GRACE_SECONDS, lambda: asyncio.create_task(self.close())
+                self.grace_seconds, lambda: asyncio.create_task(self.close())
             )
+        elif schedule_evict and self.grace_seconds == 0 and not self._closed.is_set():
+            # Grace disabled: close immediately on detach (legacy path).
+            asyncio.get_event_loop().create_task(self.close())
 
     async def close(self) -> None:
         """Tear down the PTY and free resources. Idempotent."""
@@ -195,6 +238,45 @@ class PtySession:
         return None if self._detached_at is None else (time.time() - self._detached_at)
 
 
+def _append_and_trim(path: Path, chunk: bytes) -> None:
+    """Append ``chunk`` to ``path``, then trim the file to the last
+    ``SCROLLBACK_LOG_MAX_BYTES``. Cheap for the expected workload —
+    terminal output arrives in small bursts, and a ``pathlib`` read +
+    slice on a 64 KB file is microseconds.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("ab") as f:
+        f.write(chunk)
+    size = path.stat().st_size
+    if size > SCROLLBACK_LOG_MAX_BYTES:
+        # Read the tail into memory (bounded by the cap) and rewrite.
+        # Using the cheap re-truncate approach keeps the implementation
+        # single-threaded and avoids partial-write windows: the OS
+        # guarantees ``os.replace`` atomicity so another reader never
+        # sees a corrupted log.
+        with path.open("rb") as f:
+            f.seek(-SCROLLBACK_LOG_MAX_BYTES, os.SEEK_END)
+            tail = f.read()
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_bytes(tail)
+        os.replace(tmp, path)
+
+
+def _seed_from_log(path: Path) -> deque[bytes] | None:
+    """Read a persisted scrollback log back into a deque the way the
+    ring buffer expects. Returns None when the file is missing or the
+    read fails — either condition just means "fresh session"."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if not data:
+        return None
+    dq: deque[bytes] = deque()
+    dq.append(data)
+    return dq
+
+
 def _send_all(sock: Any, data: bytes) -> None:
     """Blocking send that handles short writes — the docker hijacked
     socket sometimes accepts fewer bytes than asked when the PTY is
@@ -219,11 +301,24 @@ def _recv_chunk(sock: Any, n: int) -> bytes:
 
 
 class PtyRegistry:
-    """Process-wide map of live PTY sessions, keyed by (record_id, label)."""
+    """Process-wide map of live PTY sessions, keyed by (record_id, label).
 
-    def __init__(self) -> None:
+    M15 adds two knobs — a default grace window applied to every new
+    session, and an optional disk-log directory so scrollback dual-writes
+    survive hub restarts. Both default to the pre-M15 behaviour so tests
+    that construct a bare ``PtyRegistry()`` keep working.
+    """
+
+    def __init__(
+        self,
+        *,
+        default_grace_seconds: int = SESSION_GRACE_SECONDS,
+        scrollback_dir: Path | None = None,
+    ) -> None:
         self._sessions: dict[tuple[int, str], PtySession] = {}
         self._lock = asyncio.Lock()
+        self.default_grace_seconds = default_grace_seconds
+        self.scrollback_dir = scrollback_dir
 
     def _update_gauge(self) -> None:
         """Snapshot len(sessions) into the Prometheus gauge.
@@ -276,6 +371,18 @@ class PtyRegistry:
             with contextlib.suppress(docker.errors.APIError):
                 api.exec_resize(exec_id, height=rows, width=cols)
 
+            disk_log: Path | None = None
+            seeded_buffer: deque[bytes] | None = None
+            seeded_size = 0
+            if self.scrollback_dir is not None:
+                disk_log = _scrollback_path(self.scrollback_dir, key)
+                # Seed the in-memory ring buffer with whatever we have on
+                # disk so the very first ``sreplay`` frame after hub
+                # restart still shows the tail the user had before.
+                seeded_buffer = _seed_from_log(disk_log)
+                if seeded_buffer is not None:
+                    seeded_size = sum(len(chunk) for chunk in seeded_buffer)
+
             session = PtySession(
                 key=key,
                 container_id=container_id,
@@ -285,7 +392,12 @@ class PtyRegistry:
                 rows=rows,
                 api=api,
                 _wrapper=hijacked,
+                grace_seconds=self.default_grace_seconds,
+                _disk_log_path=disk_log,
             )
+            if seeded_buffer is not None:
+                session._buffer = seeded_buffer
+                session._buffer_size = seeded_size
             session._reader_task = asyncio.create_task(_reader_loop(session))
             self._sessions[key] = session
             self._update_gauge()

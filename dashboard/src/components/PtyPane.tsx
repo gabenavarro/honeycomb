@@ -24,6 +24,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { getAuthToken } from "../lib/auth";
+import { useToasts } from "../hooks/useToasts";
 
 type PtyStatus = "connecting" | "connected" | "reattached" | "disconnected" | "closed";
 
@@ -75,6 +76,7 @@ function labelFor(recordId: number, sessionKey: string): string {
 }
 
 export function PtyPane({ recordId, containerName, command = "bash", sessionKey }: Props) {
+  const { toast } = useToasts();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -85,6 +87,11 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
   const [banner, setBanner] = useState<string | null>(null);
 
   const label = labelFor(recordId, sessionKey);
+  // M15 — the reattach toast is composed from TWO WS control frames
+  // arriving back-to-back: ``sreattached:<secs>`` then ``sreplay:<bytes>``.
+  // We hold the seconds in a ref until the bytes land so the toast
+  // reads "Replayed K KiB after Ns" rather than firing two half-toasts.
+  const pendingReattachSecsRef = useRef<number | null>(null);
 
   // Build the WS URL from current viewport size + label. The bearer
   // token is read at call time (not closed over) so a freshly-pasted
@@ -232,17 +239,24 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
           const secsStr = msg.slice("reattached:".length);
           const secs = Number(secsStr);
           setStatus("reattached");
-          setBanner(
-            Number.isFinite(secs) && secs > 0
-              ? `Re-attached to existing session · ${secs}s since last disconnect`
-              : "Re-attached to existing session",
-          );
-          // Auto-dismiss after 4s so it doesn't linger.
-          window.setTimeout(() => setBanner(null), 4000);
+          pendingReattachSecsRef.current = Number.isFinite(secs) ? secs : 0;
+          // Don't toast yet — the paired ``sreplay:<N>`` frame that
+          // follows carries the byte count we want to surface.
         } else if (msg.startsWith("replay:")) {
-          // Next binary frame is the scrollback; nothing to do here
-          // except nudge the terminal so the cursor ends up on the new
-          // last line.
+          const bytesStr = msg.slice("replay:".length);
+          const bytes = Number(bytesStr);
+          if (pendingReattachSecsRef.current !== null && Number.isFinite(bytes) && bytes > 0) {
+            const secs = pendingReattachSecsRef.current;
+            const kib = Math.max(1, Math.round(bytes / 1024));
+            const when = secs > 0 ? `after ${secs}s` : "";
+            toast(
+              "info",
+              "Reattached to PTY",
+              `${containerName}: replayed ${kib} KiB${when ? " " + when : ""}.`,
+              4000,
+            );
+          }
+          pendingReattachSecsRef.current = null;
         } else if (msg.startsWith("closed:")) {
           setStatus("closed");
           setBanner(`Session closed: ${msg.slice("closed:".length)}`);

@@ -435,6 +435,23 @@ function SessionPane({
         <button
           type="button"
           onClick={() => {
+            const name = session.exportTranscript();
+            if (name === null) {
+              toast("info", "Nothing to export");
+              return;
+            }
+            toast("success", `Exported ${name}`);
+          }}
+          disabled={session.state.lines.length === 0}
+          className="rounded p-1 hover:bg-gray-800 hover:text-gray-300 disabled:opacity-30"
+          aria-label="Export transcript as markdown"
+          title="Export transcript (.md)"
+        >
+          <Download size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
             if (session.state.lines.length === 0) return;
             if (window.confirm(`Clear ${kind} session for this container?`)) {
               session.clear();
