@@ -138,12 +138,26 @@ class TestHealthChecker:
             project_name="Never",
         )
         past = (datetime.now() - timedelta(seconds=INITIAL_HEARTBEAT_GRACE_SECONDS + 5)).isoformat()
-        await registry.db.execute(
-            "UPDATE containers SET container_id = ?, container_status = 'running', "
-            "agent_status = 'idle', created_at = ?, updated_at = ? WHERE id = ?",
-            ("c-never", past, past, record.id),
-        )
-        await registry.db.commit()
+        # Post-M7 the registry exposes a SQLAlchemy AsyncEngine instead
+        # of an aiosqlite connection. We back-date `created_at` through
+        # a raw Core update so the health-checker sees a row that's
+        # already past the grace window.
+        import sqlalchemy as sa
+
+        from hub.db.schema import containers
+
+        async with registry.engine.begin() as conn:
+            await conn.execute(
+                sa.update(containers)
+                .where(containers.c.id == record.id)
+                .values(
+                    container_id="c-never",
+                    container_status="running",
+                    agent_status="idle",
+                    created_at=past,
+                    updated_at=past,
+                )
+            )
 
         await checker._check_all()
 

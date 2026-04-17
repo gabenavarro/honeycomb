@@ -106,11 +106,16 @@ claude-hive/
 │   │   ├── discovery.py         # Workspace + running-container enumeration
 │   │   ├── health_checker.py    # Heartbeat timeout + state recovery
 │   │   ├── pty_session.py       # PTY session registry + scrollback buffers
-│   │   ├── registry.py          # SQLite container registry (aiosqlite)
+│   │   ├── registry.py          # SQLAlchemy async container registry (since M7)
 │   │   ├── resource_monitor.py  # docker stats + nvidia-smi polling
 │   │   └── tool_probe.py        # Probes for claude CLI, gh, etc. inside containers
 │   ├── models/
 │   │   └── schemas.py           # Pydantic models
+│   ├── db/
+│   │   ├── schema.py            # SQLAlchemy Core metadata (containers table)
+│   │   ├── alembic.ini          # Alembic runtime config
+│   │   ├── migrations/          # env.py + versions/ (baseline + future deltas)
+│   │   └── migrations_runner.py # Auto-upgrade on boot; back up legacy DBs
 │   └── tests/                   # pytest suite for hub
 ├── dashboard/                   # React + Vite + Tailwind frontend
 │   ├── src/

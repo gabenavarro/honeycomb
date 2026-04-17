@@ -159,9 +159,12 @@ class TestRegistry:
     @pytest.mark.asyncio
     async def test_duplicate_workspace(self, registry: Registry) -> None:
         await registry.add(workspace_folder="/unique", project_type="base", project_name="First")
-        import aiosqlite
+        # Post-M7 the IntegrityError surfaces through SQLAlchemy, which
+        # wraps aiosqlite. Match on the SA type so both the raw driver
+        # error and any future re-wrap stay covered.
+        from sqlalchemy.exc import IntegrityError
 
-        with pytest.raises(aiosqlite.IntegrityError):
+        with pytest.raises(IntegrityError):
             await registry.add(
                 workspace_folder="/unique", project_type="base", project_name="Second"
             )
