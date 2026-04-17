@@ -1,0 +1,65 @@
+# Golden Project
+
+A canonical project description used exclusively by golden-file tests. Keep it plain prose — Jinja-looking input belongs in test_provision_security.py, not here.
+
+## Project Structure
+
+- `pipelines/` or `golden_project/pipelines/` — analysis pipelines (preprocessing, QC, analysis).
+- `data/` — data loading utilities and metadata. Raw data in `data/raw/` (gitignored).
+- `notebooks/` — analysis notebooks (numbered: `01_qc.ipynb`, `02_clustering.ipynb`).
+- `figures/` — generated figures for papers/reports.
+- `configs/` — pipeline parameters and analysis configs.
+- `scripts/` — CLI entry points for batch processing.
+- `tests/` — unit tests for pipeline components.
+
+## Analysis Conventions
+
+- **Single-cell RNA-seq**: scanpy workflow. Store data as AnnData (`.h5ad`).
+  - QC → normalization → HVG selection → PCA → neighbors → UMAP → clustering → DE.
+  - Use `scvi-tools` for probabilistic models when appropriate.
+  - Use `scvelo` for RNA velocity analysis.
+- **Genomics**: pysam for BAM/VCF processing. gget for database queries.
+- **Cheminformatics**: RDKit for molecular analysis. datamol for molecular ML.
+- **Metabolic modeling**: COBRApy for FBA/FVA.
+- **Protein modeling**: ESM for embeddings and structure prediction.
+
+## Reproducibility
+
+- Pin all dependency versions in `pyproject.toml` or `requirements.txt`.
+- Set random seeds for all stochastic operations.
+- Record analysis parameters in config files, not hardcoded in notebooks.
+- Use `scanpy.logging.print_versions()` at notebook start.
+- Save intermediate results to `.h5ad` or `.parquet` at pipeline checkpoints.
+
+## Figure Standards
+
+- Publication-quality: 300 DPI minimum. Vector formats (SVG/PDF) preferred.
+- Use consistent color palettes. Colorblind-friendly defaults.
+- Save to `figures/` with descriptive names: `fig_umap_celltypes.pdf`.
+- Use `matplotlib` style sheets or `seaborn` themes for consistency.
+
+## Data Management
+
+- Raw data in `data/raw/` — NEVER commit raw data to git.
+- Processed data in `data/processed/` — gitignored, regenerable from pipelines.
+- Metadata in `data/metadata/` — version controlled.
+- Use `.gitignore` for `*.h5ad`, `*.bam`, `*.fastq*`, `*.vcf*`, `data/raw/`, `data/processed/`.
+
+## Coding Conventions
+
+- Python 3.12+. Type hints on all function signatures.
+- Use `uv` for dependency management when available, otherwise `pip`.
+- Format with `ruff`. Lint with `ruff check`.
+- Docstrings on public functions (Google style). Include parameter types and return descriptions.
+
+## Testing
+
+- Use `pytest` for all tests.
+- Test pipeline steps independently with small synthetic data.
+- Run tests before committing: `pytest -v`.
+
+## Git Workflow
+
+- Conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`.
+- Clear notebook outputs before committing (use `nbstripout` or pre-commit hook).
+- Do NOT commit large data files, model weights, or intermediate results.
