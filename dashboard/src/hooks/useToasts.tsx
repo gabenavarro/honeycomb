@@ -80,6 +80,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <Toast.Root
             key={t.id}
+            // Radix sets an ``aria-live`` announcement region automatically,
+            // but ``<Toast.Root>`` itself renders an ``<li>`` with no role.
+            // Errors additionally carry ``role="alert"`` so the visible
+            // node is also flagged as assertive — matching the pre-Radix
+            // behaviour and what most users expect when grepping the DOM.
+            role={t.kind === "error" ? "alert" : "status"}
             type={t.kind === "error" ? "foreground" : "background"}
             open={t.open}
             duration={t.durationMs > 0 ? t.durationMs : undefined}
