@@ -100,7 +100,7 @@ export default function App() {
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const { data: containers = [] } = useQuery({
+  const { data: containers = [], isSuccess: containersLoaded } = useQuery({
     queryKey: ["containers"],
     queryFn: listContainers,
     refetchInterval: backoffRefetch(),
@@ -120,7 +120,14 @@ export default function App() {
 
   // Prune open tabs for containers that no longer exist (deleted on the
   // backend). Also purge their cached sessions.
+  //
+  // Gated on ``containersLoaded`` so the effect doesn't fire before the
+  // first ``/api/containers`` response lands. Without this guard, the
+  // initial render sees ``containers=[]`` (useQuery's default) and
+  // evicts every persisted tab, which means a slow hub makes the user
+  // lose their layout between reload and the first successful fetch.
   useEffect(() => {
+    if (!containersLoaded) return;
     const known = new Set(containers.map((c) => c.id));
     const stillOpen = openTabs.filter((id) => known.has(id));
     const removed = openTabs.filter((id) => !known.has(id));
@@ -134,7 +141,16 @@ export default function App() {
         setSplitId(null);
       }
     }
-  }, [containers, openTabs, activeTabId, splitId, setOpenTabs, setActiveTabId, setSplitId]);
+  }, [
+    containersLoaded,
+    containers,
+    openTabs,
+    activeTabId,
+    splitId,
+    setOpenTabs,
+    setActiveTabId,
+    setSplitId,
+  ]);
 
   const openContainers: ContainerRecord[] = useMemo(
     () =>
