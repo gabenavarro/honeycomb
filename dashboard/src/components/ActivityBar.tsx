@@ -1,7 +1,16 @@
 /** Narrow left rail — the VSCode/Cursor activity bar. Selecting an icon
  * changes what the primary sidebar shows. */
 
-import { AlertCircle, Box, GitBranch, Keyboard, Search, Settings, SquareStack } from "lucide-react";
+import {
+  AlertCircle,
+  Box,
+  FolderTree,
+  GitBranch,
+  Keyboard,
+  Search,
+  Settings,
+  SquareStack,
+} from "lucide-react";
 
 export type Activity =
   | "containers"
@@ -10,7 +19,8 @@ export type Activity =
   | "settings"
   | "problems"
   | "scm"
-  | "keybindings";
+  | "keybindings"
+  | "files";
 
 interface Props {
   active: Activity;
@@ -46,6 +56,13 @@ const ITEMS: Item[] = [
     icon: <SquareStack size={18} />,
     label: "Source Control",
     shortcut: "Ctrl+Shift+S",
+    badgeFor: () => null,
+  },
+  {
+    id: "files",
+    icon: <FolderTree size={18} />,
+    label: "Files",
+    shortcut: "Ctrl+Shift+F",
     badgeFor: () => null,
   },
   {

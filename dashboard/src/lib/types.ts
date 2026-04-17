@@ -201,3 +201,15 @@ export interface DirectoryListing {
 export interface ContainerWorkdir {
   path: string;
 }
+
+// M18 — file viewer payloads.
+
+export interface FileContent {
+  path: string;
+  mime_type: string;
+  size_bytes: number;
+  content: string | null;
+  content_base64: string | null;
+  truncated: boolean;
+  error: string | null;
+}

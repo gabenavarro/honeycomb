@@ -170,6 +170,27 @@ class CommandOutput(BaseModel):
     output: list[str]
 
 
+# --- Filesystem (M18) ---
+
+
+class FileContent(BaseModel):
+    """Body returned by ``GET /api/containers/{id}/fs/read``.
+
+    The hub ships text files inline as UTF-8 ``content`` (up to
+    5 MiB); binary files go through base64 (up to 1 MiB). Larger files
+    return ``truncated=true`` with no body — the dashboard offers a
+    download link instead of an inline preview.
+    """
+
+    path: str
+    mime_type: str
+    size_bytes: int
+    content: str | None = None
+    content_base64: str | None = None
+    truncated: bool = False
+    error: str | None = None
+
+
 # --- Resources ---
 
 

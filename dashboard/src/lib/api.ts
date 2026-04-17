@@ -24,6 +24,7 @@ import type {
   DirectoryListing,
   DiscoverRegisterRequest,
   DiscoveryResponse,
+  FileContent,
   GitFileStatus,
   HubHealth,
   HubSettings,
@@ -210,6 +211,20 @@ export const getContainerWorkdir = (id: number) =>
 
 export const listContainerDirectory = (id: number, path: string) =>
   request<DirectoryListing>(`/containers/${id}/fs?path=${encodeURIComponent(path)}`);
+
+export const readContainerFile = (id: number, path: string) =>
+  request<FileContent>(`/containers/${id}/fs/read?path=${encodeURIComponent(path)}`);
+
+export function containerFileDownloadUrl(id: number, path: string): string {
+  // Returns the hub URL the browser should GET directly (auth header
+  // attached via the user's active fetch token is handled by the
+  // ``request`` wrapper in the normal-preview path — for downloads we
+  // use a new-tab navigation and rely on the session's cookie/header
+  // already existing). Callers should preferentially use a fetch-based
+  // blob download instead; this helper exists for the "open in new
+  // tab" hint link.
+  return `/api/containers/${id}/fs/download?path=${encodeURIComponent(path)}`;
+}
 
 export const commitChanges = (
   workspace_folder: string,

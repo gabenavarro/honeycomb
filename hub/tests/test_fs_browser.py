@@ -6,6 +6,7 @@ import pytest
 
 from hub.services.fs_browser import (
     InvalidFsPath,
+    is_text_mime,
     parse_ls_output,
     validate_path,
 )
@@ -82,3 +83,26 @@ class TestParseLsOutput:
         src = "total 4\ngarbage\n-rw-r--r-- 1 root root 10 2026-04-17 09:15:02 +0000 ok.txt\n"
         entries, _ = parse_ls_output(src)
         assert [e.name for e in entries] == ["ok.txt"]
+
+
+class TestIsTextMime:
+    def test_recognises_common_text_types(self) -> None:
+        for mime in (
+            "text/plain",
+            "text/markdown",
+            "application/json",
+            "application/javascript",
+            "application/xml",
+            "application/x-ipynb+json",
+        ):
+            assert is_text_mime(mime) is True, mime
+
+    def test_rejects_binary_types(self) -> None:
+        for mime in (
+            "image/png",
+            "application/pdf",
+            "application/octet-stream",
+            "application/zip",
+            "",
+        ):
+            assert is_text_mime(mime) is False, mime
