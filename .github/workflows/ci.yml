@@ -43,6 +43,13 @@ jobs:
           python-version: "3.12"
       - name: Install hub (with dev extras)
         run: uv pip install --system -e "./hub[dev]"
+      - name: Install hive-agent (protocol + runner shared in M4 tests)
+        # hub/tests/test_agent_protocol.py imports both
+        # hub.models.agent_protocol and hive_agent.protocol to assert
+        # they stay byte-compatible. Installing hive-agent editable
+        # brings in the sibling protocol module without pulling its
+        # runtime deps (websockets etc.) into the hub image.
+        run: uv pip install --system -e "./hive-agent"
       - name: Install repo-wide tools
         run: uv pip install --system ruff mypy
       - name: Ruff
