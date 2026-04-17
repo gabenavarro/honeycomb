@@ -29,6 +29,7 @@ from hub.routers import (
     commands,
     containers,
     discover,
+    fs,
     gitops,
     keybindings,
     problems,
@@ -347,6 +348,7 @@ app.add_middleware(
 app.include_router(containers.router)
 app.include_router(commands.router)
 app.include_router(discover.router)
+app.include_router(fs.router)
 app.include_router(gitops.router)
 app.include_router(keybindings.router)
 app.include_router(problems.router)

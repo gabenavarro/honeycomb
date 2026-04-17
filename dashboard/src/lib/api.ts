@@ -20,6 +20,8 @@ import type {
   CommandResponse,
   ContainerCreate,
   ContainerRecord,
+  ContainerWorkdir,
+  DirectoryListing,
   DiscoverRegisterRequest,
   DiscoveryResponse,
   GitFileStatus,
@@ -200,6 +202,14 @@ export const putKeybindings = (bindings: Record<string, string>) =>
     method: "PUT",
     body: JSON.stringify({ bindings }),
   });
+
+// --- M17 endpoints (container filesystem browse) ---
+
+export const getContainerWorkdir = (id: number) =>
+  request<ContainerWorkdir>(`/containers/${id}/workdir`);
+
+export const listContainerDirectory = (id: number, path: string) =>
+  request<DirectoryListing>(`/containers/${id}/fs?path=${encodeURIComponent(path)}`);
 
 export const commitChanges = (
   workspace_folder: string,
