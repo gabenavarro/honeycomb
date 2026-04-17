@@ -27,6 +27,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 
 from hub.auth import authenticate_websocket
+from hub.pty_commands import UnknownPtyCommand, resolve_command
 
 logger = logging.getLogger("hub.routers.pty")
 
@@ -47,9 +48,12 @@ async def pty_ws(
     Query params:
       cols, rows — initial viewport size; client should immediately send
                    a resize frame if it has a more accurate number.
-      cmd        — "bash" | "sh" | "claude" | anything else already on
-                   PATH inside the container. We don't shell-quote args;
-                   keep it simple — the client sends one token.
+      cmd        — one of the values in :mod:`hub.pty_commands`
+                   (``shell``/``bash`` → bash -l, ``sh``, ``claude``,
+                   ``python``, ``node``, ``pytest``, ``git``, ``uv``).
+                   Anything outside that allowlist — including shell
+                   metacharacters — is rejected with close code 4400.
+                   Since M5 we do NOT f-string user input into ``sh -c``.
       label      — session label. The same label from the same
                    record_id attaches to the same PTY (reattach). New
                    labels spawn new PTYs.
@@ -63,6 +67,17 @@ async def pty_ws(
 
     await websocket.accept()
 
+    # Resolve the requested command against the allowlist first. An
+    # invalid value short-circuits before we look up the container —
+    # no reason to spend a Docker round-trip on a request we'll
+    # reject anyway.
+    try:
+        command = resolve_command(cmd)
+    except UnknownPtyCommand as exc:
+        await _send_ctrl(websocket, f"closed:cmd-not-allowed:{exc.raw!r}"[:200])
+        await websocket.close(code=4400)
+        return
+
     try:
         record = await registry.get(record_id)
     except KeyError:
@@ -73,24 +88,6 @@ async def pty_ws(
         await _send_ctrl(websocket, "closed:container-not-started")
         await websocket.close(code=4409)
         return
-
-    # Map friendly `cmd` names to safe invocations. `bash -l` gives a
-    # login shell (loads /etc/profile, PATH, HIVE_* env) — matches what
-    # the one-shot relay does. Fallback to sh if bash isn't present is
-    # handled *inside* bash via `|| exec sh` chain below.
-    command: list[str]
-    cmd_clean = cmd.strip().lower()
-    if cmd_clean in ("bash", ""):
-        command = ["sh", "-c", "command -v bash >/dev/null && exec bash -l || exec sh -l"]
-    elif cmd_clean == "sh":
-        command = ["sh", "-l"]
-    elif cmd_clean == "claude":
-        # Run claude interactively — full REPL, slash commands work.
-        command = ["sh", "-c", "exec claude"]
-    else:
-        # Treat any other value as a literal binary to exec. Keep it
-        # single-token; we deliberately don't parse shell syntax.
-        command = ["sh", "-c", f"exec {cmd_clean}"]
 
     try:
         session, reattached = await pty_registry.get_or_create(

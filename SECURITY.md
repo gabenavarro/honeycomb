@@ -58,13 +58,33 @@ Consequences:
   back to ``devcontainer exec`` and then ``docker exec`` — the same
   ladder as before, just with the agent socket on top.
 
+## PTY command allowlist (since M5)
+
+The ``/ws/pty/{record_id}`` endpoint used to f-string its ``cmd`` query
+parameter into ``sh -c "exec <cmd>"``. An attacker who could hit the
+socket could inject shell metacharacters — ``?cmd=;rm -rf /`` would
+actually execute.
+
+Since M5, the endpoint resolves ``cmd`` through a static allowlist
+(``hub/pty_commands.py``) of symbolic names (``shell``, ``bash``,
+``sh``, ``claude``, ``python``, ``node``, ``pytest``, ``git``, ``uv``).
+Each value maps to a fixed ``argv`` constant; unknown values — and any
+value containing shell metacharacters — get a ``4400`` close at
+handshake time. See ``hub/tests/test_pty_commands.py`` for the
+regression matrix.
+
+## Request-size limits (since M5)
+
+Every user-supplied string field in ``hub/models/schemas.py`` now has
+a ``max_length``. The most important one is
+``CommandRequest.command`` (64 KiB), which used to be unbounded and
+could have been abused to ship megabytes through the command relay.
+
 ## Known gaps in the current codebase
 
 These are tracked and scheduled, not forgotten. Do not deploy Honeycomb on
 an untrusted network until the referenced milestone has merged.
 
-- The PTY endpoint interpolates its `cmd` query parameter into `sh -c`. (M5
-  replaces it with a server-side enum.)
 - `bootstrapper/provision.py` uses a non-sandboxed Jinja2 environment for
   user-supplied project descriptions. (M6)
 - Dockerfile templates install `uv` via `curl | sh` and run every stage as

@@ -37,12 +37,19 @@ class ContainerCreate(BaseModel):
     """Request to register and provision a new devcontainer."""
 
     workspace_folder: str = Field(
-        ..., description="Absolute path to the project workspace on the host"
+        ...,
+        min_length=1,
+        max_length=4096,
+        description="Absolute path to the project workspace on the host",
     )
     project_type: ProjectType = Field(default=ProjectType.BASE)
     project_name: str = Field(..., min_length=1, max_length=200)
-    project_description: str = Field(default="")
-    git_repo_url: str | None = Field(default=None, description="GitHub repo URL if applicable")
+    project_description: str = Field(default="", max_length=10_000)
+    git_repo_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="GitHub repo URL if applicable",
+    )
     auto_provision: bool = Field(default=True, description="Run bootstrapper on registration")
     auto_start: bool = Field(default=True, description="Start the devcontainer after provisioning")
     force_gpu: bool = Field(
@@ -80,21 +87,27 @@ class ContainerRecord(BaseModel):
 class ContainerUpdate(BaseModel):
     """Fields that can be updated on a container record."""
 
-    project_name: str | None = None
-    project_description: str | None = None
-    git_repo_url: str | None = None
-    agent_port: int | None = None
+    project_name: str | None = Field(default=None, min_length=1, max_length=200)
+    project_description: str | None = Field(default=None, max_length=10_000)
+    git_repo_url: str | None = Field(default=None, max_length=2048)
+    agent_port: int | None = Field(default=None, ge=1, le=65_535)
 
 
 # --- Heartbeat ---
 
 
 class HeartbeatPayload(BaseModel):
-    """Heartbeat sent from hive-agent inside a container."""
+    """Heartbeat sent from hive-agent inside a container.
 
-    container_id: str
-    status: str
-    agent_port: int = 9100
+    Pre-M4 the agent POSTed this over HTTP; since M4 the same shape
+    travels as a ``heartbeat`` frame on the reverse-tunnel WebSocket.
+    Kept as a Pydantic model so hub code still speaks the same type in
+    both paths.
+    """
+
+    container_id: str = Field(..., min_length=1, max_length=128)
+    status: str = Field(..., max_length=32)
+    agent_port: int = Field(default=9100, ge=1, le=65_535)
     session_info: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -104,19 +117,25 @@ class HeartbeatPayload(BaseModel):
 class EventPayload(BaseModel):
     """Event sent from hive-agent inside a container."""
 
-    container_id: str
-    event_type: str
+    container_id: str = Field(..., min_length=1, max_length=128)
+    event_type: str = Field(..., min_length=1, max_length=64)
     data: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Commands ---
 
+# Command strings are passed to a shell inside the container. A 64 KiB
+# cap is generous for any real-world paste (shell history lines top out
+# in the hundreds of bytes) and defends against a confused caller that
+# tries to ship a megabyte of stdin through this channel.
+MAX_COMMAND_LENGTH = 65_536
+
 
 class CommandRequest(BaseModel):
     """Request to execute a command in a devcontainer."""
 
-    command: str = Field(..., min_length=1)
-    command_id: str | None = None
+    command: str = Field(..., min_length=1, max_length=MAX_COMMAND_LENGTH)
+    command_id: str | None = Field(default=None, max_length=128)
 
 
 class CommandResponse(BaseModel):
@@ -246,11 +265,11 @@ class DiscoverRegisterRequest(BaseModel):
     side. Exactly one of `workspace_folder` or `container_id` should be
     provided; the other is derived."""
 
-    workspace_folder: str | None = None
-    container_id: str | None = None
-    project_name: str
+    workspace_folder: str | None = Field(default=None, max_length=4096)
+    container_id: str | None = Field(default=None, max_length=128)
+    project_name: str = Field(..., min_length=1, max_length=200)
     project_type: ProjectType = ProjectType.BASE
-    project_description: str = ""
+    project_description: str = Field(default="", max_length=10_000)
     # For already-running discovered containers we default to no-provision,
     # no-start; for pure workspace picks the caller can opt in.
     auto_provision: bool = False
