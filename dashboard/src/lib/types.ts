@@ -14,6 +14,10 @@ export interface ContainerRecord {
   container_id: string | null;
   container_status: ContainerStatus;
   agent_status: AgentStatus;
+  // M13: whether a hive-agent is expected to report heartbeats. When
+  // false the hub (and dashboard) must not treat heartbeat silence as
+  // a failure — the container is fully usable over docker_exec only.
+  agent_expected: boolean;
   agent_port: number;
   has_gpu: boolean;
   has_claude_cli: boolean;

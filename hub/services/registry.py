@@ -104,6 +104,7 @@ ALLOWED_UPDATE_FIELDS: frozenset[str] = frozenset(
         "container_id",
         "container_status",
         "agent_status",
+        "agent_expected",
         "agent_port",
         "has_gpu",
         "has_claude_cli",
@@ -150,6 +151,7 @@ def _row_to_record(row: sa.Row) -> ContainerRecord:
         container_id=mapping["container_id"],
         container_status=ContainerStatus(mapping["container_status"]),
         agent_status=AgentStatus(mapping["agent_status"]),
+        agent_expected=bool(mapping["agent_expected"]),
         agent_port=mapping["agent_port"],
         has_gpu=bool(mapping["has_gpu"]),
         has_claude_cli=bool(mapping["has_claude_cli"]),
@@ -208,6 +210,7 @@ class Registry:
         project_description: str = "",
         git_repo_url: str | None = None,
         has_gpu: bool = False,
+        agent_expected: bool = True,
     ) -> ContainerRecord:
         now = datetime.now().isoformat()
         stmt = (
@@ -219,6 +222,7 @@ class Registry:
                 project_description=project_description,
                 git_repo_url=git_repo_url,
                 has_gpu=has_gpu,
+                agent_expected=agent_expected,
                 created_at=now,
                 updated_at=now,
             )

@@ -89,6 +89,13 @@ class HealthChecker:
             if not container_id:
                 continue
 
+            # M13: records registered without an agent (Discover tab with
+            # auto_provision=false) never heartbeat. They're fully usable
+            # over docker_exec; marking them "unreachable" is a lie the
+            # user sees right next to a working shell. Skip the check.
+            if not record.agent_expected:
+                continue
+
             last_hb = heartbeats.get(container_id)
             if last_hb is None:
                 # No heartbeat ever received. Use registration time as the

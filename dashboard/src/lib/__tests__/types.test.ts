@@ -28,6 +28,7 @@ describe("Type definitions", () => {
       container_id: "abc123",
       container_status: "running",
       agent_status: "idle",
+      agent_expected: true,
       agent_port: 9100,
       has_gpu: true,
       created_at: "2026-03-22T00:00:00",

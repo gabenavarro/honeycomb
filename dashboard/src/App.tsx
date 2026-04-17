@@ -81,7 +81,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useLocalStorage<boolean>(LS_SIDEBAR_OPEN, true, {
     validate: isBoolean,
   });
-  const [secondaryOpen, setSecondaryOpen] = useLocalStorage<boolean>(LS_SECONDARY_OPEN, true, {
+  // M13: the default for the secondary "Resources" pane flipped to
+  // *closed* because the headline numbers now live in the StatusBar
+  // pill. Users who still want the always-visible bar chart can toggle
+  // it back with Ctrl+` (it persists here per-user).
+  const [secondaryOpen, setSecondaryOpen] = useLocalStorage<boolean>(LS_SECONDARY_OPEN, false, {
     validate: isBoolean,
   });
   const [openTabs, setOpenTabs] = useLocalStorage<number[]>(LS_OPEN_TABS, [], {
@@ -214,9 +218,15 @@ export default function App() {
     },
   });
 
+  // M13. The "unreachable" half of this check only fires for records
+  // where the hub actually expected a hive-agent. Containers registered
+  // via the Discover tab without provisioning (agent_expected=false)
+  // run fine over docker_exec, so heartbeat silence is not a fault and
+  // we must not surface it as one.
   const selectedUnhealthy =
     active !== undefined &&
-    (active.container_status !== "running" || active.agent_status === "unreachable");
+    (active.container_status !== "running" ||
+      (active.agent_status === "unreachable" && active.agent_expected));
   const firstHealthy = useMemo(
     () =>
       openContainers.find(
@@ -385,7 +395,10 @@ export default function App() {
           )}
         </div>
 
-        <StatusBar activeContainerName={active?.project_name ?? null} />
+        <StatusBar
+          activeContainerId={active?.id ?? null}
+          activeContainerName={active?.project_name ?? null}
+        />
 
         {showProvisioner && <Provisioner onClose={() => setShowProvisioner(false)} />}
 

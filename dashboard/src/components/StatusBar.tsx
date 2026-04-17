@@ -5,8 +5,14 @@ import { Activity, Wifi, WifiOff, Cpu, GitBranch } from "lucide-react";
 import { getHealth, listContainers } from "../lib/api";
 import { useHiveWebSocket } from "../hooks/useWebSocket";
 import { backoffRefetch } from "../hooks/useSmartPoll";
+import { ResourcePill } from "./ResourcePill";
 
-export function StatusBar({ activeContainerName }: { activeContainerName: string | null }) {
+interface StatusBarProps {
+  activeContainerId: number | null;
+  activeContainerName: string | null;
+}
+
+export function StatusBar({ activeContainerId, activeContainerName }: StatusBarProps) {
   const { connected } = useHiveWebSocket();
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -53,6 +59,7 @@ export function StatusBar({ activeContainerName }: { activeContainerName: string
         )}
       </div>
       <div className="flex items-center gap-3">
+        <ResourcePill containerId={activeContainerId} containerName={activeContainerName} />
         {activeContainerName && <span>{activeContainerName}</span>}
         <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` · Ctrl+W</span>
       </div>

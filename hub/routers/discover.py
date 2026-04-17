@@ -152,12 +152,19 @@ async def register_discovered(request: Request, req: DiscoverRegisterRequest) ->
                 },
             )
 
+    # M13: a container is only "agent-expected" when the bootstrapper
+    # will install hive-agent into it (auto_provision=true). Discover
+    # registrations against an already-running container never trigger
+    # provisioning, so heartbeat silence is the expected state and the
+    # health checker must not flag it.
+    agent_expected = bool(req.auto_provision)
     record = await registry.add(
         workspace_folder=resolved_workspace,
         project_type=req.project_type.value,
         project_name=req.project_name,
         project_description=req.project_description,
         has_gpu=has_gpu,
+        agent_expected=agent_expected,
     )
 
     # Link the discovered container with a state that matches Docker's
