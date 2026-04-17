@@ -32,9 +32,7 @@ const TINY_IPYNB = JSON.stringify({
       cell_type: "code",
       execution_count: 1,
       metadata: {},
-      outputs: [
-        { name: "stdout", output_type: "stream", text: ["hi from code cell\n"] },
-      ],
+      outputs: [{ name: "stdout", output_type: "stream", text: ["hi from code cell\n"] }],
       source: ["print('hi from code cell')"],
     },
   ],
