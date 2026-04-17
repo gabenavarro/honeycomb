@@ -18,7 +18,6 @@ from pathlib import Path
 
 import docker
 import docker.errors
-import httpx
 
 from hub.config import get_settings
 from hub.services.registry import Registry
@@ -264,14 +263,10 @@ def scan_workspace_candidates(
 # ──────────────────────────────────────────────────────────────────────────
 
 
-async def _probe_hive_agent(ip: str, port: int, timeout: float = 1.5) -> bool:
-    """Fast check: does hive-agent answer on this IP:port?"""
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as http:
-            resp = await http.get(f"http://{ip}:{port}/health")
-            return resp.status_code == 200
-    except (httpx.HTTPError, OSError):
-        return False
+# Pre-M4 this module probed http://<container>:9100/health to decide
+# whether a running container carried a hive-agent. Since M4 the agent
+# is a WebSocket client of the hub — we consult AgentRegistry instead
+# (see scan_container_candidates below).
 
 
 def _infer_workspace_from_container(container) -> str | None:
@@ -315,12 +310,14 @@ def _infer_container_project_name(container, workspace: str | None) -> str:
 
 async def scan_container_candidates(
     registered_container_ids: set[str],
+    agent_registry: object | None = None,
 ) -> list[ContainerCandidate]:
     """Return running Docker containers that are not already registered.
 
-    Probes each container for hive-agent on port 9100 in parallel so we
-    don't serialize a bunch of 1.5s timeouts when several containers lack
-    the agent.
+    ``has_hive_agent`` is sourced from the :class:`AgentRegistry` since
+    M4 — a container only shows as "agent: yes" when a hive-agent has
+    successfully dialed the hub's reverse tunnel. There is no longer a
+    listener port to probe.
     """
     try:
         client = docker.from_env()
@@ -334,46 +331,27 @@ async def scan_container_candidates(
         logger.warning("docker ps failed: %s", exc)
         return []
 
-    # Collect (container, probe-ip, probe-port). We only probe the first
-    # network interface that has an IP — more than one is rare and the
-    # extra round-trips aren't worth it.
-    probe_targets: list[tuple[object, str | None, int]] = []
-    for c in running:
-        if c.short_id in registered_container_ids:
-            continue
-        ip: str | None = None
-        for net_info in (c.attrs.get("NetworkSettings", {}).get("Networks") or {}).values():
-            candidate = net_info.get("IPAddress")
-            if candidate:
-                ip = candidate
-                break
-        probe_targets.append((c, ip, 9100))
-
-    import asyncio as _asyncio
-
-    async def _probe_one(container, ip: str | None, port: int) -> bool:
-        if not ip:
+    def _has_live_agent(container_id: str) -> bool:
+        if agent_registry is None:
             return False
-        return await _probe_hive_agent(ip, port)
-
-    probe_results: list[bool] = list(
-        await _asyncio.gather(
-            *(_probe_one(c, ip, port) for c, ip, port in probe_targets),
-            return_exceptions=False,
-        )
-    )
+        try:
+            return bool(agent_registry.has_live_connection(container_id))  # type: ignore[attr-defined]
+        except Exception:
+            return False
 
     candidates: list[ContainerCandidate] = []
-    for (container, _ip, _port), has_agent in zip(probe_targets, probe_results, strict=False):
+    for container in running:
+        if container.short_id in registered_container_ids:
+            continue
         workspace = _infer_workspace_from_container(container)
         name = _infer_container_project_name(container, workspace)
-        # Image tag is usually the strongest signal for GPU images.
         image = ""
         try:
             image = (container.image.tags or [container.image.id or ""])[0]
         except Exception:
             image = ""
         inferred = infer_project_type(image, name, (container.name or ""))
+        has_agent = _has_live_agent(container.short_id)
         candidates.append(
             ContainerCandidate(
                 container_id=container.short_id,
@@ -384,7 +362,11 @@ async def scan_container_candidates(
                 inferred_project_name=name,
                 inferred_project_type=inferred,
                 has_hive_agent=has_agent,
-                agent_port=9100 if has_agent else None,
+                # agent_port is legacy — pre-M4 callers used it to know
+                # which port to probe. Left on the model for JSON compat
+                # with the dashboard; a None value is honest about the
+                # new architecture.
+                agent_port=None,
             )
         )
 

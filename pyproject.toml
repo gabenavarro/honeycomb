@@ -86,6 +86,13 @@ ignore_missing_imports = true
 module = ["hub.services.discovery", "hub.routers.discover", "hub.main"]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+# Test modules often pass duck-typed fakes in place of framework types
+# (FakeWebSocket here). Tightening mypy on tests offers little value
+# compared to the noise; skip strict arg-type checks for the test tree.
+module = ["hub.tests.*", "hive_agent.tests.*"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 asyncio_mode = "auto"

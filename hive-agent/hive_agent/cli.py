@@ -1,9 +1,10 @@
 """CLI entrypoint for hive-agent.
 
-Usage:
-    hive-agent start              Start the agent (heartbeat + command listener)
-    hive-agent start --port 9100  Start on a specific port
-    hive-agent status             Check if the agent is running
+Usage::
+
+    hive-agent start              Start the agent (WebSocket tunnel to the hub)
+    hive-agent start --verbose    Debug logging
+    hive-agent status             Report whether an agent process looks alive
 """
 
 from __future__ import annotations
@@ -14,10 +15,8 @@ import os
 import sys
 
 import click
-import uvicorn
 
-from hive_agent.client import HiveClient
-from hive_agent.command_listener import create_app
+from hive_agent.ws_client import HiveAgentWS
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -31,53 +30,54 @@ def _setup_logging(verbose: bool) -> None:
 
 @click.group()
 def main() -> None:
-    """Claude Hive Agent — worker-side client for devcontainers."""
+    """Claude Hive Agent — worker-side WebSocket client for devcontainers."""
 
 
 @main.command()
 @click.option(
-    "--port", default=None, type=int, help="Port for the command listener (default: 9100)"
+    "--hub-url",
+    default=None,
+    help="Hub URL (default: $HIVE_HUB_URL or http://host.docker.internal:8420).",
 )
-@click.option("--hub-url", default=None, help="Hub URL (default: http://host.docker.internal:8420)")
-@click.option("--container-id", default=None, help="Container identifier (default: hostname)")
-@click.option("--heartbeat-interval", default=5.0, type=float, help="Heartbeat interval in seconds")
+@click.option(
+    "--container-id",
+    default=None,
+    help="Container identifier (default: $HIVE_CONTAINER_ID or hostname).",
+)
+@click.option(
+    "--heartbeat-interval",
+    default=5.0,
+    type=float,
+    help="Heartbeat interval in seconds.",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable debug logging")
 @click.option("--daemon", "-d", is_flag=True, help="Run in background (daemonize)")
 def start(
-    port: int | None,
     hub_url: str | None,
     container_id: str | None,
     heartbeat_interval: float,
     verbose: bool,
     daemon: bool,
 ) -> None:
-    """Start the hive agent (heartbeat + command listener)."""
+    """Open a WebSocket tunnel to the hub and serve commands."""
     if daemon:
         _daemonize()
 
     _setup_logging(verbose)
-    agent_port = port or int(os.environ.get("HIVE_AGENT_PORT", "9100"))
 
-    client = HiveClient(
+    client = HiveAgentWS(
         hub_url=hub_url,
         container_id=container_id,
         heartbeat_interval=heartbeat_interval,
-        agent_port=agent_port,
     )
-
-    app = create_app(client)
 
     async def _run() -> None:
         await client.start()
-        config = uvicorn.Config(
-            app,
-            host="0.0.0.0",
-            port=agent_port,
-            log_level="debug" if verbose else "info",
-        )
-        server = uvicorn.Server(config)
         try:
-            await server.serve()
+            # The run loop lives on client._run_task; park here so the
+            # CLI process tracks its lifecycle until SIGINT.
+            while True:
+                await asyncio.sleep(3600)
         finally:
             await client.stop()
 
@@ -88,23 +88,38 @@ def start(
 
 
 @main.command()
-@click.option("--port", default=None, type=int, help="Agent port to check (default: 9100)")
-def status(port: int | None) -> None:
-    """Check if the hive agent is running locally."""
-    import httpx
+def status() -> None:
+    """Best-effort check for a running hive-agent process on the box.
 
-    agent_port = port or int(os.environ.get("HIVE_AGENT_PORT", "9100"))
+    Post-M4 the agent is a WebSocket client with no local listener, so
+    this command simply reports whether a process is running. Useful for
+    the hub to decide if it needs to spawn the agent in a container.
+    """
     try:
-        resp = httpx.get(f"http://127.0.0.1:{agent_port}/health", timeout=3.0)
-        data = resp.json()
-        click.echo(f"Agent is running: {data}")
-    except httpx.ConnectError:
-        click.echo(f"Agent is not running on port {agent_port}")
+        import subprocess
+
+        out = subprocess.run(
+            ["pgrep", "-f", "hive-agent"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        click.echo("pgrep not available; cannot determine hive-agent status.")
+        sys.exit(2)
+
+    pids = [line for line in out.stdout.splitlines() if line.strip()]
+    own_pid = str(os.getpid())
+    pids = [p for p in pids if p != own_pid]
+    if pids:
+        click.echo(f"hive-agent looks alive (pid(s): {', '.join(pids)})")
+    else:
+        click.echo("hive-agent is not running")
         sys.exit(1)
 
 
 def _daemonize() -> None:
-    """Fork into background (Unix only)."""
+    """Fork into the background (Unix only)."""
     if os.name != "posix":
         click.echo("Daemon mode is only supported on Unix systems", err=True)
         sys.exit(1)
@@ -113,7 +128,6 @@ def _daemonize() -> None:
         click.echo(f"hive-agent started in background (pid={pid})")
         sys.exit(0)
     os.setsid()
-    # Redirect stdio to /dev/null
     devnull = os.open(os.devnull, os.O_RDWR)
     os.dup2(devnull, 0)
     os.dup2(devnull, 1)

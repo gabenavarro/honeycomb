@@ -1,8 +1,8 @@
 {
   "id": "claude-hive",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "name": "Claude Hive Agent",
-  "description": "Installs Claude Code CLI, hive-agent, and configures skills/hooks for Claude Hive orchestration",
+  "description": "Installs Claude Code CLI and the hive-agent WebSocket client for Claude Hive orchestration",
   "options": {
     "projectType": {
       "type": "string",
@@ -19,11 +19,6 @@
       "type": "string",
       "default": "http://host.docker.internal:8420",
       "description": "URL of the Claude Hive hub"
-    },
-    "agentPort": {
-      "type": "string",
-      "default": "9100",
-      "description": "Port for the hive-agent command listener"
     }
   },
   "installsAfter": [],

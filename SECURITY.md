@@ -38,14 +38,31 @@ pass the host value through so a single token covers the whole fleet.
 Rotate by deleting the token file (or unsetting the env var) and
 restarting — a fresh token is generated on the next boot.
 
+## Worker transport (since M4)
+
+The ``hive-agent`` inside a container no longer binds a local listener.
+It dials an authenticated WebSocket to ``wss://<hub>/api/agent/connect``
+and stays there for the lifetime of the container. The hub pushes
+command-exec frames down that socket and consumes heartbeats, outputs,
+and completion notices back.
+
+Consequences:
+
+* No port `9100` is exposed from the container, so nothing on the
+  Docker bridge can reach the agent.
+* The bearer token gates the agent handshake the same way it gates the
+  dashboard WebSocket. An agent without ``HIVE_AUTH_TOKEN`` is
+  immediately closed (1008).
+* If the agent isn't connected (container booting, hub restarted, or
+  the container has no hive-agent at all), the command relay falls
+  back to ``devcontainer exec`` and then ``docker exec`` — the same
+  ladder as before, just with the agent socket on top.
+
 ## Known gaps in the current codebase
 
 These are tracked and scheduled, not forgotten. Do not deploy Honeycomb on
 an untrusted network until the referenced milestone has merged.
 
-- `hive-agent` inside every container still binds `0.0.0.0:9100` with no
-  auth and accepts arbitrary shell commands via `/exec`. (M4 replaces
-  this with an authenticated reverse WebSocket tunnel.)
 - The PTY endpoint interpolates its `cmd` query parameter into `sh -c`. (M5
   replaces it with a server-side enum.)
 - `bootstrapper/provision.py` uses a non-sandboxed Jinja2 environment for
