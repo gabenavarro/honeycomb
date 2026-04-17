@@ -79,5 +79,11 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: "./src/test-setup.ts",
+    // Playwright specs live under ``tests/e2e`` and use a test runner
+    // with incompatible globals (``test.beforeEach`` with different
+    // semantics). Leave them out of the Vitest run — CI's ``playwright``
+    // job runs them separately.
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["node_modules", "dist", "tests/e2e/**"],
   },
 });

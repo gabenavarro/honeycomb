@@ -64,5 +64,10 @@ test("activity bar toggle switches to the Problems pane", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /^problems$/i }).click();
 
-  await expect(page.getByRole("heading", { name: /problems/i })).toBeVisible();
+  // ProblemsPanel renders a "No problems" empty-state paragraph whenever
+  // the GET /api/problems mock returns an empty list. That string is
+  // only present in the Problems view, so it's a unique-enough assertion
+  // that the activity actually switched (the sidebar + panel both say
+  // "Problems" — matching on the heading text is ambiguous).
+  await expect(page.getByText(/health transitions and agent disconnects/i)).toBeVisible();
 });

@@ -1,6 +1,14 @@
-# Honeycomb a Claude docker hive orchestrator
+# Honeycomb — a Claude docker hive orchestrator
 
 A centralized command-and-control system for managing multiple Claude Code + VSCode Dev Container environments from a single interface.
+
+> ⚠️ **Local-only by default.** The hub binds to `127.0.0.1` and every
+> HTTP + WebSocket endpoint (except `/api/health`) requires a bearer
+> token. **Do not set `HIVE_HOST=0.0.0.0` unless you also trust the
+> network segment** and accept that the token is the only thing
+> standing between an attacker and arbitrary shell inside your
+> containers. See [SECURITY.md](SECURITY.md) for the full threat
+> model and how to rotate the token.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -198,8 +206,9 @@ resources sidebar on the right, and a status bar across the bottom.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Activity bar** (leftmost rail): `Containers`, `Git Ops`, `⌘K` palette,
-  `Settings`. Badge numbers show container + PR counts.
+- **Activity bar** (leftmost rail): `Containers`, `Source Control`,
+  `Git Ops`, `Problems`, `⌘K` palette, `Keybindings`, `Settings`. Badge
+  numbers show container, PR, and problem counts.
 - **Primary sidebar**: whatever the active activity shows — container
   list (with start/stop/remove + `+ New`) or Git Ops panel. Toggle with
   `Ctrl+B`.
@@ -226,6 +235,10 @@ resources sidebar on the right, and a status bar across the bottom.
 | `Ctrl+1..9` | Focus Nth open container tab |
 | `Ctrl+Shift+C` | Containers activity |
 | `Ctrl+Shift+G` | Git Ops activity |
+| Split-editor toggle (editor header) | Open two containers side-by-side |
+
+Keybindings are editable at runtime from the Keybindings activity; the
+hub persists overrides at `~/.config/honeycomb/keybindings.json`.
 
 ### Terminal renderer
 
@@ -379,9 +392,16 @@ The hub runs at `http://127.0.0.1:8420`. All endpoints are under `/api/`.
 |---|---|---|
 | `GET` | `/api/health` | Hub health check |
 | `GET` | `/api/auth/status` | Auth status per container (parallel, bounded at 20s) |
+| `GET`, `PATCH` | `/api/settings` | Inspect / mutate runtime settings (log_level, discover_roots, metrics_enabled) |
+| `GET`, `DELETE` | `/api/problems` | Hub problem log (health transitions, agent unreachable) |
+| `GET`, `PUT` | `/api/keybindings` | Dashboard keybinding overrides |
+| `GET` | `/api/gitops/status/{workspace_folder}` | Staged/modified/untracked files for a repo |
 | `POST` | `/api/heartbeat` | Heartbeat from hive-agent |
 | `POST` | `/api/events` | Event from hive-agent |
-| `WS` | `/ws` | Multiplexed WebSocket |
+| `GET` | `/metrics` | Prometheus scrape (when metrics_enabled) |
+| `WS` | `/ws` | Multiplexed WebSocket (channels: container id, `problems`, `logs:hub`, `cmd:{id}`, `build:{path}`) |
+| `WS` | `/ws/pty/{record_id}` | Persistent-PTY session |
+| `WS` | `/api/agent/connect` | Reverse-tunnel from hive-agent |
 
 ## Contracts
 
@@ -537,6 +557,30 @@ Claude Hive includes 8 custom skills and 4 custom agents in `.claude/`.
 | `provisioner` | Generates new devcontainer environments |
 | `gitops-reviewer` | Surfaces PRs needing attention, drafts reviews |
 | `container-doctor` | Diagnoses unhealthy containers |
+
+## Security
+
+The hub is a local-only orchestrator that brokers arbitrary shell
+execution inside every registered devcontainer. Its security model has
+four layers, in increasing order of "do not get this wrong":
+
+1. **Bind loopback by default.** `HIVE_HOST=127.0.0.1`. Nobody off the
+   host can open a TCP connection at all.
+2. **Bearer token on every endpoint.** `/api/health` is the single
+   exception (and only so the AuthGate can probe reachability). The
+   token is generated on first start, printed once, persisted at
+   `~/.config/honeycomb/token` (mode `0600`), and overridable via
+   `HIVE_AUTH_TOKEN`. Dashboards attach it as a Bearer header and as
+   a `?token=` query param on WebSocket upgrades (browsers can't send
+   custom headers on WS handshakes).
+3. **CORS allowlist.** Defaults to `http://localhost:5173` plus the
+   loopback equivalent. The middleware loudly warns on `*`.
+4. **Command allowlists.** PTY endpoints accept a `cmd` enum (not a
+   free-form string); `POST /api/containers/{id}/commands` caps the
+   command body at 64 KiB.
+
+Full threat model, rotation procedure, and incident reporting:
+[SECURITY.md](SECURITY.md).
 
 ## Authentication
 

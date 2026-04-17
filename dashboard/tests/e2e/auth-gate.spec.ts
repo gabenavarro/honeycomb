@@ -19,8 +19,10 @@ test.beforeEach(async ({ context }) => {
       // ignore
     }
   });
-  // ``/api/containers`` is the gate's probe endpoint — answer it based on
-  // whether the expected token is present. Anything else returns 401.
+  // Register the catch-all first so the more-specific handler below
+  // runs earlier — Playwright evaluates route handlers in *reverse*
+  // registration order.
+  await context.route("**/api/**", (route) => route.fulfill({ status: 401, body: "Unauthorized" }));
   await context.route("**/api/containers", (route) => {
     const auth = route.request().headers()["authorization"];
     if (auth === `Bearer ${GOOD_TOKEN}`) {
@@ -30,12 +32,6 @@ test.beforeEach(async ({ context }) => {
         body: JSON.stringify([]),
       });
     }
-    return route.fulfill({ status: 401, body: "Unauthorized" });
-  });
-  // Silence every other API call so the dashboard's queries don't log
-  // noise while the gate is the only thing we care about.
-  await context.route("**/api/**", (route) => {
-    if (route.request().url().includes("/api/containers")) return route.fallback();
     return route.fulfill({ status: 401, body: "Unauthorized" });
   });
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
