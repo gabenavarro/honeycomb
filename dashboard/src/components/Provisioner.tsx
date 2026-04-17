@@ -203,7 +203,7 @@ function DiscoverTab({
       {containers.length > 0 && (
         <section className="mb-4">
           <h3 className="mb-2 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
-            Running containers ({containers.length})
+            Containers on this host ({containers.length})
           </h3>
           <ul className="divide-y divide-gray-800/50 rounded border border-gray-800">
             {containers.map((c) => (
@@ -279,10 +279,11 @@ function ContainerCandidateRow({
           <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-400">
             {candidate.inferred_project_type}
           </span>
+          <ContainerStatusPill status={candidate.status} />
           {candidate.has_hive_agent && (
             <span
               className="inline-flex items-center gap-0.5 rounded bg-green-900/40 px-1.5 py-0.5 text-[10px] text-green-400"
-              title="hive-agent responding on :9100"
+              title="hive-agent is connected to the hub over the reverse tunnel"
             >
               <Zap size={8} />
               agent
@@ -309,6 +310,51 @@ function ContainerCandidateRow({
         <Plus size={10} /> Register
       </button>
     </li>
+  );
+}
+
+function ContainerStatusPill({ status }: { status: string }) {
+  // Mirrors the docker ps status vocabulary. Colours match the badge
+  // semantics used elsewhere: green=healthy, gray=dormant, amber=transient,
+  // red=bad-ish. The tooltip reminds the user that a stopped container is
+  // still registrable — the hub will write container_status=stopped and
+  // the user can start it from the dashboard.
+  const map: Record<string, { label: string; classes: string; title: string }> = {
+    running: {
+      label: "running",
+      classes: "bg-green-900/40 text-green-400",
+      title: "Container is running",
+    },
+    paused: {
+      label: "paused",
+      classes: "bg-yellow-900/40 text-yellow-300",
+      title: "Container is paused",
+    },
+    restarting: {
+      label: "restarting",
+      classes: "bg-yellow-900/40 text-yellow-300",
+      title: "Docker is restarting this container",
+    },
+    created: {
+      label: "created",
+      classes: "bg-gray-800 text-gray-400",
+      title: "Container exists but hasn't started",
+    },
+    exited: {
+      label: "stopped",
+      classes: "bg-gray-800 text-gray-400",
+      title: "Container is stopped. Register + start it from the dashboard.",
+    },
+  };
+  const meta = map[status] ?? {
+    label: status,
+    classes: "bg-gray-800 text-gray-400",
+    title: `Docker reports this container as "${status}"`,
+  };
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] ${meta.classes}`} title={meta.title}>
+      {meta.label}
+    </span>
   );
 }
 
