@@ -355,6 +355,13 @@ export default function App() {
             >
               <aside
                 aria-label="Primary sidebar"
+                // The Panel collapses to 0% width but the child aside has
+                // no ``w-full`` class, so its intrinsic width stays > 0
+                // and assistive tech would still see its content. ``hidden``
+                // flips ``display:none`` when collapsed — the Panel's
+                // onResize keeps ``sidebarOpen`` in sync when the user
+                // drags the separator, so drag-to-reopen keeps working.
+                hidden={!sidebarOpen}
                 className="flex h-full flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
               >
                 <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
@@ -493,6 +500,10 @@ export default function App() {
             >
               <aside
                 aria-label="Secondary panel"
+                // Same rationale as the primary sidebar's ``hidden`` —
+                // keep ``display:none`` in lockstep with the Panel's
+                // collapsed-to-0 state so a11y + Playwright agree.
+                hidden={!secondaryOpen}
                 className="h-full overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
               >
                 <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
