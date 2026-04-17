@@ -28,10 +28,24 @@ interface Props {
   onClose: (id: string) => void;
   onNew: () => void;
   onRename: (id: string, name: string) => void;
+  /** M21 D — reorder the session list. The caller gets (fromId, toId)
+   * and is responsible for moving ``fromId`` to occupy ``toId``'s
+   * slot (insertion before the target). */
+  onReorder: (fromId: string, toId: string) => void;
 }
 
-export function SessionSubTabs({ sessions, activeId, onFocus, onClose, onNew, onRename }: Props) {
+export function SessionSubTabs({
+  sessions,
+  activeId,
+  onFocus,
+  onClose,
+  onNew,
+  onRename,
+  onReorder,
+}: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   return (
     <div
@@ -46,11 +60,24 @@ export function SessionSubTabs({ sessions, activeId, onFocus, onClose, onNew, on
           active={s.id === activeId}
           canClose={sessions.length > 1}
           editing={editingId === s.id}
+          dragging={draggingId === s.id}
+          dragOver={dragOverId === s.id && draggingId !== s.id}
           onStartEdit={() => setEditingId(s.id)}
           onEndEdit={() => setEditingId(null)}
           onFocus={onFocus}
           onClose={onClose}
           onRename={onRename}
+          onDragStart={(id) => setDraggingId(id)}
+          onDragEnter={(id) => setDragOverId(id)}
+          onDragEnd={() => {
+            setDraggingId(null);
+            setDragOverId(null);
+          }}
+          onDrop={(toId) => {
+            if (draggingId && draggingId !== toId) onReorder(draggingId, toId);
+            setDraggingId(null);
+            setDragOverId(null);
+          }}
         />
       ))}
       <button
@@ -72,11 +99,17 @@ interface TabProps {
   active: boolean;
   canClose: boolean;
   editing: boolean;
+  dragging: boolean;
+  dragOver: boolean;
   onStartEdit: () => void;
   onEndEdit: () => void;
   onFocus: (id: string) => void;
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
+  onDragStart: (id: string) => void;
+  onDragEnter: (id: string) => void;
+  onDragEnd: () => void;
+  onDrop: (toId: string) => void;
 }
 
 function SessionTab({
@@ -84,11 +117,17 @@ function SessionTab({
   active,
   canClose,
   editing,
+  dragging,
+  dragOver,
   onStartEdit,
   onEndEdit,
   onFocus,
   onClose,
   onRename,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onDrop,
 }: TabProps) {
   const [draft, setDraft] = useState(session.name);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -115,12 +154,39 @@ function SessionTab({
     onEndEdit();
   }, [session.name, onEndEdit]);
 
+  // M21 D — drag state classes. ``dragging`` ghosts the source, ``dragOver``
+  // shows a left-edge caret indicating where the drop will land.
+  const dragClasses = [
+    dragging ? "opacity-50" : "",
+    dragOver ? "border-l-2 border-l-[#0078d4]" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="flex items-center">
       <button
         type="button"
         role="tab"
         aria-selected={active}
+        draggable={!editing}
+        onDragStart={(e) => {
+          if (editing) return;
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/x-hive-session", session.id);
+          onDragStart(session.id);
+        }}
+        onDragEnter={() => onDragEnter(session.id)}
+        onDragOver={(e) => {
+          // Required for drop to fire.
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          onDrop(session.id);
+        }}
+        onDragEnd={onDragEnd}
         onClick={() => {
           if (!editing) onFocus(session.id);
         }}
@@ -138,7 +204,7 @@ function SessionTab({
           active
             ? "bg-[#1e1e1e] text-[#e7e7e7]"
             : "bg-[#222] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-[#c0c0c0]"
-        }`}
+        } ${dragClasses}`}
       >
         {editing ? (
           <input

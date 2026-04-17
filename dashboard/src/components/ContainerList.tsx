@@ -1,9 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Play, Square, Trash2, RefreshCw } from "lucide-react";
-import { listContainers, startContainer, stopContainer, deleteContainer } from "../lib/api";
+import { Pencil, Play, Square, Trash2, RefreshCw } from "lucide-react";
+import {
+  deleteContainer,
+  listContainers,
+  patchContainer,
+  startContainer,
+  stopContainer,
+} from "../lib/api";
 import type { ContainerRecord } from "../lib/types";
 import { AgentStatusBadge, ContainerStatusBadge, GpuBadge } from "./StatusBadge";
+import { useToasts } from "../hooks/useToasts";
 import { backoffRefetch } from "../hooks/useSmartPoll";
 
 interface Props {
@@ -63,6 +70,16 @@ export function ContainerList({ selectedId, onSelect }: Props) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["containers"] }),
   });
 
+  const { toast } = useToasts();
+  const renameMut = useMutation({
+    mutationFn: (args: { id: number; name: string }) =>
+      patchContainer(args.id, { project_name: args.name }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["containers"] }),
+    onError: (err) =>
+      toast("error", "Rename failed", err instanceof Error ? err.message : String(err)),
+  });
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+
   if (isLoading) {
     return <div className="p-4 text-sm text-gray-500">Loading containers...</div>;
   }
@@ -116,13 +133,46 @@ export function ContainerList({ selectedId, onSelect }: Props) {
             onClick={() => onSelect(c.id)}
             data-idx={idx}
           >
-            <div className="flex items-center justify-between">
-              <span className="truncate text-sm font-medium text-gray-200">{c.project_name}</span>
+            <div className="flex items-center justify-between gap-2">
+              {renamingId === c.id ? (
+                <RenameInput
+                  initial={c.project_name}
+                  onCommit={(name) => {
+                    setRenamingId(null);
+                    if (name && name !== c.project_name) renameMut.mutate({ id: c.id, name });
+                  }}
+                  onCancel={() => setRenamingId(null)}
+                />
+              ) : (
+                <span
+                  className="truncate text-sm font-medium text-gray-200"
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setRenamingId(c.id);
+                  }}
+                  title="Double-click to rename"
+                >
+                  {c.project_name}
+                </span>
+              )}
               <div className="flex items-center gap-1">
                 {c.has_gpu && <GpuBadge />}
                 <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">
                   {typeLabels[c.project_type] ?? c.project_type}
                 </span>
+                {selectedId === c.id && renamingId !== c.id && (
+                  <button
+                    type="button"
+                    title="Rename container"
+                    className="rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingId(c.id);
+                    }}
+                  >
+                    <Pencil size={10} />
+                  </button>
+                )}
               </div>
             </div>
             <div className="mt-1 flex items-center justify-between">
@@ -171,6 +221,45 @@ export function ContainerList({ selectedId, onSelect }: Props) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function RenameInput({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value.trim())}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onCommit(value.trim());
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      className="flex-1 rounded border border-[#3c3c3c] bg-[#1e1e1e] px-1.5 py-0.5 text-sm text-[#e7e7e7] focus:border-[#0078d4] focus:outline-none"
+      aria-label="Rename container"
+    />
   );
 }
 

@@ -15,12 +15,29 @@ export interface ShortcutBindings {
   onFocusTabByIndex: (idx: number) => void;
   onActivityContainers: () => void;
   onActivityGitOps: () => void;
+  /** M21 M — open the shortcut cheat-sheet overlay. Triggered by the
+   * unmodified ``?`` key anywhere outside an input element. */
+  onShowHelp?: () => void;
 }
 
 export function useKeyboardShortcuts(bindings: ShortcutBindings): void {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+      // Bare ``?`` (Shift+/) opens the cheat sheet. Skip when focus is
+      // in a text input / textarea / contenteditable so typing a real
+      // question mark works.
+      if (!mod && e.key === "?" && bindings.onShowHelp) {
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName;
+        const editing =
+          tag === "INPUT" || tag === "TEXTAREA" || (target !== null && target.isContentEditable);
+        if (!editing) {
+          e.preventDefault();
+          bindings.onShowHelp();
+          return;
+        }
+      }
       if (!mod) return;
 
       // Cmd/Ctrl+K — command palette

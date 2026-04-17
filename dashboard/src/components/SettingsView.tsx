@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 import { getSettings, patchSettings } from "../lib/api";
 import type { HubSettingsPatch } from "../lib/types";
+import { TERMINAL_MAX_FONT, TERMINAL_MIN_FONT, useTerminalPrefs } from "../hooks/useTerminalPrefs";
 import { useToasts } from "../hooks/useToasts";
 
 const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] as const;
@@ -148,6 +149,8 @@ export function SettingsView() {
           </Row>
         </div>
 
+        <TerminalPrefsSection />
+
         <div className="space-y-2">
           <h4 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
             Read-only (requires restart)
@@ -186,6 +189,59 @@ function Row({
         {label}
       </span>
       <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function TerminalPrefsSection() {
+  const [prefs, setPrefs] = useTerminalPrefs();
+  return (
+    <div className="mb-6 space-y-3">
+      <h4 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+        Terminal (client-side)
+      </h4>
+      <Row label="font_size" tooltip="Applies on next terminal remount.">
+        <input
+          type="number"
+          min={TERMINAL_MIN_FONT}
+          max={TERMINAL_MAX_FONT}
+          value={prefs.fontSize}
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            if (!Number.isFinite(next)) return;
+            const clamped = Math.max(TERMINAL_MIN_FONT, Math.min(TERMINAL_MAX_FONT, next));
+            setPrefs({ ...prefs, fontSize: clamped });
+          }}
+          className="w-24 rounded border border-[#3c3c3c] bg-[#2a2a2a] px-2 py-1"
+        />
+      </Row>
+      <Row label="cursor_style" tooltip="block | underline | bar.">
+        <select
+          value={prefs.cursorStyle}
+          onChange={(e) =>
+            setPrefs({
+              ...prefs,
+              cursorStyle: e.target.value as "block" | "underline" | "bar",
+            })
+          }
+          className="w-48 rounded border border-[#3c3c3c] bg-[#2a2a2a] px-2 py-1"
+        >
+          <option value="bar">bar</option>
+          <option value="block">block</option>
+          <option value="underline">underline</option>
+        </select>
+      </Row>
+      <Row label="copy_on_select" tooltip="Copy selection to clipboard on mouse release.">
+        <label className="inline-flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={prefs.copyOnSelect}
+            onChange={(e) => setPrefs({ ...prefs, copyOnSelect: e.target.checked })}
+            className="h-4 w-4"
+          />
+          <span>{prefs.copyOnSelect ? "on" : "off"}</span>
+        </label>
+      </Row>
     </div>
   );
 }

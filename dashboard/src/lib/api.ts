@@ -99,6 +99,22 @@ export const stopContainer = (id: number) =>
 export const rebuildContainer = (id: number) =>
   request<ContainerRecord>(`/containers/${id}/rebuild`, { method: "POST" }, ContainerRecordSchema);
 
+/** M21 J — partial update. Today only rename (``project_name``) is
+ * used from the dashboard, but the endpoint accepts every field in
+ * ``ContainerUpdate`` so this signature keeps wider updates a line away. */
+export interface ContainerPatch {
+  project_name?: string;
+  project_description?: string;
+  git_repo_url?: string | null;
+  agent_port?: number;
+}
+export const patchContainer = (id: number, patch: ContainerPatch) =>
+  request<ContainerRecord>(
+    `/containers/${id}`,
+    { method: "PATCH", body: JSON.stringify(patch) },
+    ContainerRecordSchema,
+  );
+
 export interface InstallClaudeCliResult {
   installed: boolean;
   exit_code?: number;

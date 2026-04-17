@@ -33,10 +33,23 @@ function SeverityIcon({ severity }: { severity: Problem["severity"] }) {
   }
 }
 
-export function ProblemsPanel() {
+interface ProblemsPanelProps {
+  /** M21 H — clicking a problem row focuses the offending container
+   * when the hub knows one. The caller resolves the docker short-id
+   * to its registry record id. */
+  onOpenContainer?: (recordId: number) => void;
+}
+
+export function ProblemsPanel({ onOpenContainer }: ProblemsPanelProps = {}) {
   const { toast } = useToasts();
   const queryClient = useQueryClient();
   const { subscribe, unsubscribe, onChannel } = useHiveWebSocket();
+  // Lookup table: docker short-id → hub record id. Populated from the
+  // ``containers`` query's cache so clicks in the Problems panel can
+  // route to ``onOpenContainer`` without an extra fetch.
+  const containersCache = queryClient.getQueryData<{ id: number; container_id: string | null }[]>([
+    "containers",
+  ]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["problems"],
@@ -105,19 +118,42 @@ export function ProblemsPanel() {
           </p>
         )}
         <ul className="divide-y divide-[#2b2b2b]/50">
-          {sorted.map((p) => (
-            <li key={p.id} className="flex items-start gap-2 px-3 py-2 text-xs">
-              <SeverityIcon severity={p.severity} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[#e7e7e7]">{p.message}</div>
-                <div className="mt-0.5 flex items-center gap-2 text-[10px] text-[#858585]">
-                  <span>{p.source}</span>
-                  {p.project_name && <span>· {p.project_name}</span>}
-                  <span>· {relativeTime(p.created_at)}</span>
+          {sorted.map((p) => {
+            const recordId =
+              p.container_id && containersCache
+                ? (containersCache.find((c) => c.container_id === p.container_id)?.id ?? null)
+                : null;
+            const clickable = recordId !== null && onOpenContainer !== undefined;
+            const Inner = (
+              <>
+                <SeverityIcon severity={p.severity} />
+                <div className="min-w-0 flex-1 text-left">
+                  <div className="truncate text-[#e7e7e7]">{p.message}</div>
+                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-[#858585]">
+                    <span>{p.source}</span>
+                    {p.project_name && <span>· {p.project_name}</span>}
+                    <span>· {relativeTime(p.created_at)}</span>
+                    {clickable && <span className="ml-auto text-[#606060]">→ open</span>}
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+              </>
+            );
+            return (
+              <li key={p.id}>
+                {clickable ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenContainer?.(recordId)}
+                    className="flex w-full items-start gap-2 px-3 py-2 text-xs hover:bg-[#2a2a2a] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4] focus-visible:ring-inset"
+                  >
+                    {Inner}
+                  </button>
+                ) : (
+                  <div className="flex items-start gap-2 px-3 py-2 text-xs">{Inner}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>
