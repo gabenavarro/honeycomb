@@ -47,11 +47,18 @@ async def client(registry):
 class TestHealthEndpoint:
     @pytest.mark.asyncio
     async def test_health(self, client: TestClient) -> None:
+        # Version is sourced from ``hub.main.HUB_VERSION`` so this
+        # assertion follows the bump rather than pinning a specific
+        # release — any future milestone bump here fails only if the
+        # health endpoint stops reporting SOME version (the real
+        # regression) rather than every time we roll forward.
+        from hub.main import HUB_VERSION
+
         resp = client.get("/api/health")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert data["version"] == "0.1.0"
+        assert data["version"] == HUB_VERSION
 
 
 class TestHeartbeatEndpoint:
