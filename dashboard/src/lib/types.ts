@@ -178,3 +178,26 @@ export interface GitFileStatus {
 export interface KeybindingsPayload {
   bindings: Record<string, string>;
 }
+
+// M17 — container filesystem browse
+
+export type FsEntryKind = "file" | "dir" | "symlink" | "other";
+
+export interface FsEntry {
+  name: string;
+  kind: FsEntryKind;
+  size: number;
+  mode: string;
+  mtime: string;
+  target: string | null;
+}
+
+export interface DirectoryListing {
+  path: string;
+  entries: FsEntry[];
+  truncated: boolean;
+}
+
+export interface ContainerWorkdir {
+  path: string;
+}

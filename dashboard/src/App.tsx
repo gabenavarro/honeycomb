@@ -23,6 +23,7 @@ import {
 
 import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { AuthGate } from "./components/AuthGate";
+import { Breadcrumbs } from "./components/Breadcrumbs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContainerList } from "./components/ContainerList";
 import { ContainerTabs } from "./components/ContainerTabs";
@@ -58,6 +59,7 @@ const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
 const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
 const LS_ACTIVE_SESSION = "hive:layout:activeSession"; // M16
+const LS_FS_PATHS = "hive:layout:fsPaths"; // M17 — per-container browsed path
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
 // M16 — client-side session registry.
@@ -81,6 +83,10 @@ function isSessionsByContainer(v: unknown): v is SessionsByContainer {
   );
 }
 function isActiveSessionMap(v: unknown): v is Record<string, string> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every((s) => typeof s === "string");
+}
+function isFsPathMap(v: unknown): v is Record<string, string> {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   return Object.values(v).every((s) => typeof s === "string");
 }
@@ -161,6 +167,14 @@ export default function App() {
   const [activeSessionByContainer, setActiveSessionByContainer] = useLocalStorage<
     Record<string, string>
   >(LS_ACTIVE_SESSION, {}, { validate: isActiveSessionMap });
+  // M17 — the currently browsed container-filesystem path per container.
+  // Empty until the user (or Breadcrumbs' mount effect) picks one up
+  // from the container's WORKDIR.
+  const [fsPathByContainer, setFsPathByContainer] = useLocalStorage<Record<string, string>>(
+    LS_FS_PATHS,
+    {},
+    { validate: isFsPathMap },
+  );
 
   const { data: containers = [], isSuccess: containersLoaded } = useQuery({
     queryKey: ["containers"],
@@ -264,6 +278,19 @@ export default function App() {
       setActiveSessionByContainer((prev) => ({ ...prev, [String(active.id)]: id }));
     },
     [active, setActiveSessionByContainer],
+  );
+
+  const activeFsPath: string = useMemo(() => {
+    if (active === undefined) return "";
+    return fsPathByContainer[String(active.id)] ?? "";
+  }, [active, fsPathByContainer]);
+
+  const setActiveFsPath = useCallback(
+    (path: string) => {
+      if (active === undefined) return;
+      setFsPathByContainer((prev) => ({ ...prev, [String(active.id)]: path }));
+    },
+    [active, setFsPathByContainer],
   );
 
   const closeSession = useCallback(
@@ -566,6 +593,12 @@ export default function App() {
                       />
                     ) : (
                       <>
+                        {/* M17 — container path breadcrumbs. */}
+                        <Breadcrumbs
+                          containerId={active.id}
+                          path={activeFsPath}
+                          onPathChange={setActiveFsPath}
+                        />
                         {/* M16 — nested session tabs under the container. */}
                         <SessionSubTabs
                           sessions={activeSessions}
