@@ -1,13 +1,23 @@
 /** NotebookViewer smoke tests (M19).
  *
- * Keeps the scope tight: valid .ipynb JSON renders without crashing,
- * invalid JSON falls through to the error state. The underlying
- * react-ipynb-renderer owns cell-level rendering — we don't try to
- * assert on every cell type.
+ * We mock ``react-ipynb-renderer`` — its transitive
+ * ``react-syntax-highlighter`` pulls in a theme module via dynamic
+ * ESM imports that don't resolve under Vitest + jsdom. The real
+ * renderer is still exercised at dev/prod runtime; the test's job is
+ * to pin the parse/error boundary, which is pure JSON.parse logic
+ * that lives in our component, not the library.
  */
 
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("react-ipynb-renderer", () => ({
+  IpynbRenderer: ({ ipynb }: { ipynb: { cells?: { cell_type: string }[] } }) => (
+    <div data-testid="ipynb-stub">cells: {ipynb.cells?.length ?? 0}</div>
+  ),
+}));
+
+vi.mock("react-ipynb-renderer/dist/styles/onedork.css", () => ({}));
 
 import { NotebookViewer } from "../NotebookViewer";
 
@@ -23,11 +33,7 @@ const TINY_IPYNB = JSON.stringify({
       execution_count: 1,
       metadata: {},
       outputs: [
-        {
-          name: "stdout",
-          output_type: "stream",
-          text: ["hi from code cell\n"],
-        },
+        { name: "stdout", output_type: "stream", text: ["hi from code cell\n"] },
       ],
       source: ["print('hi from code cell')"],
     },
@@ -38,11 +44,9 @@ const TINY_IPYNB = JSON.stringify({
 });
 
 describe("NotebookViewer", () => {
-  it("renders a markdown heading + code output from a minimal ipynb", () => {
+  it("parses valid ipynb JSON and forwards it to the renderer", () => {
     render(<NotebookViewer source={TINY_IPYNB} />);
-    // react-ipynb-renderer emits the markdown heading text.
-    expect(screen.getByText(/hello/i)).toBeInTheDocument();
-    expect(screen.getByText(/hi from code cell/i)).toBeInTheDocument();
+    expect(screen.getByTestId("ipynb-stub")).toHaveTextContent("cells: 2");
   });
 
   it("falls through to an error state on invalid JSON", () => {
