@@ -119,6 +119,9 @@ export interface SessionHandle {
   pushHistory: (entry: string) => void;
   clear: () => void;
   copyTranscript: () => Promise<boolean>;
+  /** M15: downloads the transcript as a markdown file. Returns the
+   * filename that was triggered, or null when nothing to export. */
+  exportTranscript: () => string | null;
 }
 
 export function useSession(containerId: number, kind: SessionKind): SessionHandle {
@@ -197,6 +200,62 @@ export function useSession(containerId: number, kind: SessionKind): SessionHandl
     }
   }, [state.lines, kind]);
 
+  // M15: download the transcript as a markdown file. Returns the
+  // generated filename or null when there's nothing to export. The
+  // markdown format is: a session header, then each input wrapped as a
+  // fenced code block (shell or claude) followed by its output. Good
+  // enough for paste-into-notes workflows without trying to be a full
+  // .md Claude-session exporter.
+  const exportTranscript = useCallback((): string | null => {
+    if (state.lines.length === 0) return null;
+    const ts = new Date(state.lastActive || Date.now())
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .replace(/Z$/, "");
+    const filename = `honeycomb-${kind}-${containerId}-${ts}.md`;
+    const fence = kind === "claude" ? "claude" : "bash";
+    const sections: string[] = [
+      `# Honeycomb ${kind} transcript — container ${containerId}`,
+      "",
+      `_Exported ${new Date().toISOString()}_`,
+      "",
+    ];
+    let current: string[] = [];
+    let inBlock = false;
+    for (const line of state.lines) {
+      if (line.type === "input") {
+        if (inBlock && current.length > 0) {
+          sections.push("```", ...current, "```", "");
+          current = [];
+        }
+        const prompt = kind === "claude" ? "claude>" : "$";
+        sections.push(`\`\`\`${fence}`, `${prompt} ${line.text}`);
+        inBlock = true;
+      } else if (line.type === "system" || line.type === "error") {
+        current.push(line.text);
+      } else {
+        current.push(line.text);
+      }
+    }
+    if (inBlock) sections.push(...current, "```", "");
+    const md = sections.join("\n");
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      // Release the blob URL after the browser starts the download. The
+      // tiny delay is harmless and avoids a race on some browsers.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    return filename;
+  }, [state.lines, state.lastActive, kind, containerId]);
+
   return {
     state,
     appendLines,
@@ -205,6 +264,7 @@ export function useSession(containerId: number, kind: SessionKind): SessionHandl
     pushHistory,
     clear,
     copyTranscript,
+    exportTranscript,
   };
 }
 

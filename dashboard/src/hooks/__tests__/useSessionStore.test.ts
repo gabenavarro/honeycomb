@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { purgeContainerSessions, useSession } from "../useSessionStore";
 
 describe("useSession", () => {
@@ -148,5 +148,41 @@ describe("useSession", () => {
     });
     expect(result.current.state.lines).toEqual([]);
     expect(result.current.state.history).toEqual(["summarize repo"]);
+  });
+
+  it("exportTranscript returns null when the session is empty", () => {
+    const { result } = renderHook(() => useSession(7, "claude"));
+    expect(result.current.exportTranscript()).toBeNull();
+  });
+
+  it("exportTranscript triggers a download and returns the filename", () => {
+    // jsdom stubs URL.createObjectURL but leaves revokeObjectURL
+    // undefined; stub both so the hook's blob flow runs cleanly.
+    const created = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:fake");
+    const revoked = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clickSpy = vi.fn();
+    // Also stub HTMLAnchorElement.click so we don't trigger a real
+    // navigation in jsdom.
+    const origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = clickSpy as unknown as () => void;
+
+    try {
+      const { result } = renderHook(() => useSession(9, "claude"));
+      act(() => {
+        result.current.appendLines([
+          { text: "explain", timestamp: "2026-04-17T00:00:00Z", type: "input" },
+          { text: "sure", timestamp: "2026-04-17T00:00:01Z", type: "output" },
+        ]);
+      });
+      const name = result.current.exportTranscript();
+      expect(name).not.toBeNull();
+      expect(name).toMatch(/^honeycomb-claude-9-.+\.md$/);
+      expect(created).toHaveBeenCalledOnce();
+      expect(clickSpy).toHaveBeenCalledOnce();
+    } finally {
+      HTMLAnchorElement.prototype.click = origClick;
+      created.mockRestore();
+      revoked.mockRestore();
+    }
   });
 });

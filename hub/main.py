@@ -109,7 +109,20 @@ async def lifespan(app: FastAPI):
     resource_monitor = ResourceMonitor(poll_interval=5.0)
     problem_log = ProblemLog()
     health_checker = HealthChecker(registry, check_interval=10.0, problem_log=problem_log)
-    pty_registry = PtyRegistry()
+    # M15: resolve the disk-backed scrollback directory. ``None`` disables
+    # disk backing (e.g. empty env var). Default lives under the same
+    # config root as the bearer token.
+    scrollback_dir: Path | None
+    if settings.pty_scrollback_dir is None:
+        scrollback_dir = Path.home() / ".config" / "honeycomb" / "sessions"
+    elif str(settings.pty_scrollback_dir).strip() == "":
+        scrollback_dir = None
+    else:
+        scrollback_dir = Path(settings.pty_scrollback_dir).expanduser()
+    pty_registry = PtyRegistry(
+        default_grace_seconds=settings.pty_grace_seconds,
+        scrollback_dir=scrollback_dir,
+    )
     agent_registry = AgentRegistry()
     # ClaudeRelay needs the agent registry to prefer the reverse-tunnel
     # socket over devcontainer/docker exec. Constructed after
@@ -172,6 +185,34 @@ async def lifespan(app: FastAPI):
     drainer_task = asyncio.create_task(_drainer(), name="hub-log-drainer")
     app.state.log_drainer_task = drainer_task
 
+    # M15 — GC stale scrollback logs every 15 min. Deletes files older
+    # than ``pty_scrollback_max_age_hours``; errors are swallowed so one
+    # bad file doesn't kill the sweep.
+    async def _scrollback_gc() -> None:
+        if scrollback_dir is None:
+            return
+        import time as _time
+
+        interval = 15 * 60
+        max_age = settings.pty_scrollback_max_age_hours * 3600
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                if not scrollback_dir.is_dir():
+                    continue
+                now = _time.time()
+                for entry in scrollback_dir.iterdir():
+                    if not entry.is_file():
+                        continue
+                    with contextlib.suppress(OSError):
+                        if now - entry.stat().st_mtime > max_age:
+                            entry.unlink()
+            except Exception as exc:
+                logger.debug("scrollback_gc_error", error=str(exc))
+
+    gc_task = asyncio.create_task(_scrollback_gc(), name="hub-scrollback-gc")
+    app.state.scrollback_gc_task = gc_task
+
     # Start background services
     await resource_monitor.start()
     await health_checker.start()
@@ -196,6 +237,10 @@ async def lifespan(app: FastAPI):
     drainer_task.cancel()
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await drainer_task
+
+    gc_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await gc_task
 
     await agent_registry.close_all()
     await pty_registry.close_all()

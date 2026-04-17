@@ -147,6 +147,39 @@ class HiveSettings(BaseSettings):
         description="When True, /metrics exposes Prometheus counters/gauges.",
     )
 
+    # ── PTY + session caching (M15) ────────────────────────────────
+    pty_grace_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description=(
+            "How long a detached PTY session stays alive before the hub kills it. "
+            "Default 1 h — long enough to survive a laptop lid-close and a proxy "
+            "reconnect. 0 = close immediately on disconnect (legacy behaviour)."
+        ),
+    )
+    pty_scrollback_dir: Path | None = Field(
+        default=None,
+        description=(
+            "Directory the hub uses to dual-write PTY scrollback so the bytes "
+            "replay across hub restarts. Defaults to ~/.config/honeycomb/sessions. "
+            "Set to the empty string to disable disk-backed scrollback entirely."
+        ),
+    )
+    pty_scrollback_max_age_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Delete persisted scrollback logs older than this on the GC sweep.",
+    )
+    quick_history_lines: int = Field(
+        default=10_000,
+        ge=100,
+        description=(
+            "Max transcript lines the Claude Quick pane stores in localStorage. "
+            "Raising this keeps longer conversations across reloads; lower if "
+            "localStorage quota bites."
+        ),
+    )
+
     # ── Validators ──────────────────────────────────────────────────
     @field_validator("cors_origins", mode="before")
     @classmethod
