@@ -39,6 +39,32 @@ EntryKind = Literal["file", "dir", "symlink", "other"]
 # conceivable "project root" listing while bounding the dashboard payload.
 MAX_ENTRIES = 1000
 
+# File-read caps (M18). Text content ships back as a string up to 5 MiB;
+# binary files up to 1 MiB (base64 inflates that to ~1.33 MiB on the
+# wire, which is the real ceiling). Anything bigger returns
+# ``truncated=true`` with no body — the client offers a download link.
+MAX_TEXT_BYTES = 5 * 1024 * 1024
+MAX_BINARY_BYTES = 1 * 1024 * 1024
+
+# MIME prefixes we treat as "text-like" and decode as UTF-8 for the
+# dashboard's text viewer. Everything else ships as base64.
+_TEXT_MIME_PREFIXES: tuple[str, ...] = (
+    "text/",
+    "application/json",
+    "application/javascript",
+    "application/xml",
+    "application/x-sh",
+    "application/x-yaml",
+    "application/toml",
+    "application/x-ipynb+json",
+)
+
+
+def is_text_mime(mime: str) -> bool:
+    """Whether the given MIME type should be decoded as UTF-8 text."""
+    lowered = (mime or "").lower()
+    return any(lowered.startswith(prefix) for prefix in _TEXT_MIME_PREFIXES)
+
 
 # Reject shell metacharacters in the path. Even though ``docker exec``
 # with an argv list doesn't interpret them, accepting them makes

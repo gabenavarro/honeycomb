@@ -25,9 +25,11 @@ import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { AuthGate } from "./components/AuthGate";
 import { Breadcrumbs } from "./components/Breadcrumbs";
 import { CommandPalette } from "./components/CommandPalette";
+import { ContainerFilesView } from "./components/ContainerFilesView";
 import { ContainerList } from "./components/ContainerList";
 import { ContainerTabs } from "./components/ContainerTabs";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FileViewer } from "./components/FileViewer";
 import { GitOpsPanel } from "./components/GitOpsPanel";
 import { KeybindingsEditor } from "./components/KeybindingsEditor";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
@@ -99,6 +101,7 @@ const ACTIVITY_VALUES: Activity[] = [
   "search",
   "settings",
   "keybindings",
+  "files",
 ];
 
 function isActivity(v: unknown): v is Activity {
@@ -422,7 +425,19 @@ export default function App() {
               ? "Settings"
               : activity === "keybindings"
                 ? "Keybindings"
-                : "Search";
+                : activity === "files"
+                  ? "Files"
+                  : "Search";
+
+  // M18 — the file currently opened in the inline viewer. Keyed on the
+  // active container so switching containers doesn't leak a file from
+  // another workspace into view. Closing the viewer sets it back to
+  // null.
+  const [openedFile, setOpenedFile] = useState<string | null>(null);
+  useEffect(() => {
+    // Reset viewer when the active container changes.
+    setOpenedFile(null);
+  }, [active?.id]);
 
   // M14: keep imperative Panel handles so keybindings can drive
   // collapse/expand without losing the user's dragged widths. The
@@ -523,6 +538,14 @@ export default function App() {
                   {activity === "problems" && <ProblemsPanel />}
                   {activity === "settings" && <SettingsView />}
                   {activity === "keybindings" && <KeybindingsEditor />}
+                  {activity === "files" && (
+                    <ContainerFilesView
+                      containerId={active?.id ?? null}
+                      path={activeFsPath}
+                      onNavigate={setActiveFsPath}
+                      onOpenFile={setOpenedFile}
+                    />
+                  )}
                 </div>
               </aside>
             </Panel>
@@ -607,20 +630,39 @@ export default function App() {
                           onClose={closeSession}
                           onNew={newSession}
                         />
-                        <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                          <ErrorBoundary
-                            key={`eb-${active.id}-${activeSessionId}`}
-                            label={`the ${active.project_name} terminal`}
-                          >
-                            <TerminalPane
-                              key={`${active.id}-${activeSessionId}`}
-                              containerId={active.id}
-                              containerName={active.project_name}
-                              hasClaudeCli={active.has_claude_cli}
-                              sessionId={activeSessionId}
-                            />
-                          </ErrorBoundary>
-                        </div>
+                        {/* M18 — FileViewer takes over the editor pane
+                            when the user opens a file from the Files
+                            sidebar. Closing falls back to the terminal. */}
+                        {openedFile !== null ? (
+                          <div className="flex min-h-0 min-w-0 flex-1">
+                            <ErrorBoundary
+                              key={`eb-file-${active.id}-${openedFile}`}
+                              label={`the ${openedFile} viewer`}
+                            >
+                              <FileViewer
+                                key={`${active.id}-${openedFile}`}
+                                containerId={active.id}
+                                path={openedFile}
+                                onClose={() => setOpenedFile(null)}
+                              />
+                            </ErrorBoundary>
+                          </div>
+                        ) : (
+                          <div className="flex min-h-0 min-w-0 flex-1 p-2">
+                            <ErrorBoundary
+                              key={`eb-${active.id}-${activeSessionId}`}
+                              label={`the ${active.project_name} terminal`}
+                            >
+                              <TerminalPane
+                                key={`${active.id}-${activeSessionId}`}
+                                containerId={active.id}
+                                containerName={active.project_name}
+                                hasClaudeCli={active.has_claude_cli}
+                                sessionId={activeSessionId}
+                              />
+                            </ErrorBoundary>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
