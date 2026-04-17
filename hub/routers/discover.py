@@ -39,12 +39,15 @@ async def discover_all(request: Request) -> DiscoveryResponse:
     one pane populates before the other.
     """
     registry = request.app.state.registry
+    agent_registry = getattr(request.app.state, "agent_registry", None)
     registered_folders, registered_container_ids = await registered_filter_sets(registry)
 
     # Workspace scan hits the filesystem; container scan hits Docker. They
     # don't share state, so run in parallel.
     workspace_task = asyncio.to_thread(scan_workspace_candidates, registered_folders)
-    container_task = asyncio.create_task(scan_container_candidates(registered_container_ids))
+    container_task = asyncio.create_task(
+        scan_container_candidates(registered_container_ids, agent_registry=agent_registry)
+    )
     workspaces, containers = await asyncio.gather(workspace_task, container_task)
 
     return DiscoveryResponse(
@@ -67,8 +70,11 @@ async def discover_workspaces(request: Request) -> list[WorkspaceCandidate]:
 async def discover_containers_endpoint(request: Request) -> list[ContainerCandidate]:
     """Unregistered running Docker containers."""
     registry = request.app.state.registry
+    agent_registry = getattr(request.app.state, "agent_registry", None)
     _, registered_container_ids = await registered_filter_sets(registry)
-    candidates = await scan_container_candidates(registered_container_ids)
+    candidates = await scan_container_candidates(
+        registered_container_ids, agent_registry=agent_registry
+    )
     return [ContainerCandidate(**c.__dict__) for c in candidates]
 
 

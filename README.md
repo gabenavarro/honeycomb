@@ -303,7 +303,8 @@ two sources and shows only entries not yet registered:
 
 - **Running containers** — every Docker container currently running. Each
   row shows the inferred project name, image tag, inferred project type,
-  and whether `hive-agent` is already reachable on port 9100. Click
+  and whether the `hive-agent` inside it has dialed the hub's reverse
+  tunnel (``/api/agent/connect``). Click
   **Register** to link it in place (state transitions straight to
   `running`, no rebuild).
 - **Workspaces ready to register** — folders under
@@ -436,7 +437,9 @@ The hub tries three paths for each command, in order, and reports which
 one delivered it in `CommandResponse.relay_path`:
 
 1. **`agent`** — POST to `hive-agent`'s `/exec` inside the container. Only
-   works when the agent port (9100) answered a recent health check.
+   works when the agent has an active WebSocket registered in the hub's
+   AgentRegistry (since M4 — the agent dials the hub, not the other way
+   around).
    Output streams over the `cmd:{command_id}` WebSocket channel; response
    is async.
 2. **`devcontainer_exec`** — only when the workspace folder has a real
@@ -620,7 +623,7 @@ lsof -i :8420
 docker ps | grep <container-name>
 
 # Check hive-agent inside container
-docker exec <container-id> curl http://127.0.0.1:9100/health
+docker exec <container-id> hive-agent status  # post-M4, no listener to probe
 
 # Restart hive-agent
 docker exec <container-id> hive-agent start --daemon

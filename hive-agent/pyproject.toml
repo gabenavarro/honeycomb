@@ -1,13 +1,12 @@
 [project]
 name = "hive-agent"
-version = "0.1.0"
-description = "Lightweight worker-side client for Claude Hive — runs inside devcontainers to communicate with the hub"
+version = "0.4.0"
+description = "Lightweight worker-side WebSocket client for Claude Hive — runs inside devcontainers and dials the hub"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx>=0.27,<1",
-    "uvicorn>=0.34,<1",
-    "starlette>=0.45,<1",
+    "websockets>=13,<16",
+    "pydantic>=2,<3",
     "click>=8.1,<9",
 ]
 
@@ -18,8 +17,6 @@ hive-agent = "hive_agent.cli:main"
 dev = [
     "pytest>=8,<9",
     "pytest-asyncio>=0.24,<1",
-    "pytest-httpx>=0.35,<1",
-    "respx>=0.22,<1",
 ]
 
 [build-system]

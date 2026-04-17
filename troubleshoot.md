@@ -172,7 +172,9 @@ failed silently (pre-Phase-1 bug).
 **Fix.** This is now surfaced as HTTP 502 with
 `{"agent_error": ..., "devcontainer_error": ...}`. If you see 502:
 
-- Check the agent is reachable at `http://<container_ip>:9100/health`.
+- Check the agent has dialed the hub recently — the hub's
+  ``AgentRegistry`` snapshot (``/api/discover/containers``) reports
+  ``has_hive_agent: true`` iff a live WebSocket is registered.
 - Check `devcontainer` is on `PATH` on the host
   (`npm install -g @devcontainers/cli`).
 - Inspect hub logs for the specific failure.
@@ -185,8 +187,9 @@ failed silently (pre-Phase-1 bug).
 and `agent_status` stays `idle`.
 
 **Cause.** hive-agent failed to start inside the container — misconfigured
-`HIVE_HUB_URL`, port conflict on 9100, or missing Python deps in the dev
-stage.
+`HIVE_HUB_URL` or `HIVE_AUTH_TOKEN`, or missing Python deps in the dev
+stage. Since M4 the agent is a WebSocket client of the hub, so the
+failure mode is "never dials the hub" rather than "listener port busy".
 
 **Fix.** After the 60-second registration grace period, the hub marks the
 container `unreachable`. To recover:

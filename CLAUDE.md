@@ -171,8 +171,9 @@ claude-hive/
 │   ├── README.md
 │   ├── hive_agent/
 │   │   ├── __init__.py
-│   │   ├── client.py            # HTTP client → hub (heartbeat, status, events)
-│   │   ├── command_listener.py  # Starlette app on :9100 accepting /exec
+│   │   ├── ws_client.py         # WebSocket client dialing the hub (since M4)
+│   │   ├── command_runner.py    # Subprocess runner (used by ws_client)
+│   │   ├── protocol.py          # Wire frames mirrored from hub/models/
 │   │   └── cli.py               # `hive-agent start` entrypoint
 │   └── tests/
 ├── gitops/                      # Git operations module
@@ -200,11 +201,11 @@ claude-hive/
 - **DevContainer CLI as primary interface**: Use `devcontainer up/exec/read-configuration` for container lifecycle, not raw Docker commands. Docker SDK supplements for inspection and log streaming.
 - **DevContainer Features for bootstrapping**: Claude Code CLI, skills, hooks, and configs are packaged as a reusable DevContainer Feature, installable via a single line in `devcontainer.json`.
 - **WebSocket for real-time**: Terminal output and status updates stream via WebSocket, not polling. A single multiplexed `/ws` carries tagged frames for all containers; persistent-PTY sessions use dedicated `/ws/pty/{record_id}` sockets with 5-minute grace reattach and 64 KB scrollback replay.
-- **Three-path command relay**: One-shot commands try, in order, `hive-agent` HTTP (`/exec` on :9100), then `devcontainer exec` (only when a real `.devcontainer/devcontainer.json` exists), then `docker exec bash -lc` (with `sh -c` retry for Alpine). Each `CommandResponse` reports which path ran via `relay_path`; all three failing yields a 502 with a structured `{agent_error, devcontainer_error, docker_error}` body. Interactive work uses persistent PTYs instead.
+- **Three-path command relay**: One-shot commands try, in order, the `hive-agent` reverse-tunnel WebSocket (hub dispatches `cmd_exec`, agent returns `done`), then `devcontainer exec` (only when a real `.devcontainer/devcontainer.json` exists), then `docker exec bash -lc` (with `sh -c` retry for Alpine). Each `CommandResponse` reports which path ran via `relay_path`; all three failing yields a 502 with a structured `{agent_error, devcontainer_error, docker_error}` body. Interactive work uses persistent PTYs instead.
 - **Template-based provisioning**: New devcontainers are provisioned by composing `devcontainer.json` templates + CLAUDE.md Jinja2 templates + curated skill registries, not by cloning entire repos.
 - **`gh` CLI for GitHub ops**: All GitHub operations use `gh` CLI (authenticated once on the hub, token shared to containers via Docker secrets).
 - **VSCode-compatible**: The hub orchestrates across VSCode windows — users can still attach to any devcontainer with VSCode as normal. The dashboard is additive, not a replacement.
-- **Discovery-first registration**: The "+ New" wizard defaults to a Discover tab that enumerates running Docker containers (probing :9100 for hive-agent) and workspace folders under `HIVE_DISCOVER_ROOTS` that contain a `.devcontainer/`. Manual template-based provisioning is the fallback, not the happy path.
+- **Discovery-first registration**: The "+ New" wizard defaults to a Discover tab that enumerates running Docker containers (marking "has_hive_agent" from AgentRegistry — the agent dials the hub over WebSocket) and workspace folders under `HIVE_DISCOVER_ROOTS` that contain a `.devcontainer/`. Manual template-based provisioning is the fallback, not the happy path.
 
 ## Community Resources — Used as Templates, Not Copied
 

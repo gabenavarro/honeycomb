@@ -10,10 +10,9 @@
   "remoteEnv": {
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
     "HIVE_HUB_URL": "${localEnv:HIVE_HUB_URL:-http://host.docker.internal:8420}",
-    "HIVE_AGENT_PORT": "9100",
     "HIVE_AUTH_TOKEN": "${localEnv:HIVE_AUTH_TOKEN}"
   },
-  "forwardPorts": [9100, 3000, 5173, 8000],
+  "forwardPorts": [3000, 5173, 8000],
   "customizations": {
     "vscode": {
       "extensions": [

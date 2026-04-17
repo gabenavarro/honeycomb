@@ -4,7 +4,6 @@ set -e
 PROJECT_TYPE="${PROJECTTYPE:-base}"
 INSTALL_SKILLS="${INSTALLSKILLS:-true}"
 HUB_URL="${HUBURL:-http://host.docker.internal:8420}"
-AGENT_PORT="${AGENTPORT:-9100}"
 
 echo "[claude-hive] Installing Claude Hive Feature (project_type=${PROJECT_TYPE})..."
 
@@ -14,16 +13,19 @@ if ! command -v claude &> /dev/null; then
     npm install -g @anthropic-ai/claude-code
 fi
 
-# Install hive-agent if not present
+# Install hive-agent if not present (WebSocket client of the hub since M4).
 if ! command -v hive-agent &> /dev/null; then
     echo "[claude-hive] Installing hive-agent..."
     pip install hive-agent 2>/dev/null || pip3 install hive-agent 2>/dev/null || true
 fi
 
-# Set up environment variables (no ANTHROPIC_API_KEY — uses Max plan subscription auth)
+# Set up environment variables (no ANTHROPIC_API_KEY — uses Max plan subscription auth).
+# HIVE_AUTH_TOKEN must be provided by the outer environment (passed via
+# devcontainer.json remoteEnv from the host's token) — we don't write it
+# into /etc/environment because this file is readable by every user in
+# the container.
 cat >> /etc/environment <<EOF
 HIVE_HUB_URL=${HUB_URL}
-HIVE_AGENT_PORT=${AGENT_PORT}
 EOF
 
 # Guard against API key contamination in shell profiles

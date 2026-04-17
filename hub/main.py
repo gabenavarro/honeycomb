@@ -24,8 +24,9 @@ from hub.logging_setup import (
     get_logger,
 )
 from hub.models.schemas import EventPayload, HeartbeatPayload, WSFrame
-from hub.routers import commands, containers, discover, gitops, pty, ws
+from hub.routers import agent, commands, containers, discover, gitops, pty, ws
 from hub.services import metrics
+from hub.services.agent_registry import AgentRegistry
 from hub.services.autodiscovery import discover_containers
 from hub.services.claude_relay import ClaudeRelay
 from hub.services.devcontainer_manager import DevContainerManager
@@ -86,10 +87,14 @@ async def lifespan(app: FastAPI):
     await registry.open()
 
     devcontainer_mgr = DevContainerManager()
-    claude_relay = ClaudeRelay(devcontainer_mgr)
     resource_monitor = ResourceMonitor(poll_interval=5.0)
     health_checker = HealthChecker(registry, check_interval=10.0)
     pty_registry = PtyRegistry()
+    agent_registry = AgentRegistry()
+    # ClaudeRelay needs the agent registry to prefer the reverse-tunnel
+    # socket over devcontainer/docker exec. Constructed after
+    # agent_registry so the relay captures a live reference.
+    claude_relay = ClaudeRelay(devcontainer_mgr, agent_registry=agent_registry)
 
     app.state.settings = settings
     app.state.registry = registry
@@ -98,6 +103,7 @@ async def lifespan(app: FastAPI):
     app.state.resource_monitor = resource_monitor
     app.state.health_checker = health_checker
     app.state.pty_registry = pty_registry
+    app.state.agent_registry = agent_registry
 
     # ── logs:hub WebSocket fan-out ──────────────────────────────────
     # The sink is called synchronously from every log call; to keep it
@@ -161,6 +167,7 @@ async def lifespan(app: FastAPI):
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await drainer_task
 
+    await agent_registry.close_all()
     await pty_registry.close_all()
     await health_checker.stop()
     await resource_monitor.stop()
@@ -267,6 +274,7 @@ app.include_router(discover.router)
 app.include_router(gitops.router)
 app.include_router(pty.router)
 app.include_router(ws.router)
+app.include_router(agent.router)
 
 
 # --- Heartbeat & Event endpoints (called by hive-agent in containers) ---
