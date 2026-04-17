@@ -72,6 +72,11 @@ class ContainerRecord(BaseModel):
     container_id: str | None = None
     container_status: ContainerStatus = ContainerStatus.UNKNOWN
     agent_status: AgentStatus = AgentStatus.UNREACHABLE
+    # Whether a hive-agent is expected to report heartbeats. False for
+    # containers registered via the Discover tab without provisioning —
+    # they work over docker_exec only and heartbeat silence is normal.
+    # The health checker + dashboard banner consult this flag (M13).
+    agent_expected: bool = True
     agent_port: int = 9100
     has_gpu: bool = False
     # Whether Claude Code CLI (`claude`) is on PATH inside the container.

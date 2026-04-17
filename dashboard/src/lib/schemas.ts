@@ -27,6 +27,9 @@ export const ContainerRecordSchema = z
     container_id: z.string().nullable(),
     container_status: ContainerStatusSchema,
     agent_status: AgentStatusSchema,
+    // M13. Legacy servers without this field default to true so the
+    // dashboard preserves the pre-M13 behaviour against an older hub.
+    agent_expected: z.boolean().default(true),
     agent_port: z.number(),
     has_gpu: z.boolean(),
     has_claude_cli: z.boolean(),

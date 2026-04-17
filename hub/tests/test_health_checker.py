@@ -185,3 +185,44 @@ class TestHealthChecker:
         updated = await registry.get(record.id)
         # Within grace window: no heartbeat yet, but not marked unreachable
         assert updated.agent_status.value == "idle"
+
+    @pytest.mark.asyncio
+    async def test_agent_not_expected_stays_idle_forever(
+        self, registry: Registry, checker: HealthChecker
+    ) -> None:
+        """M13: records registered via the Discover tab without
+        provisioning set ``agent_expected=False``. The health checker
+        must NEVER mark these records unreachable, even well past the
+        grace window, because no hive-agent was ever installed.
+        """
+        record = await registry.add(
+            workspace_folder="/bare",
+            project_type="base",
+            project_name="Bare",
+            agent_expected=False,
+        )
+        past = (
+            datetime.now() - timedelta(seconds=INITIAL_HEARTBEAT_GRACE_SECONDS + 600)
+        ).isoformat()
+        import sqlalchemy as sa
+
+        from hub.db.schema import containers
+
+        async with registry.engine.begin() as conn:
+            await conn.execute(
+                sa.update(containers)
+                .where(containers.c.id == record.id)
+                .values(
+                    container_id="c-bare",
+                    container_status="running",
+                    agent_status="idle",
+                    created_at=past,
+                    updated_at=past,
+                )
+            )
+
+        await checker._check_all()
+
+        updated = await registry.get(record.id)
+        assert updated.agent_status.value == "idle"
+        assert updated.agent_expected is False

@@ -48,6 +48,13 @@ containers = sa.Table(
     sa.Column("container_id", sa.Text, nullable=True),
     sa.Column("container_status", sa.Text, nullable=False, server_default="unknown"),
     sa.Column("agent_status", sa.Text, nullable=False, server_default="unreachable"),
+    # Whether a hive-agent is *expected* to be reporting heartbeats from
+    # this container. True when the hub provisioned the container via
+    # the bootstrapper (agent baked into the dev stage). False for
+    # containers registered via the Discover tab without auto_provision
+    # — those work fine through docker_exec but will never heartbeat,
+    # so the health checker must not mark them unreachable (M13).
+    sa.Column("agent_expected", sa.Boolean, nullable=False, server_default=sa.text("1")),
     sa.Column("agent_port", sa.Integer, nullable=False, server_default="9100"),
     # Booleans ship as INTEGER (0/1) in SQLite. SQLAlchemy's Boolean
     # type handles the coercion.

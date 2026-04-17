@@ -50,6 +50,7 @@ class TestUpdateAllowlist:
             "container_id",
             "container_status",
             "agent_status",
+            "agent_expected",
             "agent_port",
             "has_gpu",
             "has_claude_cli",
