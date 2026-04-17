@@ -1,15 +1,23 @@
 /** Narrow left rail — the VSCode/Cursor activity bar. Selecting an icon
  * changes what the primary sidebar shows. */
 
-import { Box, GitBranch, Search, Settings } from "lucide-react";
+import { AlertCircle, Box, GitBranch, Keyboard, Search, Settings, SquareStack } from "lucide-react";
 
-export type Activity = "containers" | "gitops" | "search" | "settings";
+export type Activity =
+  | "containers"
+  | "gitops"
+  | "search"
+  | "settings"
+  | "problems"
+  | "scm"
+  | "keybindings";
 
 interface Props {
   active: Activity;
   onChange: (a: Activity) => void;
   containerCount: number;
   prCount: number;
+  problemCount?: number;
   onOpenCommandPalette: () => void;
 }
 
@@ -18,7 +26,11 @@ interface Item {
   icon: React.ReactNode;
   label: string;
   shortcut: string;
-  badgeFor: (counts: { containerCount: number; prCount: number }) => number | null;
+  badgeFor: (counts: {
+    containerCount: number;
+    prCount: number;
+    problemCount: number;
+  }) => number | null;
 }
 
 const ITEMS: Item[] = [
@@ -30,11 +42,25 @@ const ITEMS: Item[] = [
     badgeFor: ({ containerCount }) => (containerCount > 0 ? containerCount : null),
   },
   {
+    id: "scm",
+    icon: <SquareStack size={18} />,
+    label: "Source Control",
+    shortcut: "Ctrl+Shift+S",
+    badgeFor: () => null,
+  },
+  {
     id: "gitops",
     icon: <GitBranch size={18} />,
     label: "Git Ops",
     shortcut: "Ctrl+Shift+G",
     badgeFor: ({ prCount }) => (prCount > 0 ? prCount : null),
+  },
+  {
+    id: "problems",
+    icon: <AlertCircle size={18} />,
+    label: "Problems",
+    shortcut: "Ctrl+Shift+P",
+    badgeFor: ({ problemCount }) => (problemCount > 0 ? problemCount : null),
   },
   {
     id: "search",
@@ -50,6 +76,7 @@ export function ActivityBar({
   onChange,
   containerCount,
   prCount,
+  problemCount = 0,
   onOpenCommandPalette,
 }: Props) {
   return (
@@ -60,7 +87,7 @@ export function ActivityBar({
       <ul className="flex flex-col gap-1">
         {ITEMS.map((item) => {
           const isActive = active === item.id;
-          const badge = item.badgeFor({ containerCount, prCount });
+          const badge = item.badgeFor({ containerCount, prCount, problemCount });
           return (
             <li key={item.id}>
               <button
@@ -93,6 +120,22 @@ export function ActivityBar({
         })}
       </ul>
       <ul className="flex flex-col gap-1">
+        <li>
+          <button
+            type="button"
+            onClick={() => onChange("keybindings")}
+            title="Keybindings"
+            aria-label="Keybindings"
+            aria-pressed={active === "keybindings"}
+            className={`flex h-10 w-10 items-center justify-center rounded transition-colors ${
+              active === "keybindings"
+                ? "bg-[#2a2d2e] text-[#e7e7e7]"
+                : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+            }`}
+          >
+            <Keyboard size={18} />
+          </button>
+        </li>
         <li>
           <button
             type="button"

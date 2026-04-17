@@ -137,3 +137,40 @@ export interface HubHealth {
   version: string;
   registered_containers: number;
 }
+
+// M10 — Settings/Problems/SourceControl/Keybindings
+
+export interface HubSettings {
+  values: Record<string, unknown>;
+  mutable_fields: string[];
+}
+
+export interface HubSettingsPatch {
+  log_level?: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
+  discover_roots?: string[];
+  metrics_enabled?: boolean;
+}
+
+export type ProblemSeverity = "info" | "warning" | "error";
+export type ProblemSource = "health" | "agent" | "relay" | "registry" | "other";
+
+export interface Problem {
+  id: number;
+  severity: ProblemSeverity;
+  source: ProblemSource;
+  message: string;
+  container_id: string | null;
+  project_name: string | null;
+  created_at: string;
+}
+
+export interface GitFileStatus {
+  workspace_folder: string;
+  staged: string[];
+  modified: string[];
+  untracked: string[];
+}
+
+export interface KeybindingsPayload {
+  bindings: Record<string, string>;
+}

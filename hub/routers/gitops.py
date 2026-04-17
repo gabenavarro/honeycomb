@@ -25,6 +25,7 @@ from gitops.pr_manager import (
     submit_review as git_submit_review,
 )
 from gitops.repo_scanner import scan_repos
+from gitops.runner import run_git
 
 logger = logging.getLogger("hub.routers.gitops")
 
@@ -176,6 +177,47 @@ async def merge_pr(
     if not success:
         raise HTTPException(400, "Merge failed")
     return {"status": "merged", "method": method, "pr": number}
+
+
+@router.get("/status/{workspace_folder:path}")
+async def get_repo_file_status(workspace_folder: str) -> dict[str, Any]:
+    """Return the staged/modified/untracked file lists for a repo (M10).
+
+    Uses ``git status --porcelain=v1`` so output is stable across git
+    versions. Paths are returned relative to ``workspace_folder``. A 400
+    is returned for paths outside a git repo, matching the existing
+    behaviour of the repo scanner.
+    """
+    workspace_folder = (
+        f"/{workspace_folder}" if not workspace_folder.startswith("/") else workspace_folder
+    )
+    rc, output = await run_git(
+        ["status", "--porcelain=v1", "--untracked-files=all"], cwd=workspace_folder
+    )
+    if rc != 0:
+        raise HTTPException(400, f"git status failed: {output.strip()}")
+
+    staged: list[str] = []
+    modified: list[str] = []
+    untracked: list[str] = []
+    for line in output.splitlines():
+        if len(line) < 3:
+            continue
+        # porcelain v1 format: XY<space>path  (XY = two-char status)
+        x, y, _, path = line[0], line[1], line[2], line[3:]
+        if x == "?" and y == "?":
+            untracked.append(path)
+            continue
+        if x != " " and x != "?":
+            staged.append(path)
+        if y != " " and y != "?":
+            modified.append(path)
+    return {
+        "workspace_folder": workspace_folder,
+        "staged": staged,
+        "modified": modified,
+        "untracked": untracked,
+    }
 
 
 @router.post("/commit")
