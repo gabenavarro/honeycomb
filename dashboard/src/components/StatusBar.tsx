@@ -1,10 +1,19 @@
-/** Bottom status bar — VSCode-style thin accent strip. */
+/** Bottom status bar — VSCode-style thin accent strip.
+ *
+ * M21 I: hub connectivity now lives in a single ``ConnectivityChip``
+ * that replaces the old WiFi + version + "reconnecting" text. Clicking
+ * the chip opens a popover with a per-signal breakdown (WS, REST,
+ * active PTY). Frees up a few inches of horizontal room and surfaces
+ * the "is the dashboard actually talking to the hub?" question as a
+ * single discoverable UI.
+ */
 
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Wifi, WifiOff, Cpu, GitBranch } from "lucide-react";
-import { getHealth, listContainers } from "../lib/api";
-import { useHiveWebSocket } from "../hooks/useWebSocket";
+import { Cpu, GitBranch } from "lucide-react";
+
+import { listContainers } from "../lib/api";
 import { backoffRefetch } from "../hooks/useSmartPoll";
+import { ConnectivityChip } from "./ConnectivityChip";
 import { ResourcePill } from "./ResourcePill";
 
 interface StatusBarProps {
@@ -13,12 +22,6 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ activeContainerId, activeContainerName }: StatusBarProps) {
-  const { connected } = useHiveWebSocket();
-  const { data: health } = useQuery({
-    queryKey: ["health"],
-    queryFn: getHealth,
-    refetchInterval: backoffRefetch({ baseMs: 10_000, maxMs: 120_000 }),
-  });
   const { data: containers = [] } = useQuery({
     queryKey: ["containers"],
     queryFn: listContainers,
@@ -34,21 +37,7 @@ export function StatusBar({ activeContainerId, activeContainerName }: StatusBarP
       role="contentinfo"
     >
       <div className="flex items-center gap-3">
-        {connected ? (
-          <span className="flex items-center gap-1" title="Hub WebSocket connected">
-            <Wifi size={10} /> hub
-          </span>
-        ) : (
-          <span
-            className="flex items-center gap-1 text-yellow-200"
-            title="Hub WebSocket disconnected — reconnecting…"
-          >
-            <WifiOff size={10} /> reconnecting
-          </span>
-        )}
-        <span className="flex items-center gap-1">
-          <Activity size={10} /> v{health?.version ?? "?"}
-        </span>
+        <ConnectivityChip activeContainerId={activeContainerId} />
         <span className="flex items-center gap-1">
           <GitBranch size={10} /> {running}/{containers.length} running
         </span>
@@ -61,7 +50,7 @@ export function StatusBar({ activeContainerId, activeContainerName }: StatusBarP
       <div className="flex items-center gap-3">
         <ResourcePill containerId={activeContainerId} containerName={activeContainerName} />
         {activeContainerName && <span>{activeContainerName}</span>}
-        <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` · Ctrl+W</span>
+        <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` · Ctrl+W · ?</span>
       </div>
     </footer>
   );

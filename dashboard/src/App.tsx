@@ -31,6 +31,7 @@ import { ContainerTabs } from "./components/ContainerTabs";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FileViewer } from "./components/FileViewer";
 import { GitOpsPanel } from "./components/GitOpsPanel";
+import { HelpOverlay } from "./components/HelpOverlay";
 import { KeybindingsEditor } from "./components/KeybindingsEditor";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
 import { ProblemsPanel } from "./components/ProblemsPanel";
@@ -58,6 +59,7 @@ const LS_ACTIVITY = "hive:layout:activity";
 const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
+const LS_ROOT_LAYOUT_BY_CONTAINER = "hive:layout:rootPanelsByContainer"; // M21 L
 const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
 const LS_ACTIVE_SESSION = "hive:layout:activeSession"; // M16
 const LS_FS_PATHS = "hive:layout:fsPaths"; // M17 — per-container browsed path
@@ -123,6 +125,10 @@ function isLayout(v: unknown): v is Layout {
     Object.values(v).every((n) => typeof n === "number")
   );
 }
+function isLayoutByContainer(v: unknown): v is Record<string, Layout> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every((layout) => isLayout(layout));
+}
 
 const DEFAULT_ROOT_LAYOUT: Layout = {
   "hive-sidebar": 20,
@@ -149,6 +155,7 @@ export default function App() {
   });
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // M16 — nested sessions per container. The active-session map tracks
   // which session is focused within each container tab; switching
@@ -301,6 +308,25 @@ export default function App() {
     [active, sessionsByContainer, setSessionsByContainer],
   );
 
+  const reorderSession = useCallback(
+    (fromId: string, toId: string) => {
+      if (active === undefined) return;
+      if (fromId === toId) return;
+      const containerKey = String(active.id);
+      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
+      const fromIdx = existing.findIndex((s) => s.id === fromId);
+      const toIdx = existing.findIndex((s) => s.id === toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const next = existing.slice();
+      const [moved] = next.splice(fromIdx, 1);
+      // Insert BEFORE the target: matches VSCode's drag-tab behaviour.
+      const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
+      next.splice(insertAt, 0, moved);
+      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
+    },
+    [active, sessionsByContainer, setSessionsByContainer],
+  );
+
   const closeSession = useCallback(
     (id: string) => {
       if (active === undefined) return;
@@ -401,6 +427,7 @@ export default function App() {
       setActivity("gitops");
       setSidebarOpen(true);
     },
+    onShowHelp: () => setHelpOpen(true),
   });
 
   // M13 + M20. The "unreachable" half of this check fires only when
@@ -469,6 +496,27 @@ export default function App() {
   const [rootLayout, setRootLayout] = useLocalStorage<Layout>(LS_ROOT_LAYOUT, DEFAULT_ROOT_LAYOUT, {
     validate: isLayout,
   });
+  // M21 L — per-container layouts. When the user switches tabs we
+  // re-key the Group with this container's saved sizes; on drag we
+  // write back to both the per-container map AND the global default
+  // so a brand-new container starts with the user's latest widths.
+  const [layoutByContainer, setLayoutByContainer] = useLocalStorage<Record<string, Layout>>(
+    LS_ROOT_LAYOUT_BY_CONTAINER,
+    {},
+    { validate: isLayoutByContainer },
+  );
+  const activeLayoutKey = activeTabId === null ? null : String(activeTabId);
+  const activeRootLayout: Layout =
+    (activeLayoutKey !== null && layoutByContainer[activeLayoutKey]) || rootLayout;
+  const setActiveRootLayout = useCallback(
+    (next: Layout) => {
+      setRootLayout(next);
+      if (activeLayoutKey !== null) {
+        setLayoutByContainer((prev) => ({ ...prev, [activeLayoutKey]: next }));
+      }
+    },
+    [setRootLayout, setLayoutByContainer, activeLayoutKey],
+  );
   useEffect(() => {
     const handle = sidebarPanelRef.current;
     if (!handle) return;
@@ -496,10 +544,16 @@ export default function App() {
           />
 
           <Group
+            // Remount the group on container switch so the stored
+            // per-container layout is applied on mount rather than
+            // fighting a live drag. ``activeLayoutKey`` is the stable
+            // identity — if no container is focused we fall back to a
+            // static key so the group still mounts once.
+            key={`root-${activeLayoutKey ?? "none"}`}
             orientation="horizontal"
             id="hive-root-layout"
-            defaultLayout={rootLayout}
-            onLayoutChanged={setRootLayout}
+            defaultLayout={activeRootLayout}
+            onLayoutChanged={setActiveRootLayout}
             style={{ flex: 1, minWidth: 0, minHeight: 0 }}
           >
             <Panel
@@ -535,12 +589,17 @@ export default function App() {
                     {sidebarTitle}
                   </h2>
                   {activity === "containers" && (
+                    // M21 A — more prominent primary-colour CTA so the
+                    // main "register a new container" action is obvious
+                    // on a cold load.
                     <button
                       type="button"
                       onClick={() => setShowProvisioner(true)}
-                      className="rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#1188e0]"
+                      className="flex items-center gap-1 rounded bg-[#0078d4] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1188e0] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                      title="Register or discover a new devcontainer"
                     >
-                      + New
+                      <span aria-hidden="true">+</span>
+                      <span>New</span>
                     </button>
                   )}
                 </header>
@@ -550,7 +609,14 @@ export default function App() {
                   )}
                   {activity === "gitops" && <GitOpsPanel />}
                   {activity === "scm" && <SourceControlView />}
-                  {activity === "problems" && <ProblemsPanel />}
+                  {activity === "problems" && (
+                    <ProblemsPanel
+                      onOpenContainer={(id) => {
+                        openContainer(id);
+                        setActivity("containers");
+                      }}
+                    />
+                  )}
                   {activity === "settings" && <SettingsView />}
                   {activity === "keybindings" && <KeybindingsEditor />}
                   {activity === "files" && (
@@ -645,6 +711,7 @@ export default function App() {
                           onClose={closeSession}
                           onNew={newSession}
                           onRename={renameSession}
+                          onReorder={reorderSession}
                         />
                         {/* M18 — FileViewer takes over the editor pane
                             when the user opens a file from the Files
@@ -697,6 +764,8 @@ export default function App() {
           activeContainerId={active?.id ?? null}
           activeContainerName={active?.project_name ?? null}
         />
+
+        <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
 
         {showProvisioner && <Provisioner onClose={() => setShowProvisioner(false)} />}
 

@@ -25,6 +25,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { getAuthToken } from "../lib/auth";
 import { scanForAttention } from "../hooks/useAttention";
+import { useTerminalPrefs } from "../hooks/useTerminalPrefs";
 import { useToasts } from "../hooks/useToasts";
 
 type PtyStatus = "connecting" | "connected" | "reattached" | "disconnected" | "closed";
@@ -78,6 +79,7 @@ function labelFor(recordId: number, sessionKey: string): string {
 
 export function PtyPane({ recordId, containerName, command = "bash", sessionKey }: Props) {
   const { toast } = useToasts();
+  const [prefs] = useTerminalPrefs();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -86,6 +88,10 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
   const reconnectTimerRef = useRef<number | null>(null);
   const [status, setStatus] = useState<PtyStatus>("connecting");
   const [banner, setBanner] = useState<string | null>(null);
+  // M21 B — true while xterm.js reports the terminal has focus, drives
+  // the editor-border glow via the ``data-term-focused`` attribute a
+  // parent sets on its wrapper.
+  const [focused, setFocused] = useState(false);
 
   const label = labelFor(recordId, sessionKey);
   // M15 — the reattach toast is composed from TWO WS control frames
@@ -128,11 +134,11 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
 
     const term = new Terminal({
       theme: THEME,
-      fontSize: 13,
+      fontSize: prefs.fontSize,
       fontFamily:
         'ui-monospace, "Cascadia Code", "Fira Code", Consolas, "DejaVu Sans Mono", monospace',
       cursorBlink: true,
-      cursorStyle: "bar",
+      cursorStyle: prefs.cursorStyle,
       scrollback: 10_000,
       convertEol: false, // PTY is already sending \r\n
       allowProposedApi: false,
@@ -156,6 +162,26 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
 
     termRef.current = term;
     fitRef.current = fit;
+
+    // M21 G — copy-on-select: write the selection to the clipboard
+    // whenever xterm reports a non-empty selection. We subscribe via
+    // onSelectionChange and gate on hasSelection() so a click-to-
+    // deselect doesn't churn the clipboard. Navigator.clipboard can
+    // reject when the page isn't focused; failures are silent.
+    const copyOnSelectDisposable = term.onSelectionChange(() => {
+      if (!prefs.copyOnSelect) return;
+      const text = term.getSelection();
+      if (!text) return;
+      navigator.clipboard?.writeText(text).catch(() => undefined);
+    });
+
+    // M21 B — mirror xterm's focus state into React so the parent can
+    // render a focus glow on the editor border.
+    const focusDisposable = term.onRender(() => undefined); // placeholder; real focus hooks below
+    const focusHandler = () => setFocused(true);
+    const blurHandler = () => setFocused(false);
+    host.addEventListener("focusin", focusHandler);
+    host.addEventListener("focusout", blurHandler);
 
     // Forward keystrokes → WebSocket. We send stdin as *binary* frames
     // to avoid the "d"-prefix UTF-8 encoding overhead for paste paths.
@@ -182,12 +208,16 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
 
     return () => {
       disposable.dispose();
+      copyOnSelectDisposable.dispose();
+      focusDisposable.dispose();
+      host.removeEventListener("focusin", focusHandler);
+      host.removeEventListener("focusout", blurHandler);
       ro.disconnect();
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [recordId, sessionKey, sendCtrl]);
+  }, [recordId, sessionKey, sendCtrl, prefs.fontSize, prefs.cursorStyle, prefs.copyOnSelect]);
 
   // WebSocket lifecycle. Separate from the terminal effect so we can
   // reconnect without remounting the Terminal — keeps scrollback.
@@ -335,7 +365,10 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
   }, []);
 
   return (
-    <div className="flex h-full w-full min-w-0 flex-col">
+    <div
+      data-term-focused={focused || undefined}
+      className="flex h-full w-full min-w-0 flex-col rounded-sm ring-0 ring-[#0078d4] transition-[box-shadow] data-[term-focused]:shadow-[inset_0_0_0_1px_rgba(0,120,212,0.55)]"
+    >
       {/* Status strip */}
       <div className="flex items-center justify-between gap-2 border-b border-gray-800 px-2 py-1 text-[10px]">
         <StatusPill status={status} command={command} />
