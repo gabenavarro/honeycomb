@@ -276,3 +276,126 @@ See the **Authentication — Max Plan Subscription** section in
 - Login once: `docker compose run --rm <container> claude`, follow OAuth.
 - The shared `claude-auth` Docker volume mounted at `/root/.claude`
   propagates credentials to every container.
+
+---
+
+## Dashboard AuthGate keeps re-opening / I lost the bearer token
+
+**Symptom.** The paste-your-token dialog shows on every page load even
+after successfully unlocking once; or you never saved the token printed
+on first hub start and now the dashboard is stuck.
+
+**Cause.** The hub generates the token on first run and persists it to
+`~/.config/honeycomb/token` (mode `0600`). The dashboard stores it in
+`localStorage` under `hive:auth:token`. A 401 from the hub (stale or
+wrong token) clears the client-side copy and re-opens the gate.
+
+**Fix.**
+
+1. Read the current token:
+   ```bash
+   cat ~/.config/honeycomb/token
+   ```
+   Paste it into the gate.
+2. If the file is missing, regenerate it — delete the stale entry and
+   restart the hub; it'll print a fresh token:
+   ```bash
+   rm -f ~/.config/honeycomb/token
+   python hub/main.py   # new token is logged to stdout once
+   ```
+3. For CI / scripted runs, set `HIVE_AUTH_TOKEN=…` in the environment;
+   that takes precedence over the file and is echoed back as
+   `token_source=env` in the boot log.
+
+---
+
+## hive-agent doesn't connect over the reverse tunnel (container shows `agent: unreachable`)
+
+**Symptom.** The container status is `running` but `agent_status` is
+`unreachable`. The Problems panel shows an entry like `<name>
+unreachable (never heartbeated)` 60 s after registration.
+
+**Cause.** Since M4 the agent dials the hub over WebSocket at
+`/api/agent/connect`; there is no HTTP listener inside the container to
+probe. Common failure modes:
+- The `hive-agent` package is missing inside the container (Dockerfile
+  `RUN pip install hive-agent` step was removed or failed).
+- The agent was started without `HIVE_HUB_URL` / `HIVE_AUTH_TOKEN`, so
+  it can't resolve or authenticate to the hub.
+- The container is on a Docker network that can't reach the hub's
+  loopback bind (`HIVE_HOST=127.0.0.1` + `--network=host` is fine;
+  bridge networks need the hub bound to a reachable address).
+
+**Fix.**
+
+1. Check the agent is installed:
+   ```bash
+   docker exec <container-id> hive-agent --version
+   ```
+2. Check its logs for connect errors:
+   ```bash
+   docker exec <container-id> journalctl -u hive-agent 2>/dev/null \
+     || docker exec <container-id> cat /var/log/hive-agent.log 2>/dev/null \
+     || docker logs <container-id> | tail -40
+   ```
+3. Verify the tunnel URL + token are plumbed into the container's
+   environment (the DevContainer Feature sets these from the hub's
+   inspect output on first build).
+4. Start the agent manually to see the handshake:
+   ```bash
+   docker exec -e HIVE_HUB_URL=ws://host.docker.internal:8420 \
+               -e HIVE_AUTH_TOKEN="$(cat ~/.config/honeycomb/token)" \
+               <container-id> hive-agent start --foreground
+   ```
+
+---
+
+## Settings view rejects an edit with "Invalid settings"
+
+**Symptom.** Saving from the Settings view pops an error toast like
+`Settings save failed: Invalid settings: …`.
+
+**Cause.** The hub validates the merged settings against
+`HiveSettings` via pydantic. A typoed `log_level` (e.g. `verbose`) or
+non-string entries in `discover_roots` fail the `Literal` / type
+constraint.
+
+**Fix.**
+
+- `log_level` must be one of `DEBUG`, `INFO`, `WARNING`, `ERROR`,
+  `CRITICAL`.
+- `discover_roots` is one path per line; blank lines are ignored.
+- `metrics_enabled` is a boolean checkbox; no free-form value.
+
+If a persisted override file is already invalid (e.g. hand-edited),
+delete it and reboot:
+
+```bash
+rm ~/.config/honeycomb/settings.json
+python hub/main.py
+```
+
+Immutable fields (`host`, `port`, `auth_token`, `cors_origins`, …) are
+exposed read-only in the UI. To change them, set the matching `HIVE_*`
+env var and restart.
+
+---
+
+## Playwright E2E fails locally but CI is green (or vice versa)
+
+**Symptom.** `npx playwright test` times out waiting for the Vite dev
+server, or the AuthGate spec fails with the dialog staying visible.
+
+**Cause.** `playwright.config.ts` starts Vite on `127.0.0.1:5173` via
+its `webServer` block. If a stale dev server is already bound to 5173
+(e.g. a previous `npm run dev` in another terminal), Playwright's
+`reuseExistingServer` picks it up — and that server proxies `/api` to
+the real hub on 8420, not the Playwright mock.
+
+**Fix.**
+
+1. Kill stray dev servers: `lsof -ti :5173 | xargs kill`.
+2. Re-run the specs: `cd dashboard && npx playwright test`.
+3. If the auth-gate spec fails, download the `playwright-traces`
+   artifact from CI to see the rendered DOM at failure time —
+   `error-context.md` inside shows the exact locator mismatch.
