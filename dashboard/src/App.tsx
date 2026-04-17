@@ -35,11 +35,11 @@ import { KeybindingsEditor } from "./components/KeybindingsEditor";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { Provisioner } from "./components/Provisioner";
-import { ResourceMonitor } from "./components/ResourceMonitor";
 import { SessionSubTabs, type SessionInfo } from "./components/SessionSubTabs";
 import { SettingsView } from "./components/SettingsView";
 import { SourceControlView } from "./components/SourceControlView";
 import { SplitEditor } from "./components/SplitEditor";
+import { StaleHubWatcher } from "./components/StaleHubWatcher";
 import { StatusBar } from "./components/StatusBar";
 import { TerminalPane } from "./components/TerminalPane";
 import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
@@ -47,7 +47,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
 import { backoffRefetch } from "./hooks/useSmartPoll";
-import { listContainers, listPRs, listProblems } from "./lib/api";
+import { listContainerSessions, listContainers, listPRs, listProblems } from "./lib/api";
 import type { ContainerRecord } from "./lib/types";
 
 // Storage keys for layout state. Remembering these across reloads is
@@ -56,7 +56,6 @@ const LS_OPEN_TABS = "hive:layout:openTabs";
 const LS_ACTIVE_TAB = "hive:layout:activeTab";
 const LS_ACTIVITY = "hive:layout:activity";
 const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
-const LS_SECONDARY_OPEN = "hive:layout:secondary";
 const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
 const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
@@ -127,8 +126,7 @@ function isLayout(v: unknown): v is Layout {
 
 const DEFAULT_ROOT_LAYOUT: Layout = {
   "hive-sidebar": 20,
-  "hive-editor": 60,
-  "hive-secondary": 0,
+  "hive-editor": 80,
 };
 
 export default function App() {
@@ -138,13 +136,6 @@ export default function App() {
     validate: isActivity,
   });
   const [sidebarOpen, setSidebarOpen] = useLocalStorage<boolean>(LS_SIDEBAR_OPEN, true, {
-    validate: isBoolean,
-  });
-  // M13: the default for the secondary "Resources" pane flipped to
-  // *closed* because the headline numbers now live in the StatusBar
-  // pill. Users who still want the always-visible bar chart can toggle
-  // it back with Ctrl+` (it persists here per-user).
-  const [secondaryOpen, setSecondaryOpen] = useLocalStorage<boolean>(LS_SECONDARY_OPEN, false, {
     validate: isBoolean,
   });
   const [openTabs, setOpenTabs] = useLocalStorage<number[]>(LS_OPEN_TABS, [], {
@@ -296,6 +287,20 @@ export default function App() {
     [active, setFsPathByContainer],
   );
 
+  const renameSession = useCallback(
+    (id: string, nextName: string) => {
+      if (active === undefined) return;
+      const containerKey = String(active.id);
+      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
+      const trimmed = nextName.trim();
+      if (!trimmed) return;
+      if (!existing.some((s) => s.id === id)) return;
+      const next = existing.map((s) => (s.id === id ? { ...s, name: trimmed } : s));
+      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
+    },
+    [active, sessionsByContainer, setSessionsByContainer],
+  );
+
   const closeSession = useCallback(
     (id: string) => {
       if (active === undefined) return;
@@ -377,7 +382,10 @@ export default function App() {
   useKeyboardShortcuts({
     onCommandPalette: () => setPaletteOpen((v) => !v),
     onToggleSidebar: () => setSidebarOpen((v) => !v),
-    onToggleSecondary: () => setSecondaryOpen((v) => !v),
+    // Secondary panel was removed in M20 — Ctrl+` is a no-op now but
+    // the handler stays in the shortcut registry so the hotkey is
+    // reserved for a future repurposing.
+    onToggleSecondary: () => undefined,
     onCloseActiveTab: () => {
       if (activeTabId !== null) closeTab(activeTabId);
     },
@@ -395,15 +403,28 @@ export default function App() {
     },
   });
 
-  // M13. The "unreachable" half of this check only fires for records
-  // where the hub actually expected a hive-agent. Containers registered
-  // via the Discover tab without provisioning (agent_expected=false)
-  // run fine over docker_exec, so heartbeat silence is not a fault and
-  // we must not surface it as one.
+  // M13 + M20. The "unreachable" half of this check fires only when
+  // (a) the hub was expecting a hive-agent for this record AND
+  // (b) there is no live PTY session attached (i.e. the user isn't
+  //     already successfully talking to the container over docker_exec).
+  //
+  // Legacy rows registered before M13 carry ``agent_expected=true``
+  // even though they have no agent installed. Gating on live-PTY
+  // presence hides the false positive without requiring a retro
+  // database backfill.
+  const { data: liveSessions } = useQuery({
+    queryKey: ["sessions", active?.id ?? 0],
+    queryFn: () => listContainerSessions(active!.id),
+    enabled: active !== undefined,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+  const hasLiveAttachedPty =
+    liveSessions?.sessions.some((s) => s.attached || s.detached_for_seconds !== null) ?? false;
   const selectedUnhealthy =
     active !== undefined &&
     (active.container_status !== "running" ||
-      (active.agent_status === "unreachable" && active.agent_expected));
+      (active.agent_status === "unreachable" && active.agent_expected && !hasLiveAttachedPty));
   const firstHealthy = useMemo(
     () =>
       openContainers.find(
@@ -445,7 +466,6 @@ export default function App() {
   // expressed; the Panel's pixel widths are persisted through a
   // ``useLocalStorage`` layout record keyed by panel id.
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const secondaryPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [rootLayout, setRootLayout] = useLocalStorage<Layout>(LS_ROOT_LAYOUT, DEFAULT_ROOT_LAYOUT, {
     validate: isLayout,
   });
@@ -455,17 +475,12 @@ export default function App() {
     if (sidebarOpen && handle.isCollapsed()) handle.expand();
     if (!sidebarOpen && !handle.isCollapsed()) handle.collapse();
   }, [sidebarOpen]);
-  useEffect(() => {
-    const handle = secondaryPanelRef.current;
-    if (!handle) return;
-    if (secondaryOpen && handle.isCollapsed()) handle.expand();
-    if (!secondaryOpen && !handle.isCollapsed()) handle.collapse();
-  }, [secondaryOpen]);
 
   return (
     <AuthGate>
       <LocalStorageQuotaWatcher />
       <WebSocketListenerErrorWatcher />
+      <StaleHubWatcher />
       <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
         <div className="flex min-h-0 flex-1">
           <ActivityBar
@@ -629,6 +644,7 @@ export default function App() {
                           onFocus={focusSession}
                           onClose={closeSession}
                           onNew={newSession}
+                          onRename={renameSession}
                         />
                         {/* M18 — FileViewer takes over the editor pane
                             when the user opens a file from the Files
@@ -673,45 +689,6 @@ export default function App() {
                   />
                 )}
               </main>
-            </Panel>
-
-            <Separator
-              className="w-0.5 cursor-col-resize bg-[#2b2b2b] transition-colors hover:bg-[#0078d4]"
-              aria-label="Resize secondary panel"
-            />
-
-            <Panel
-              id="hive-secondary"
-              panelRef={secondaryPanelRef}
-              defaultSize={0}
-              minSize={14}
-              collapsible
-              collapsedSize={0}
-              onResize={(size) => {
-                const collapsedNow = size.asPercentage === 0;
-                if (collapsedNow && secondaryOpen) setSecondaryOpen(false);
-                else if (!collapsedNow && !secondaryOpen) setSecondaryOpen(true);
-              }}
-            >
-              <aside
-                aria-label="Secondary panel"
-                // Same rationale as the primary sidebar's ``hidden`` —
-                // keep ``display:none`` in lockstep with the Panel's
-                // collapsed-to-0 state so a11y + Playwright agree.
-                hidden={!secondaryOpen}
-                className="h-full overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
-              >
-                <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                  Resources
-                </h2>
-                {active ? (
-                  <ResourceMonitor containerId={active.id} />
-                ) : (
-                  <p className="text-[11px] text-[#606060]">
-                    Open a container to see its CPU, memory, and GPU bars here.
-                  </p>
-                )}
-              </aside>
             </Panel>
           </Group>
         </div>

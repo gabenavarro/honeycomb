@@ -76,3 +76,71 @@ export function GpuBadge() {
     </span>
   );
 }
+
+// M20 — compact icon-only variants. Used in the container-tab header
+// where horizontal room is scarce. Tooltip + aria-label carry the
+// full status label so screen readers and mouse hovers still surface
+// it. Keeps colour parity with the long-form badges above.
+
+const containerTextColors: Record<ContainerStatus, string> = {
+  running: "text-green-400",
+  stopped: "text-gray-500",
+  starting: "text-yellow-400",
+  error: "text-red-400",
+  unknown: "text-gray-600",
+};
+
+const agentTextColors: Record<AgentStatus, string> = {
+  idle: "text-green-400",
+  busy: "text-blue-400",
+  error: "text-red-400",
+  unreachable: "text-gray-500",
+};
+
+export function ContainerStatusDot({ status }: { status: ContainerStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center ${containerTextColors[status]}`}
+      role="status"
+      aria-label={`Container status: ${status}`}
+      title={`Container ${status}`}
+    >
+      <span aria-hidden="true" className="text-[11px] leading-none">
+        {containerShapes[status]}
+      </span>
+    </span>
+  );
+}
+
+export function AgentStatusDot({ status }: { status: AgentStatus }) {
+  return (
+    <span
+      className={`inline-flex items-center ${agentTextColors[status]}`}
+      role="status"
+      aria-label={`Agent status: ${status}`}
+      title={`Agent ${status}`}
+    >
+      <span aria-hidden="true" className="text-[11px] leading-none">
+        {agentShapes[status]}
+      </span>
+    </span>
+  );
+}
+
+/** M20 — renders only when the container has something waiting on the
+ * user (Claude prompt, ``(y/N)``, password entry, …). A gentle pulse
+ * draws the eye without being annoying. */
+export function NeedsAttentionIcon() {
+  return (
+    <span
+      aria-label="Needs attention"
+      title="Session is waiting for your input"
+      className="inline-flex items-center"
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.85)]"
+        aria-hidden="true"
+      />
+    </span>
+  );
+}

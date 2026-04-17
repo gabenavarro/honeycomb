@@ -65,9 +65,15 @@ export function ContainerFilesView({ containerId, path, onNavigate, onOpenFile }
       <div className="flex-1 overflow-y-auto">
         {isLoading && <p className="px-3 py-2 text-xs text-[#858585]">Loading…</p>}
         {error && (
-          <p className="px-3 py-2 text-xs text-red-400">
-            {error instanceof Error ? error.message : String(error)}
-          </p>
+          <div className="px-3 py-2 text-xs text-red-400">
+            <p>{error instanceof Error ? error.message : String(error)}</p>
+            {error instanceof Error && /^404:/.test(error.message) && (
+              <p className="mt-1 text-[10px] text-[#858585]">
+                The hub doesn&apos;t know this route. It&apos;s likely running an older build —
+                restart it to pick up the filesystem endpoints.
+              </p>
+            )}
+          </div>
         )}
         {data && (
           <ul>
