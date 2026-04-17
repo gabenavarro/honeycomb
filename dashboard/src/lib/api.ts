@@ -22,7 +22,12 @@ import type {
   ContainerRecord,
   DiscoverRegisterRequest,
   DiscoveryResponse,
+  GitFileStatus,
   HubHealth,
+  HubSettings,
+  HubSettingsPatch,
+  KeybindingsPayload,
+  Problem,
   PullRequestSummary,
   RepoStatus,
   ResourceStats,
@@ -165,6 +170,35 @@ export const reviewPR = (
   request<{ status: string; pr: number }>(`/gitops/prs/${owner}/${repo}/${number}/review`, {
     method: "POST",
     body: JSON.stringify({ action, body }),
+  });
+
+// --- M10 endpoints ---
+
+export const getSettings = () => request<HubSettings>("/settings");
+
+export const patchSettings = (patch: HubSettingsPatch) =>
+  request<HubSettings>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+
+export const listProblems = () => request<{ problems: Problem[] }>("/problems");
+
+export const clearProblems = () => request<{ cleared: boolean }>("/problems", { method: "DELETE" });
+
+export const getRepoFileStatus = (workspaceFolder: string) => {
+  // workspace_folder is treated as a path param; strip the leading slash
+  // because FastAPI's path converter expects it relative.
+  const stripped = workspaceFolder.startsWith("/") ? workspaceFolder.slice(1) : workspaceFolder;
+  return request<GitFileStatus>(`/gitops/status/${stripped}`);
+};
+
+export const getKeybindings = () => request<KeybindingsPayload>("/keybindings");
+
+export const putKeybindings = (bindings: Record<string, string>) =>
+  request<KeybindingsPayload>("/keybindings", {
+    method: "PUT",
+    body: JSON.stringify({ bindings }),
   });
 
 export const commitChanges = (

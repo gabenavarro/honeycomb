@@ -7,6 +7,7 @@ import contextlib
 import logging
 from datetime import datetime, timedelta
 
+from hub.services.problem_log import ProblemLog
 from hub.services.registry import Registry
 
 logger = logging.getLogger("hub.health_checker")
@@ -21,12 +22,18 @@ INITIAL_HEARTBEAT_GRACE_SECONDS = 60
 class HealthChecker:
     """Periodically checks container heartbeat freshness and marks stale ones."""
 
-    def __init__(self, registry: Registry, check_interval: float = 10.0) -> None:
+    def __init__(
+        self,
+        registry: Registry,
+        check_interval: float = 10.0,
+        problem_log: ProblemLog | None = None,
+    ) -> None:
         self._registry = registry
         self._check_interval = check_interval
         self._last_heartbeat: dict[str, datetime] = {}
         self._lock = asyncio.Lock()
         self._task: asyncio.Task[None] | None = None
+        self._problem_log = problem_log
 
     async def record_heartbeat(self, container_id: str) -> None:
         """Called when a heartbeat is received from a container."""
@@ -101,6 +108,7 @@ class HealthChecker:
                         record.id,
                         agent_status="unreachable",
                     )
+                    self._report_unreachable(record, reason="never heartbeated")
                 continue
 
             if now - last_hb > timeout:
@@ -114,6 +122,7 @@ class HealthChecker:
                         record.id,
                         agent_status="unreachable",
                     )
+                    self._report_unreachable(record, reason="missed heartbeat")
             elif record.agent_status.value == "unreachable":
                 logger.info(
                     "Container %s (%s) heartbeat resumed",
@@ -124,3 +133,23 @@ class HealthChecker:
                     record.id,
                     agent_status="idle",
                 )
+                if self._problem_log is not None:
+                    self._problem_log.record(
+                        "info",
+                        "health",
+                        f"{record.project_name} heartbeat resumed",
+                        container_id=container_id,
+                        project_name=record.project_name,
+                    )
+
+    def _report_unreachable(self, record, reason: str) -> None:
+        """Append an entry to the problem log if one is attached."""
+        if self._problem_log is None:
+            return
+        self._problem_log.record(
+            "warning",
+            "health",
+            f"{record.project_name} unreachable ({reason})",
+            container_id=record.container_id,
+            project_name=record.project_name,
+        )

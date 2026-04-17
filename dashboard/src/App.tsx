@@ -1,33 +1,42 @@
 /** Top-level layout. VSCode/Cursor-inspired:
- *   ActivityBar | PrimarySidebar | (ContainerTabs over TerminalPane) | SecondaryPanel
+ *   ActivityBar | PrimarySidebar | (ContainerTabs over editor pane) | SecondaryPanel
  *                                                                    StatusBar (bottom)
  *
  * The primary sidebar content is driven by the active Activity; only one
  * sidebar view is visible at a time so the rail stays narrow. Open
  * containers become tabs in the editor area — closing a tab just removes
- * it from the open set, it does not unregister the container. */
+ * it from the open set, it does not unregister the container. M10 adds
+ * Problems, Source Control, Settings, and Keybindings activities plus an
+ * optional split-editor layout via ``react-resizable-panels``.
+ */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle } from "lucide-react";
-import { listContainers, listPRs } from "./lib/api";
-import { ContainerList } from "./components/ContainerList";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
-import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
-import { TerminalPane } from "./components/TerminalPane";
-import { ResourceMonitor } from "./components/ResourceMonitor";
-import { GitOpsPanel } from "./components/GitOpsPanel";
-import { Provisioner } from "./components/Provisioner";
+import { AlertTriangle, Columns } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { ActivityBar, type Activity } from "./components/ActivityBar";
-import { ContainerTabs } from "./components/ContainerTabs";
-import { StatusBar } from "./components/StatusBar";
-import { CommandPalette } from "./components/CommandPalette";
 import { AuthGate } from "./components/AuthGate";
-import { backoffRefetch } from "./hooks/useSmartPoll";
+import { CommandPalette } from "./components/CommandPalette";
+import { ContainerList } from "./components/ContainerList";
+import { ContainerTabs } from "./components/ContainerTabs";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { GitOpsPanel } from "./components/GitOpsPanel";
+import { KeybindingsEditor } from "./components/KeybindingsEditor";
+import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
+import { ProblemsPanel } from "./components/ProblemsPanel";
+import { Provisioner } from "./components/Provisioner";
+import { ResourceMonitor } from "./components/ResourceMonitor";
+import { SettingsView } from "./components/SettingsView";
+import { SourceControlView } from "./components/SourceControlView";
+import { SplitEditor } from "./components/SplitEditor";
+import { StatusBar } from "./components/StatusBar";
+import { TerminalPane } from "./components/TerminalPane";
+import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
+import { backoffRefetch } from "./hooks/useSmartPoll";
+import { listContainers, listPRs, listProblems } from "./lib/api";
 import type { ContainerRecord } from "./lib/types";
 
 // Storage keys for layout state. Remembering these across reloads is
@@ -37,10 +46,21 @@ const LS_ACTIVE_TAB = "hive:layout:activeTab";
 const LS_ACTIVITY = "hive:layout:activity";
 const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SECONDARY_OPEN = "hive:layout:secondary";
+const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
+const ACTIVITY_VALUES: Activity[] = [
+  "containers",
+  "gitops",
+  "problems",
+  "scm",
+  "search",
+  "settings",
+  "keybindings",
+];
+
 function isActivity(v: unknown): v is Activity {
-  return v === "containers" || v === "gitops" || v === "settings";
+  return typeof v === "string" && (ACTIVITY_VALUES as string[]).includes(v);
 }
 function isNumberArray(v: unknown): v is number[] {
   return Array.isArray(v) && v.every((n) => typeof n === "number");
@@ -55,8 +75,6 @@ function isBoolean(v: unknown): v is boolean {
 export default function App() {
   const queryClient = useQueryClient();
 
-  // One typed hook per persisted field — storage read + write collapsed
-  // into the hook, no explicit ``useEffect`` needed.
   const [activity, setActivity] = useLocalStorage<Activity>(LS_ACTIVITY, "containers", {
     validate: isActivity,
   });
@@ -72,6 +90,9 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useLocalStorage<number | null>(LS_ACTIVE_TAB, null, {
     validate: isNullableNumber,
   });
+  const [splitId, setSplitId] = useLocalStorage<number | null>(LS_SPLIT_ID, null, {
+    validate: isNullableNumber,
+  });
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -85,6 +106,13 @@ export default function App() {
     queryFn: () => listPRs("open"),
     refetchInterval: backoffRefetch({ baseMs: 30_000, maxMs: 300_000 }),
   });
+  const { data: problemsData } = useQuery({
+    queryKey: ["problems"],
+    queryFn: listProblems,
+    // Long stale — the live feed comes from the problems WS channel.
+    staleTime: 60_000,
+  });
+  const problemCount = problemsData?.problems.length ?? 0;
 
   // Prune open tabs for containers that no longer exist (deleted on the
   // backend). Also purge their cached sessions.
@@ -98,8 +126,11 @@ export default function App() {
       if (activeTabId !== null && !known.has(activeTabId)) {
         setActiveTabId(stillOpen[0] ?? null);
       }
+      if (splitId !== null && !known.has(splitId)) {
+        setSplitId(null);
+      }
     }
-  }, [containers, openTabs, activeTabId]);
+  }, [containers, openTabs, activeTabId, splitId, setOpenTabs, setActiveTabId, setSplitId]);
 
   const openContainers: ContainerRecord[] = useMemo(
     () =>
@@ -109,6 +140,10 @@ export default function App() {
     [openTabs, containers],
   );
   const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
+  const splitContainer: ContainerRecord | null =
+    splitId !== null && splitId !== activeTabId
+      ? (containers.find((c) => c.id === splitId) ?? null)
+      : null;
 
   const openContainer = useCallback(
     (id: number) => {
@@ -122,8 +157,6 @@ export default function App() {
     (id: number) => {
       setOpenTabs((prev) => {
         const next = prev.filter((x) => x !== id);
-        // When closing the active tab, hop to the neighbor on the
-        // right, then the left — same semantics as VSCode.
         setActiveTabId((current) => {
           if (current !== id) return current;
           const wasIdx = prev.indexOf(id);
@@ -133,20 +166,32 @@ export default function App() {
         });
         return next;
       });
+      // Closing the split pane's container also collapses the split.
+      setSplitId((current) => (current === id ? null : current));
     },
-    [setOpenTabs, setActiveTabId],
+    [setOpenTabs, setActiveTabId, setSplitId],
   );
 
   const newClaudeSession = useCallback(
     (id: number) => {
-      // Open the container and remember that Claude is the intended
-      // kind — TerminalPane reads this LS key on mount.
       localStorage.setItem(`${LS_LAST_KIND_PREFIX}${id}`, "claude");
       setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
       setActiveTabId(id);
     },
     [setOpenTabs, setActiveTabId],
   );
+
+  const toggleSplit = useCallback(() => {
+    // Split = "open the next container in the open-tab list next to the
+    // active one". If only one container is open there is nothing to
+    // split with — the button is disabled in that case.
+    if (splitId !== null) {
+      setSplitId(null);
+      return;
+    }
+    const partner = openTabs.find((id) => id !== activeTabId);
+    if (partner !== undefined) setSplitId(partner);
+  }, [splitId, openTabs, activeTabId, setSplitId]);
 
   useKeyboardShortcuts({
     onCommandPalette: () => setPaletteOpen((v) => !v),
@@ -180,6 +225,21 @@ export default function App() {
     [openContainers],
   );
 
+  const sidebarTitle =
+    activity === "containers"
+      ? "Containers"
+      : activity === "gitops"
+        ? "Git Ops"
+        : activity === "scm"
+          ? "Source Control"
+          : activity === "problems"
+            ? "Problems"
+            : activity === "settings"
+              ? "Settings"
+              : activity === "keybindings"
+                ? "Keybindings"
+                : "Search";
+
   return (
     <AuthGate>
       <LocalStorageQuotaWatcher />
@@ -194,6 +254,7 @@ export default function App() {
             }}
             containerCount={containers.length}
             prCount={prs.length}
+            problemCount={problemCount}
             onOpenCommandPalette={() => setPaletteOpen(true)}
           />
 
@@ -204,11 +265,7 @@ export default function App() {
             >
               <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
                 <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                  {activity === "containers"
-                    ? "Containers"
-                    : activity === "gitops"
-                      ? "Git Ops"
-                      : "Settings"}
+                  {sidebarTitle}
                 </h2>
                 {activity === "containers" && (
                   <button
@@ -225,19 +282,40 @@ export default function App() {
                   <ContainerList selectedId={activeTabId} onSelect={openContainer} />
                 )}
                 {activity === "gitops" && <GitOpsPanel />}
-                {activity === "settings" && <SettingsPane />}
+                {activity === "scm" && <SourceControlView />}
+                {activity === "problems" && <ProblemsPanel />}
+                {activity === "settings" && <SettingsView />}
+                {activity === "keybindings" && <KeybindingsEditor />}
               </div>
             </aside>
           )}
 
-          {/* Editor area: tabs + active pane */}
+          {/* Editor area: tabs + active pane (or split) */}
           <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
-            <ContainerTabs
-              openContainers={openContainers}
-              activeId={activeTabId}
-              onFocus={setActiveTabId}
-              onClose={closeTab}
-            />
+            <div className="flex items-stretch">
+              <div className="min-w-0 flex-1">
+                <ContainerTabs
+                  openContainers={openContainers}
+                  activeId={activeTabId}
+                  onFocus={setActiveTabId}
+                  onClose={closeTab}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={toggleSplit}
+                disabled={openTabs.length < 2 && splitId === null}
+                className={`flex items-center gap-1 border-b border-[#2b2b2b] px-3 text-[11px] transition-colors ${
+                  splitId !== null
+                    ? "bg-[#2a2d2e] text-[#e7e7e7]"
+                    : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                } disabled:opacity-40`}
+                title={splitId !== null ? "Close split" : "Split editor"}
+                aria-label={splitId !== null ? "Close split" : "Split editor"}
+              >
+                <Columns size={12} />
+              </button>
+            </div>
             {active ? (
               <div className="flex min-h-0 flex-1 flex-col">
                 {selectedUnhealthy && (
@@ -264,22 +342,27 @@ export default function App() {
                     )}
                   </div>
                 )}
-                <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                  {/* ErrorBoundary keyed on active.id so remounting the
-                      child when the user switches tabs also clears any
-                      stuck error state from the previous container. */}
-                  <ErrorBoundary
-                    key={`eb-${active.id}`}
-                    label={`the ${active.project_name} terminal`}
-                  >
-                    <TerminalPane
-                      key={active.id}
-                      containerId={active.id}
-                      containerName={active.project_name}
-                      hasClaudeCli={active.has_claude_cli}
-                    />
-                  </ErrorBoundary>
-                </div>
+                {splitContainer !== null ? (
+                  <SplitEditor
+                    primary={active}
+                    secondary={splitContainer}
+                    onCloseSecondary={() => setSplitId(null)}
+                  />
+                ) : (
+                  <div className="flex min-h-0 min-w-0 flex-1 p-2">
+                    <ErrorBoundary
+                      key={`eb-${active.id}`}
+                      label={`the ${active.project_name} terminal`}
+                    >
+                      <TerminalPane
+                        key={active.id}
+                        containerId={active.id}
+                        containerName={active.project_name}
+                        hasClaudeCli={active.has_claude_cli}
+                      />
+                    </ErrorBoundary>
+                  </div>
+                )}
               </div>
             ) : (
               <EmptyEditor
@@ -354,18 +437,6 @@ function EmptyEditor({
       >
         Discover &amp; register a container
       </button>
-    </div>
-  );
-}
-
-function SettingsPane() {
-  return (
-    <div className="p-4 text-xs text-[#858585]">
-      <p>Settings view — coming soon.</p>
-      <p className="mt-2 text-[11px]">
-        For now, use <code className="text-[#c0c0c0]">HIVE_*</code> env vars and edit{" "}
-        <code className="text-[#c0c0c0]">settings.json</code> directly.
-      </p>
     </div>
   );
 }

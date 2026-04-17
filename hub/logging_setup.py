@@ -165,3 +165,18 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     in new code — the output is the same, but the call site gets to attach
     structured fields without string-formatting."""
     return structlog.get_logger(name) if name else structlog.get_logger()
+
+
+def update_log_level(level_name: str) -> None:
+    """Re-bind root logger + structlog filtering to ``level_name``.
+
+    Used by the M10 settings PATCH endpoint so operators can change the
+    verbosity at runtime without restarting the hub. The renderer and
+    handlers stay in place — only the level cut-off moves.
+    """
+    level = getattr(logging, level_name)
+    logging.getLogger().setLevel(level)
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(level),
+        cache_logger_on_first_use=True,
+    )
