@@ -37,16 +37,26 @@ interface Props {
   containerId: number;
   containerName: string;
   hasClaudeCli: boolean;
+  /** M16: arbitrary N sessions per container are disambiguated by this
+   * id. Each session gets its own PTY (different sessionKey passed to
+   * PtyPane). Default "default" preserves the pre-M16 behaviour when
+   * the dashboard doesn't yet pass a value. */
+  sessionId?: string;
 }
 
-export function TerminalPane({ containerId, containerName, hasClaudeCli }: Props) {
+export function TerminalPane({
+  containerId,
+  containerName,
+  hasClaudeCli,
+  sessionId = "default",
+}: Props) {
   const [kind, setKind] = useState<SessionKind>(() => {
-    const stored = localStorage.getItem(`hive:terminal-last-kind:${containerId}`);
+    const stored = localStorage.getItem(`hive:terminal-last-kind:${containerId}:${sessionId}`);
     return stored === "claude" ? "claude" : "shell";
   });
   useEffect(() => {
-    localStorage.setItem(`hive:terminal-last-kind:${containerId}`, kind);
-  }, [containerId, kind]);
+    localStorage.setItem(`hive:terminal-last-kind:${containerId}:${sessionId}`, kind);
+  }, [containerId, sessionId, kind]);
 
   return (
     // w-full + min-w-0 so the pane actually fills its flex parent. Without
@@ -64,12 +74,14 @@ export function TerminalPane({ containerId, containerName, hasClaudeCli }: Props
           recordId={containerId}
           containerName={containerName}
           hidden={kind !== "shell"}
+          sessionId={sessionId}
         />
         <ClaudePaneSlot
           containerId={containerId}
           containerName={containerName}
           hidden={kind !== "claude"}
           hasClaudeCli={hasClaudeCli}
+          sessionId={sessionId}
         />
       </div>
     </div>
@@ -175,10 +187,12 @@ function ShellPaneSlot({
   recordId,
   containerName,
   hidden,
+  sessionId,
 }: {
   recordId: number;
   containerName: string;
   hidden: boolean;
+  sessionId: string;
 }) {
   return (
     <div
@@ -189,7 +203,7 @@ function ShellPaneSlot({
         recordId={recordId}
         containerName={containerName}
         command="bash"
-        sessionKey="shell"
+        sessionKey={`shell-${sessionId}`}
       />
     </div>
   );
@@ -202,19 +216,21 @@ function ClaudePaneSlot({
   containerName,
   hidden,
   hasClaudeCli,
+  sessionId,
 }: {
   containerId: number;
   containerName: string;
   hidden: boolean;
   hasClaudeCli: boolean;
+  sessionId: string;
 }) {
   const [mode, setMode] = useState<ClaudeMode>(() => {
-    const stored = localStorage.getItem(`hive:claude-mode:${containerId}`);
+    const stored = localStorage.getItem(`hive:claude-mode:${containerId}:${sessionId}`);
     return stored === "interactive" ? "interactive" : "quick";
   });
   useEffect(() => {
-    localStorage.setItem(`hive:claude-mode:${containerId}`, mode);
-  }, [containerId, mode]);
+    localStorage.setItem(`hive:claude-mode:${containerId}:${sessionId}`, mode);
+  }, [containerId, sessionId, mode]);
 
   return (
     <div
@@ -257,7 +273,7 @@ function ClaudePaneSlot({
           recordId={containerId}
           containerName={containerName}
           command="claude"
-          sessionKey="claude-interactive"
+          sessionKey={`claude-interactive-${sessionId}`}
         />
       )}
     </div>

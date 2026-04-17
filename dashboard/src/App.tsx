@@ -33,6 +33,7 @@ import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher"
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { Provisioner } from "./components/Provisioner";
 import { ResourceMonitor } from "./components/ResourceMonitor";
+import { SessionSubTabs, type SessionInfo } from "./components/SessionSubTabs";
 import { SettingsView } from "./components/SettingsView";
 import { SourceControlView } from "./components/SourceControlView";
 import { SplitEditor } from "./components/SplitEditor";
@@ -55,7 +56,34 @@ const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SECONDARY_OPEN = "hive:layout:secondary";
 const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
+const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
+const LS_ACTIVE_SESSION = "hive:layout:activeSession"; // M16
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
+
+// M16 — client-side session registry.
+// Shape: { [containerId]: [{id, name}, ...] }.
+// Default per container is a single "Main" session whose id is literally
+// "default" so pre-M16 sessionStorage labels keep resolving.
+type SessionsByContainer = Record<string, SessionInfo[]>;
+
+function isSessionsByContainer(v: unknown): v is SessionsByContainer {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every(
+    (arr) =>
+      Array.isArray(arr) &&
+      arr.every(
+        (it) =>
+          typeof it === "object" &&
+          it !== null &&
+          typeof (it as SessionInfo).id === "string" &&
+          typeof (it as SessionInfo).name === "string",
+      ),
+  );
+}
+function isActiveSessionMap(v: unknown): v is Record<string, string> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every((s) => typeof s === "string");
+}
 
 const ACTIVITY_VALUES: Activity[] = [
   "containers",
@@ -122,6 +150,18 @@ export default function App() {
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  // M16 — nested sessions per container. The active-session map tracks
+  // which session is focused within each container tab; switching
+  // containers preserves each container's selection.
+  const [sessionsByContainer, setSessionsByContainer] = useLocalStorage<SessionsByContainer>(
+    LS_SESSIONS,
+    {},
+    { validate: isSessionsByContainer },
+  );
+  const [activeSessionByContainer, setActiveSessionByContainer] = useLocalStorage<
+    Record<string, string>
+  >(LS_ACTIVE_SESSION, {}, { validate: isActiveSessionMap });
+
   const { data: containers = [], isSuccess: containersLoaded } = useQuery({
     queryKey: ["containers"],
     queryFn: listContainers,
@@ -182,6 +222,75 @@ export default function App() {
     [openTabs, containers],
   );
   const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
+
+  // M16 — session list for the active container. Auto-seed an implicit
+  // "Main" session so a freshly-opened container always has exactly one
+  // tab sitting underneath it; users never see an "empty editor with no
+  // sessions" state.
+  const activeSessions: SessionInfo[] = useMemo(() => {
+    if (active === undefined) return [];
+    const stored = sessionsByContainer[String(active.id)] ?? [];
+    if (stored.length > 0) return stored;
+    return [{ id: "default", name: "Main" }];
+  }, [active, sessionsByContainer]);
+  const activeSessionId: string = useMemo(() => {
+    if (active === undefined) return "default";
+    const stored = activeSessionByContainer[String(active.id)];
+    if (stored && activeSessions.some((s) => s.id === stored)) return stored;
+    return activeSessions[0]?.id ?? "default";
+  }, [active, activeSessionByContainer, activeSessions]);
+
+  const newSession = useCallback(() => {
+    if (active === undefined) return;
+    const existing = sessionsByContainer[String(active.id)] ?? [{ id: "default", name: "Main" }];
+    const nextNumber = existing.length + 1;
+    const rawName = window.prompt(
+      `Name for the new session on ${active.project_name}:`,
+      `session ${nextNumber}`,
+    );
+    if (rawName === null) return; // cancelled
+    const name = rawName.trim() || `session ${nextNumber}`;
+    const id = `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    setSessionsByContainer((prev) => ({
+      ...prev,
+      [String(active.id)]: [...existing, { id, name }],
+    }));
+    setActiveSessionByContainer((prev) => ({ ...prev, [String(active.id)]: id }));
+  }, [active, sessionsByContainer, setSessionsByContainer, setActiveSessionByContainer]);
+
+  const focusSession = useCallback(
+    (id: string) => {
+      if (active === undefined) return;
+      setActiveSessionByContainer((prev) => ({ ...prev, [String(active.id)]: id }));
+    },
+    [active, setActiveSessionByContainer],
+  );
+
+  const closeSession = useCallback(
+    (id: string) => {
+      if (active === undefined) return;
+      const containerKey = String(active.id);
+      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
+      // Guard: never let the user close the last session — the container
+      // tab would otherwise render an empty editor region.
+      if (existing.length <= 1) return;
+      const next = existing.filter((s) => s.id !== id);
+      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
+      if (activeSessionByContainer[containerKey] === id) {
+        setActiveSessionByContainer((prev) => ({
+          ...prev,
+          [containerKey]: next[0]?.id ?? "default",
+        }));
+      }
+    },
+    [
+      active,
+      sessionsByContainer,
+      activeSessionByContainer,
+      setSessionsByContainer,
+      setActiveSessionByContainer,
+    ],
+  );
   const splitContainer: ContainerRecord | null =
     splitId !== null && splitId !== activeTabId
       ? (containers.find((c) => c.id === splitId) ?? null)
@@ -456,19 +565,30 @@ export default function App() {
                         onCloseSecondary={() => setSplitId(null)}
                       />
                     ) : (
-                      <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                        <ErrorBoundary
-                          key={`eb-${active.id}`}
-                          label={`the ${active.project_name} terminal`}
-                        >
-                          <TerminalPane
-                            key={active.id}
-                            containerId={active.id}
-                            containerName={active.project_name}
-                            hasClaudeCli={active.has_claude_cli}
-                          />
-                        </ErrorBoundary>
-                      </div>
+                      <>
+                        {/* M16 — nested session tabs under the container. */}
+                        <SessionSubTabs
+                          sessions={activeSessions}
+                          activeId={activeSessionId}
+                          onFocus={focusSession}
+                          onClose={closeSession}
+                          onNew={newSession}
+                        />
+                        <div className="flex min-h-0 min-w-0 flex-1 p-2">
+                          <ErrorBoundary
+                            key={`eb-${active.id}-${activeSessionId}`}
+                            label={`the ${active.project_name} terminal`}
+                          >
+                            <TerminalPane
+                              key={`${active.id}-${activeSessionId}`}
+                              containerId={active.id}
+                              containerName={active.project_name}
+                              hasClaudeCli={active.has_claude_cli}
+                              sessionId={activeSessionId}
+                            />
+                          </ErrorBoundary>
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : (
