@@ -15,6 +15,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+// ``QuotaExceededError`` is silent today but M9 routes it through the
+// ``useLocalStorage`` warning channel so the user sees a single toast
+// when session writes start failing, instead of losing transcripts
+// silently. The dispatch helper has to match the event name in
+// ``useLocalStorage.ts`` — both sides are intentionally decoupled so
+// this hook doesn't import a React-only module.
+const QUOTA_EVENT = "hive:localStorage:quota";
+
+function emitQuota(key: string, error: unknown): void {
+  try {
+    window.dispatchEvent(new CustomEvent(QUOTA_EVENT, { detail: { key, error } }));
+  } catch {
+    // ignore — CustomEvent missing in very old environments.
+  }
+}
+
 export type SessionKind = "shell" | "claude";
 
 export type LineType = "input" | "output" | "error" | "system";
@@ -78,15 +94,20 @@ function load(containerId: number, kind: SessionKind): SessionState {
 }
 
 function save(state: SessionState): void {
+  const key = storageKey(state.containerId, state.kind);
   try {
     const trimmed: SessionState = {
       ...state,
       lines: state.lines.slice(-MAX_LINES_PER_SESSION),
       history: state.history.slice(0, HISTORY_MAX),
     };
-    localStorage.setItem(storageKey(state.containerId, state.kind), JSON.stringify(trimmed));
-  } catch {
-    // Storage quota exhausted or private mode — sessions remain in memory.
+    localStorage.setItem(key, JSON.stringify(trimmed));
+  } catch (err) {
+    // Storage quota exhausted or private mode — sessions remain in
+    // memory. Surface once so the user knows why a reload will drop
+    // scrollback; the rate-limiter in the watcher component keeps the
+    // toast stream bounded.
+    emitQuota(key, err);
   }
 }
 

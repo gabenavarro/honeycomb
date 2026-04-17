@@ -13,6 +13,8 @@ import { AlertTriangle } from "lucide-react";
 import { listContainers, listPRs } from "./lib/api";
 import { ContainerList } from "./components/ContainerList";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
+import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
 import { TerminalPane } from "./components/TerminalPane";
 import { ResourceMonitor } from "./components/ResourceMonitor";
 import { GitOpsPanel } from "./components/GitOpsPanel";
@@ -24,6 +26,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { AuthGate } from "./components/AuthGate";
 import { backoffRefetch } from "./hooks/useSmartPoll";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
 import type { ContainerRecord } from "./lib/types";
 
@@ -36,67 +39,41 @@ const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SECONDARY_OPEN = "hive:layout:secondary";
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
-function readNumberArray(key: string): number[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((n) => typeof n === "number") : [];
-  } catch {
-    return [];
-  }
+function isActivity(v: unknown): v is Activity {
+  return v === "containers" || v === "gitops" || v === "settings";
 }
-
-function readBool(key: string, dflt: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw === null ? dflt : raw === "true";
-  } catch {
-    return dflt;
-  }
+function isNumberArray(v: unknown): v is number[] {
+  return Array.isArray(v) && v.every((n) => typeof n === "number");
+}
+function isNullableNumber(v: unknown): v is number | null {
+  return v === null || typeof v === "number";
+}
+function isBoolean(v: unknown): v is boolean {
+  return typeof v === "boolean";
 }
 
 export default function App() {
   const queryClient = useQueryClient();
 
-  const [activity, setActivity] = useState<Activity>(() => {
-    const v = localStorage.getItem(LS_ACTIVITY);
-    return v === "gitops" || v === "containers" || v === "settings"
-      ? (v as Activity)
-      : "containers";
+  // One typed hook per persisted field — storage read + write collapsed
+  // into the hook, no explicit ``useEffect`` needed.
+  const [activity, setActivity] = useLocalStorage<Activity>(LS_ACTIVITY, "containers", {
+    validate: isActivity,
   });
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => readBool(LS_SIDEBAR_OPEN, true));
-  const [secondaryOpen, setSecondaryOpen] = useState<boolean>(() =>
-    readBool(LS_SECONDARY_OPEN, true),
-  );
-  const [openTabs, setOpenTabs] = useState<number[]>(() => readNumberArray(LS_OPEN_TABS));
-  const [activeTabId, setActiveTabId] = useState<number | null>(() => {
-    const raw = localStorage.getItem(LS_ACTIVE_TAB);
-    return raw ? Number(raw) : null;
+  const [sidebarOpen, setSidebarOpen] = useLocalStorage<boolean>(LS_SIDEBAR_OPEN, true, {
+    validate: isBoolean,
+  });
+  const [secondaryOpen, setSecondaryOpen] = useLocalStorage<boolean>(LS_SECONDARY_OPEN, true, {
+    validate: isBoolean,
+  });
+  const [openTabs, setOpenTabs] = useLocalStorage<number[]>(LS_OPEN_TABS, [], {
+    validate: isNumberArray,
+  });
+  const [activeTabId, setActiveTabId] = useLocalStorage<number | null>(LS_ACTIVE_TAB, null, {
+    validate: isNullableNumber,
   });
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-
-  // Persist layout state.
-  useEffect(() => {
-    localStorage.setItem(LS_ACTIVITY, activity);
-  }, [activity]);
-  useEffect(() => {
-    localStorage.setItem(LS_SIDEBAR_OPEN, String(sidebarOpen));
-  }, [sidebarOpen]);
-  useEffect(() => {
-    localStorage.setItem(LS_SECONDARY_OPEN, String(secondaryOpen));
-  }, [secondaryOpen]);
-  useEffect(() => {
-    localStorage.setItem(LS_OPEN_TABS, JSON.stringify(openTabs));
-  }, [openTabs]);
-  useEffect(() => {
-    if (activeTabId === null) {
-      localStorage.removeItem(LS_ACTIVE_TAB);
-    } else {
-      localStorage.setItem(LS_ACTIVE_TAB, String(activeTabId));
-    }
-  }, [activeTabId]);
 
   const { data: containers = [] } = useQuery({
     queryKey: ["containers"],
@@ -133,34 +110,43 @@ export default function App() {
   );
   const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
 
-  const openContainer = useCallback((id: number) => {
-    setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setActiveTabId(id);
-  }, []);
+  const openContainer = useCallback(
+    (id: number) => {
+      setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setActiveTabId(id);
+    },
+    [setOpenTabs, setActiveTabId],
+  );
 
-  const closeTab = useCallback((id: number) => {
-    setOpenTabs((prev) => {
-      const next = prev.filter((x) => x !== id);
-      // When closing the active tab, hop to the neighbor on the right,
-      // then the left — same semantics as VSCode.
-      setActiveTabId((current) => {
-        if (current !== id) return current;
-        const wasIdx = prev.indexOf(id);
-        if (wasIdx === -1) return current;
-        if (next.length === 0) return null;
-        return next[Math.min(wasIdx, next.length - 1)];
+  const closeTab = useCallback(
+    (id: number) => {
+      setOpenTabs((prev) => {
+        const next = prev.filter((x) => x !== id);
+        // When closing the active tab, hop to the neighbor on the
+        // right, then the left — same semantics as VSCode.
+        setActiveTabId((current) => {
+          if (current !== id) return current;
+          const wasIdx = prev.indexOf(id);
+          if (wasIdx === -1) return current;
+          if (next.length === 0) return null;
+          return next[Math.min(wasIdx, next.length - 1)];
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [setOpenTabs, setActiveTabId],
+  );
 
-  const newClaudeSession = useCallback((id: number) => {
-    // Open the container and remember that Claude is the intended kind —
-    // TerminalPane reads this LS key on mount.
-    localStorage.setItem(`${LS_LAST_KIND_PREFIX}${id}`, "claude");
-    setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setActiveTabId(id);
-  }, []);
+  const newClaudeSession = useCallback(
+    (id: number) => {
+      // Open the container and remember that Claude is the intended
+      // kind — TerminalPane reads this LS key on mount.
+      localStorage.setItem(`${LS_LAST_KIND_PREFIX}${id}`, "claude");
+      setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setActiveTabId(id);
+    },
+    [setOpenTabs, setActiveTabId],
+  );
 
   useKeyboardShortcuts({
     onCommandPalette: () => setPaletteOpen((v) => !v),
@@ -196,6 +182,8 @@ export default function App() {
 
   return (
     <AuthGate>
+      <LocalStorageQuotaWatcher />
+      <WebSocketListenerErrorWatcher />
       <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
         <div className="flex min-h-0 flex-1">
           <ActivityBar
