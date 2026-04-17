@@ -12,7 +12,14 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Columns } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Group,
+  type Layout,
+  Panel,
+  type PanelImperativeHandle,
+  Separator,
+} from "react-resizable-panels";
 
 import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { AuthGate } from "./components/AuthGate";
@@ -47,6 +54,7 @@ const LS_ACTIVITY = "hive:layout:activity";
 const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SECONDARY_OPEN = "hive:layout:secondary";
 const LS_SPLIT_ID = "hive:layout:splitId";
+const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
 const ACTIVITY_VALUES: Activity[] = [
@@ -71,6 +79,20 @@ function isNullableNumber(v: unknown): v is number | null {
 function isBoolean(v: unknown): v is boolean {
   return typeof v === "boolean";
 }
+function isLayout(v: unknown): v is Layout {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    !Array.isArray(v) &&
+    Object.values(v).every((n) => typeof n === "number")
+  );
+}
+
+const DEFAULT_ROOT_LAYOUT: Layout = {
+  "hive-sidebar": 20,
+  "hive-editor": 60,
+  "hive-secondary": 0,
+};
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -266,6 +288,29 @@ export default function App() {
                 ? "Keybindings"
                 : "Search";
 
+  // M14: keep imperative Panel handles so keybindings can drive
+  // collapse/expand without losing the user's dragged widths. The
+  // sidebarOpen/secondaryOpen booleans remain the *intent* the user
+  // expressed; the Panel's pixel widths are persisted through a
+  // ``useLocalStorage`` layout record keyed by panel id.
+  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const secondaryPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const [rootLayout, setRootLayout] = useLocalStorage<Layout>(LS_ROOT_LAYOUT, DEFAULT_ROOT_LAYOUT, {
+    validate: isLayout,
+  });
+  useEffect(() => {
+    const handle = sidebarPanelRef.current;
+    if (!handle) return;
+    if (sidebarOpen && handle.isCollapsed()) handle.expand();
+    if (!sidebarOpen && !handle.isCollapsed()) handle.collapse();
+  }, [sidebarOpen]);
+  useEffect(() => {
+    const handle = secondaryPanelRef.current;
+    if (!handle) return;
+    if (secondaryOpen && handle.isCollapsed()) handle.expand();
+    if (!secondaryOpen && !handle.isCollapsed()) handle.collapse();
+  }, [secondaryOpen]);
+
   return (
     <AuthGate>
       <LocalStorageQuotaWatcher />
@@ -284,131 +329,185 @@ export default function App() {
             onOpenCommandPalette={() => setPaletteOpen(true)}
           />
 
-          {sidebarOpen && (
-            <aside
-              aria-label="Primary sidebar"
-              className="flex w-72 shrink-0 flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
+          <Group
+            orientation="horizontal"
+            id="hive-root-layout"
+            defaultLayout={rootLayout}
+            onLayoutChanged={setRootLayout}
+            style={{ flex: 1, minWidth: 0, minHeight: 0 }}
+          >
+            <Panel
+              id="hive-sidebar"
+              panelRef={sidebarPanelRef}
+              defaultSize={20}
+              minSize={12}
+              collapsible
+              collapsedSize={0}
+              onResize={(size) => {
+                // react-resizable-panels v4 doesn't surface onCollapse/
+                // onExpand — detect them by the panel's size going to/from
+                // zero. The guard prevents the effect-driven collapse loop
+                // from fighting itself when sidebarOpen was already false.
+                const collapsedNow = size.asPercentage === 0;
+                if (collapsedNow && sidebarOpen) setSidebarOpen(false);
+                else if (!collapsedNow && !sidebarOpen) setSidebarOpen(true);
+              }}
             >
-              <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
-                <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                  {sidebarTitle}
-                </h2>
-                {activity === "containers" && (
+              <aside
+                aria-label="Primary sidebar"
+                className="flex h-full flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
+              >
+                <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
+                  <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+                    {sidebarTitle}
+                  </h2>
+                  {activity === "containers" && (
+                    <button
+                      type="button"
+                      onClick={() => setShowProvisioner(true)}
+                      className="rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#1188e0]"
+                    >
+                      + New
+                    </button>
+                  )}
+                </header>
+                <div className="flex-1 overflow-y-auto">
+                  {activity === "containers" && (
+                    <ContainerList selectedId={activeTabId} onSelect={openContainer} />
+                  )}
+                  {activity === "gitops" && <GitOpsPanel />}
+                  {activity === "scm" && <SourceControlView />}
+                  {activity === "problems" && <ProblemsPanel />}
+                  {activity === "settings" && <SettingsView />}
+                  {activity === "keybindings" && <KeybindingsEditor />}
+                </div>
+              </aside>
+            </Panel>
+
+            <Separator
+              className="w-0.5 cursor-col-resize bg-[#2b2b2b] transition-colors hover:bg-[#0078d4]"
+              aria-label="Resize primary sidebar"
+            />
+
+            <Panel id="hive-editor" minSize={30} defaultSize={60}>
+              {/* Editor area: tabs + active pane (or split) */}
+              <main className="flex h-full min-w-0 flex-col bg-[#1e1e1e]">
+                <div className="flex items-stretch">
+                  <div className="min-w-0 flex-1">
+                    <ContainerTabs
+                      openContainers={openContainers}
+                      activeId={activeTabId}
+                      onFocus={setActiveTabId}
+                      onClose={closeTab}
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowProvisioner(true)}
-                    className="rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-medium text-white hover:bg-[#1188e0]"
+                    onClick={toggleSplit}
+                    disabled={openTabs.length < 2 && splitId === null}
+                    className={`flex items-center gap-1 border-b border-[#2b2b2b] px-3 text-[11px] transition-colors ${
+                      splitId !== null
+                        ? "bg-[#2a2d2e] text-[#e7e7e7]"
+                        : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                    } disabled:opacity-40`}
+                    title={splitId !== null ? "Close split" : "Split editor"}
+                    aria-label={splitId !== null ? "Close split" : "Split editor"}
                   >
-                    + New
+                    <Columns size={12} />
                   </button>
-                )}
-              </header>
-              <div className="flex-1 overflow-y-auto">
-                {activity === "containers" && (
-                  <ContainerList selectedId={activeTabId} onSelect={openContainer} />
-                )}
-                {activity === "gitops" && <GitOpsPanel />}
-                {activity === "scm" && <SourceControlView />}
-                {activity === "problems" && <ProblemsPanel />}
-                {activity === "settings" && <SettingsView />}
-                {activity === "keybindings" && <KeybindingsEditor />}
-              </div>
-            </aside>
-          )}
-
-          {/* Editor area: tabs + active pane (or split) */}
-          <main className="flex min-w-0 flex-1 flex-col bg-[#1e1e1e]">
-            <div className="flex items-stretch">
-              <div className="min-w-0 flex-1">
-                <ContainerTabs
-                  openContainers={openContainers}
-                  activeId={activeTabId}
-                  onFocus={setActiveTabId}
-                  onClose={closeTab}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={toggleSplit}
-                disabled={openTabs.length < 2 && splitId === null}
-                className={`flex items-center gap-1 border-b border-[#2b2b2b] px-3 text-[11px] transition-colors ${
-                  splitId !== null
-                    ? "bg-[#2a2d2e] text-[#e7e7e7]"
-                    : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
-                } disabled:opacity-40`}
-                title={splitId !== null ? "Close split" : "Split editor"}
-                aria-label={splitId !== null ? "Close split" : "Split editor"}
-              >
-                <Columns size={12} />
-              </button>
-            </div>
-            {active ? (
-              <div className="flex min-h-0 flex-1 flex-col">
-                {selectedUnhealthy && (
-                  <div
-                    role="alert"
-                    className="flex items-center justify-between gap-3 border-b border-yellow-800/50 bg-yellow-900/20 px-3 py-1 text-[11px] text-yellow-300"
-                  >
-                    <span className="flex items-center gap-2">
-                      <AlertTriangle size={11} />
-                      {active.project_name} is{" "}
-                      {active.container_status !== "running"
-                        ? active.container_status
-                        : "unreachable"}
-                      .
-                    </span>
-                    {firstHealthy && firstHealthy.id !== active.id && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTabId(firstHealthy.id)}
-                        className="rounded bg-yellow-800/40 px-2 py-0.5 hover:bg-yellow-700/40"
+                </div>
+                {active ? (
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    {selectedUnhealthy && (
+                      <div
+                        role="alert"
+                        className="flex items-center justify-between gap-3 border-b border-yellow-800/50 bg-yellow-900/20 px-3 py-1 text-[11px] text-yellow-300"
                       >
-                        Switch to {firstHealthy.project_name}
-                      </button>
+                        <span className="flex items-center gap-2">
+                          <AlertTriangle size={11} />
+                          {active.project_name} is{" "}
+                          {active.container_status !== "running"
+                            ? active.container_status
+                            : "unreachable"}
+                          .
+                        </span>
+                        {firstHealthy && firstHealthy.id !== active.id && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTabId(firstHealthy.id)}
+                            className="rounded bg-yellow-800/40 px-2 py-0.5 hover:bg-yellow-700/40"
+                          >
+                            Switch to {firstHealthy.project_name}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {splitContainer !== null ? (
+                      <SplitEditor
+                        primary={active}
+                        secondary={splitContainer}
+                        onCloseSecondary={() => setSplitId(null)}
+                      />
+                    ) : (
+                      <div className="flex min-h-0 min-w-0 flex-1 p-2">
+                        <ErrorBoundary
+                          key={`eb-${active.id}`}
+                          label={`the ${active.project_name} terminal`}
+                        >
+                          <TerminalPane
+                            key={active.id}
+                            containerId={active.id}
+                            containerName={active.project_name}
+                            hasClaudeCli={active.has_claude_cli}
+                          />
+                        </ErrorBoundary>
+                      </div>
                     )}
                   </div>
-                )}
-                {splitContainer !== null ? (
-                  <SplitEditor
-                    primary={active}
-                    secondary={splitContainer}
-                    onCloseSecondary={() => setSplitId(null)}
-                  />
                 ) : (
-                  <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                    <ErrorBoundary
-                      key={`eb-${active.id}`}
-                      label={`the ${active.project_name} terminal`}
-                    >
-                      <TerminalPane
-                        key={active.id}
-                        containerId={active.id}
-                        containerName={active.project_name}
-                        hasClaudeCli={active.has_claude_cli}
-                      />
-                    </ErrorBoundary>
-                  </div>
+                  <EmptyEditor
+                    onOpenProvisioner={() => setShowProvisioner(true)}
+                    hasRegistered={containers.length > 0}
+                  />
                 )}
-              </div>
-            ) : (
-              <EmptyEditor
-                onOpenProvisioner={() => setShowProvisioner(true)}
-                hasRegistered={containers.length > 0}
-              />
-            )}
-          </main>
+              </main>
+            </Panel>
 
-          {secondaryOpen && active && (
-            <aside
-              aria-label="Secondary panel"
-              className="w-64 shrink-0 overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
+            <Separator
+              className="w-0.5 cursor-col-resize bg-[#2b2b2b] transition-colors hover:bg-[#0078d4]"
+              aria-label="Resize secondary panel"
+            />
+
+            <Panel
+              id="hive-secondary"
+              panelRef={secondaryPanelRef}
+              defaultSize={0}
+              minSize={14}
+              collapsible
+              collapsedSize={0}
+              onResize={(size) => {
+                const collapsedNow = size.asPercentage === 0;
+                if (collapsedNow && secondaryOpen) setSecondaryOpen(false);
+                else if (!collapsedNow && !secondaryOpen) setSecondaryOpen(true);
+              }}
             >
-              <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                Resources
-              </h2>
-              <ResourceMonitor containerId={active.id} />
-            </aside>
-          )}
+              <aside
+                aria-label="Secondary panel"
+                className="h-full overflow-y-auto border-l border-[#2b2b2b] bg-[#1e1e1e] p-3"
+              >
+                <h2 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+                  Resources
+                </h2>
+                {active ? (
+                  <ResourceMonitor containerId={active.id} />
+                ) : (
+                  <p className="text-[11px] text-[#606060]">
+                    Open a container to see its CPU, memory, and GPU bars here.
+                  </p>
+                )}
+              </aside>
+            </Panel>
+          </Group>
         </div>
 
         <StatusBar
