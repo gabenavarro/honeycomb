@@ -11,7 +11,7 @@
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Columns } from "lucide-react";
+import { Columns } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Group,
@@ -36,17 +36,18 @@ import { KeybindingsEditor } from "./components/KeybindingsEditor";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
 import { ProblemsPanel } from "./components/ProblemsPanel";
 import { Provisioner } from "./components/Provisioner";
+import { SessionSplitArea } from "./components/SessionSplitArea";
 import { SessionSubTabs, type SessionInfo } from "./components/SessionSubTabs";
 import { SettingsView } from "./components/SettingsView";
 import { SourceControlView } from "./components/SourceControlView";
 import { SplitEditor } from "./components/SplitEditor";
 import { StaleHubWatcher } from "./components/StaleHubWatcher";
 import { StatusBar } from "./components/StatusBar";
-import { TerminalPane } from "./components/TerminalPane";
 import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
+import { useToasts } from "./hooks/useToasts";
 import { backoffRefetch } from "./hooks/useSmartPoll";
 import { listContainerSessions, listContainers, listPRs, listProblems } from "./lib/api";
 import type { ContainerRecord } from "./lib/types";
@@ -63,6 +64,7 @@ const LS_ROOT_LAYOUT_BY_CONTAINER = "hive:layout:rootPanelsByContainer"; // M21 
 const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
 const LS_ACTIVE_SESSION = "hive:layout:activeSession"; // M16
 const LS_FS_PATHS = "hive:layout:fsPaths"; // M17 — per-container browsed path
+const LS_SESSION_SPLIT = "hive:layout:sessionSplit"; // M22.4 — per-container secondary session
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
 // M16 — client-side session registry.
@@ -90,6 +92,10 @@ function isActiveSessionMap(v: unknown): v is Record<string, string> {
   return Object.values(v).every((s) => typeof s === "string");
 }
 function isFsPathMap(v: unknown): v is Record<string, string> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v).every((s) => typeof s === "string");
+}
+function isSessionSplitMap(v: unknown): v is Record<string, string> {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   return Object.values(v).every((s) => typeof s === "string");
 }
@@ -176,6 +182,12 @@ export default function App() {
     {},
     { validate: isFsPathMap },
   );
+  // M22.4 — drag a session tab onto the editor to pin a second session
+  // next to the primary one. One split per container; clearing is
+  // explicit (close button on the secondary pane).
+  const [sessionSplitByContainer, setSessionSplitByContainer] = useLocalStorage<
+    Record<string, string>
+  >(LS_SESSION_SPLIT, {}, { validate: isSessionSplitMap });
 
   const { data: containers = [], isSuccess: containersLoaded } = useQuery({
     queryKey: ["containers"],
@@ -285,6 +297,37 @@ export default function App() {
     if (active === undefined) return "";
     return fsPathByContainer[String(active.id)] ?? "";
   }, [active, fsPathByContainer]);
+
+  // M22.4 — validated split session for the active container. Drops
+  // are silently ignored when the target session no longer exists
+  // (e.g. user closed it before releasing the drag).
+  const activeSplitSessionId: string | null = useMemo(() => {
+    if (active === undefined) return null;
+    const id = sessionSplitByContainer[String(active.id)];
+    if (!id) return null;
+    if (!activeSessions.some((s) => s.id === id)) return null;
+    if (id === activeSessionId) return null;
+    return id;
+  }, [active, sessionSplitByContainer, activeSessions, activeSessionId]);
+
+  const setActiveSplitSession = useCallback(
+    (sessionId: string) => {
+      if (active === undefined) return;
+      setSessionSplitByContainer((prev) => ({ ...prev, [String(active.id)]: sessionId }));
+    },
+    [active, setSessionSplitByContainer],
+  );
+
+  const clearActiveSplitSession = useCallback(() => {
+    if (active === undefined) return;
+    setSessionSplitByContainer((prev) => {
+      const key = String(active.id);
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, [active, setSessionSplitByContainer]);
 
   const setActiveFsPath = useCallback(
     (path: string) => {
@@ -448,17 +491,40 @@ export default function App() {
   });
   const hasLiveAttachedPty =
     liveSessions?.sessions.some((s) => s.attached || s.detached_for_seconds !== null) ?? false;
-  const selectedUnhealthy =
-    active !== undefined &&
-    (active.container_status !== "running" ||
-      (active.agent_status === "unreachable" && active.agent_expected && !hasLiveAttachedPty));
-  const firstHealthy = useMemo(
-    () =>
-      openContainers.find(
-        (c) => c.container_status === "running" && c.agent_status !== "unreachable",
-      ),
-    [openContainers],
-  );
+  void hasLiveAttachedPty; // retained for reference; banner removed in M22.3
+
+  // M22.3 — emit one-shot toasts when a container's agent_status
+  // transitions into / out of ``unreachable``. The persistent dot on
+  // the container tab (M20) remains the steady-state indicator; the
+  // toast is just the event, which is also recorded in the bell
+  // history so the user can review later.
+  const { toast } = useToasts();
+  const prevAgentStatusRef = useRef<Map<number, string>>(new Map());
+  useEffect(() => {
+    const prev = prevAgentStatusRef.current;
+    for (const c of containers) {
+      const wasStatus = prev.get(c.id);
+      if (wasStatus === undefined) {
+        prev.set(c.id, c.agent_status);
+        continue;
+      }
+      if (wasStatus === c.agent_status) continue;
+      prev.set(c.id, c.agent_status);
+      // Only notify when the record actually expected an agent —
+      // Discover-registered containers with agent_expected=false live
+      // on docker_exec and don't deserve a "recovery" message either.
+      if (!c.agent_expected) continue;
+      if (c.agent_status === "unreachable") {
+        toast(
+          "warning",
+          `${c.project_name} is unreachable`,
+          "The hive-agent hasn't heartbeated. Container still usable via docker_exec.",
+        );
+      } else if (wasStatus === "unreachable") {
+        toast("info", `${c.project_name} is reachable again`, "Agent heartbeat resumed.");
+      }
+    }
+  }, [containers, toast]);
 
   const sidebarTitle =
     activity === "containers"
@@ -534,13 +600,21 @@ export default function App() {
           <ActivityBar
             active={activity}
             onChange={(a) => {
-              setActivity(a);
-              setSidebarOpen(true);
+              // M22.2 — only auto-open the sidebar when switching to a
+              // different activity. Clicking the already-active icon
+              // leaves ``sidebarOpen`` alone so the accompanying
+              // double-click gesture can toggle cleanly without the
+              // intermediate single-clicks fighting it.
+              if (a !== activity) {
+                setActivity(a);
+                setSidebarOpen(true);
+              }
             }}
             containerCount={containers.length}
             prCount={prs.length}
             problemCount={problemCount}
             onOpenCommandPalette={() => setPaletteOpen(true)}
+            onToggleSidebar={() => setSidebarOpen((v) => !v)}
           />
 
           <Group
@@ -584,9 +658,17 @@ export default function App() {
                 hidden={!sidebarOpen}
                 className="flex h-full flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
               >
-                <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
-                  <h2 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                    {sidebarTitle}
+                <header className="flex items-center justify-between gap-2 border-b border-[#2b2b2b] px-3 py-1.5">
+                  <h2 className="flex min-w-0 items-baseline gap-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+                    <span className="shrink-0">{sidebarTitle}</span>
+                    {activity === "files" && activeFsPath && (
+                      <span
+                        className="min-w-0 truncate font-mono text-[10px] tracking-normal text-[#c0c0c0] normal-case"
+                        title={activeFsPath}
+                      >
+                        {activeFsPath}
+                      </span>
+                    )}
                   </h2>
                   {activity === "containers" && (
                     // M21 A — more prominent primary-colour CTA so the
@@ -665,30 +747,10 @@ export default function App() {
                 </div>
                 {active ? (
                   <div className="flex min-h-0 flex-1 flex-col">
-                    {selectedUnhealthy && (
-                      <div
-                        role="alert"
-                        className="flex items-center justify-between gap-3 border-b border-yellow-800/50 bg-yellow-900/20 px-3 py-1 text-[11px] text-yellow-300"
-                      >
-                        <span className="flex items-center gap-2">
-                          <AlertTriangle size={11} />
-                          {active.project_name} is{" "}
-                          {active.container_status !== "running"
-                            ? active.container_status
-                            : "unreachable"}
-                          .
-                        </span>
-                        {firstHealthy && firstHealthy.id !== active.id && (
-                          <button
-                            type="button"
-                            onClick={() => setActiveTabId(firstHealthy.id)}
-                            className="rounded bg-yellow-800/40 px-2 py-0.5 hover:bg-yellow-700/40"
-                          >
-                            Switch to {firstHealthy.project_name}
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {/* M22.3 removed the always-visible yellow banner —
+                        the ``AgentStatusDot`` on the container tab is
+                        the steady-state indicator, and a transition
+                        toast is emitted above when agent_status flips. */}
                     {splitContainer !== null ? (
                       <SplitEditor
                         primary={active}
@@ -731,20 +793,16 @@ export default function App() {
                             </ErrorBoundary>
                           </div>
                         ) : (
-                          <div className="flex min-h-0 min-w-0 flex-1 p-2">
-                            <ErrorBoundary
-                              key={`eb-${active.id}-${activeSessionId}`}
-                              label={`the ${active.project_name} terminal`}
-                            >
-                              <TerminalPane
-                                key={`${active.id}-${activeSessionId}`}
-                                containerId={active.id}
-                                containerName={active.project_name}
-                                hasClaudeCli={active.has_claude_cli}
-                                sessionId={activeSessionId}
-                              />
-                            </ErrorBoundary>
-                          </div>
+                          <SessionSplitArea
+                            containerId={active.id}
+                            containerName={active.project_name}
+                            hasClaudeCli={active.has_claude_cli}
+                            sessions={activeSessions}
+                            primarySessionId={activeSessionId}
+                            splitSessionId={activeSplitSessionId}
+                            onSetSplit={setActiveSplitSession}
+                            onClearSplit={clearActiveSplitSession}
+                          />
                         )}
                       </>
                     )}

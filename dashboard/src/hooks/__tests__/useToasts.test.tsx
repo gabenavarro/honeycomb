@@ -47,6 +47,89 @@ describe("ToastProvider", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Failure");
   });
 
+  it("appends toast to history and increments unreadCount", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      api!.toast("info", "first", undefined, 60_000);
+      api!.toast("warning", "second");
+    });
+    expect(api!.history).toHaveLength(2);
+    expect(api!.history[0].title).toBe("first");
+    expect(api!.history[1].title).toBe("second");
+    expect(api!.unreadCount).toBe(2);
+  });
+
+  it("caps history at 50 entries (ring-buffer drops oldest)", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      for (let i = 0; i < 55; i++) api!.toast("info", `t${i}`, undefined, 60_000);
+    });
+    expect(api!.history).toHaveLength(50);
+    // Oldest 5 were dropped; first surviving entry should be t5.
+    expect(api!.history[0].title).toBe("t5");
+    expect(api!.history[49].title).toBe("t54");
+  });
+
+  it("markHistoryRead clears unreadCount but leaves history intact", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      api!.toast("info", "a");
+      api!.toast("info", "b");
+    });
+    expect(api!.unreadCount).toBe(2);
+    act(() => api!.markHistoryRead());
+    expect(api!.unreadCount).toBe(0);
+    expect(api!.history).toHaveLength(2);
+  });
+
+  it("clearHistory empties history and resets unreadCount", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      api!.toast("error", "boom");
+    });
+    act(() => api!.clearHistory());
+    expect(api!.history).toHaveLength(0);
+    expect(api!.unreadCount).toBe(0);
+  });
+
+  it("applies default duration by kind when no override is given", () => {
+    let api: ReturnType<typeof useToasts> | null = null;
+    render(
+      <ToastProvider>
+        <TestHarness onReady={(ctx) => (api = ctx)} />
+      </ToastProvider>,
+    );
+    act(() => {
+      api!.toast("info", "i");
+      api!.toast("warning", "w");
+      api!.toast("error", "e");
+    });
+    const [info, warn, err] = api!.history;
+    expect(info.durationMs).toBe(3000);
+    expect(warn.durationMs).toBe(5000);
+    expect(err.durationMs).toBe(8000);
+  });
+
   it("dismiss flips the toast to data-state=closed", async () => {
     let api: ReturnType<typeof useToasts> | null = null;
     render(

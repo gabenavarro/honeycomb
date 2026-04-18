@@ -39,25 +39,88 @@ export interface ToastItem {
   open: boolean;
 }
 
+/** M22.3 — persisted log of everything the toast system has fired,
+ * alive or dismissed. Consumed by the ``NotificationCenter`` bell in
+ * the StatusBar. Capped at 50 entries — the user never wants to scroll
+ * forever, and we clear on demand. */
+export interface ToastRecord extends ToastItem {
+  /** Wall-clock when the toast was created. Cheaper than holding Date
+   * objects in the list; we format at render time. */
+  created_at: string;
+}
+
 interface ToastContextValue {
   toast: (kind: ToastKind, title: string, body?: string, durationMs?: number) => number;
   dismiss: (id: number) => void;
+  /** Full history (oldest first). Capped at 50 entries; older entries
+   * are dropped as new ones arrive. */
+  history: ToastRecord[];
+  /** Manually wipe the history. Does not dismiss live toasts. */
+  clearHistory: () => void;
+  /** Mark every history entry as seen so the unread badge clears. */
+  markHistoryRead: () => void;
+  /** Number of history entries added since the last ``markHistoryRead``. */
+  unreadCount: number;
 }
+
+// M22.3 — per-kind default duration. Callers can still override with
+// an explicit ``durationMs`` arg. Errors linger longest so the user has
+// time to read them; info/success auto-dismiss fastest because they
+// usually confirm a completed action.
+const DEFAULT_DURATIONS: Record<ToastKind, number> = {
+  info: 3000,
+  success: 3000,
+  warning: 5000,
+  error: 8000,
+};
+
+const HISTORY_CAP = 50;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [history, setHistory] = useState<ToastRecord[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const nextIdRef = useRef(1);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, open: false } : t)));
   }, []);
 
-  const toast = useCallback((kind: ToastKind, title: string, body?: string, durationMs = 5000) => {
-    const id = nextIdRef.current++;
-    setToasts((prev) => [...prev, { id, kind, title, body, durationMs, open: true }]);
-    return id;
+  const toast = useCallback(
+    (kind: ToastKind, title: string, body?: string, durationMs?: number) => {
+      const id = nextIdRef.current++;
+      const resolvedDuration = durationMs ?? DEFAULT_DURATIONS[kind];
+      const record: ToastRecord = {
+        id,
+        kind,
+        title,
+        body,
+        durationMs: resolvedDuration,
+        open: true,
+        created_at: new Date().toISOString(),
+      };
+      setToasts((prev) => [...prev, record]);
+      setHistory((prev) => {
+        const next = [...prev, record];
+        // Ring-buffer discipline — drop from the front when we exceed
+        // the cap so .slice() returns most-recent-last.
+        return next.length > HISTORY_CAP ? next.slice(next.length - HISTORY_CAP) : next;
+      });
+      setUnreadCount((n) => n + 1);
+      return id;
+    },
+    [],
+  );
+
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    setUnreadCount(0);
+  }, []);
+
+  const markHistoryRead = useCallback(() => {
+    setUnreadCount(0);
   }, []);
 
   // When Radix finishes its close transition (open=false for a bit
@@ -71,7 +134,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [toasts]);
 
-  const value = useMemo(() => ({ toast, dismiss }), [toast, dismiss]);
+  const value = useMemo(
+    () => ({ toast, dismiss, history, clearHistory, markHistoryRead, unreadCount }),
+    [toast, dismiss, history, clearHistory, markHistoryRead, unreadCount],
+  );
 
   return (
     <ToastContext.Provider value={value}>

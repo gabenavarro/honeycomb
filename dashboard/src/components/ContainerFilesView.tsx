@@ -17,10 +17,22 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUp, ChevronDown, ChevronRight, FileText, Folder, Link2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { listContainerDirectory } from "../lib/api";
 import type { DirectoryListing, FsEntry, FsEntryKind } from "../lib/types";
+
+/** M22.1 — folders sort before files; both groups case-insensitive. */
+function sortEntries(entries: FsEntry[]): FsEntry[] {
+  const dirs: FsEntry[] = [];
+  const files: FsEntry[] = [];
+  for (const e of entries) (e.kind === "dir" ? dirs : files).push(e);
+  const cmp = (a: FsEntry, b: FsEntry) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  dirs.sort(cmp);
+  files.sort(cmp);
+  return [...dirs, ...files];
+}
 
 interface Props {
   containerId: number | null;
@@ -61,13 +73,10 @@ export function ContainerFilesView({ containerId, path, onNavigate, onOpenFile }
   const parent = parentOf(path);
 
   return (
+    // M22.2 — the outer App.tsx sidebar header already labels the
+    // activity and shows the path; this component stays headerless to
+    // avoid a duplicate "FILES … /path" strip.
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-[#2b2b2b] px-3 py-1.5">
-        <h3 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">Files</h3>
-        <span className="truncate font-mono text-[11px] text-[#858585]" title={path}>
-          {path}
-        </span>
-      </header>
       <div className="flex-1 overflow-y-auto">
         {parent !== null && (
           <button
@@ -95,21 +104,15 @@ interface NodeProps {
   containerId: number;
   path: string;
   depth: number;
-  /** Starts expanded for the root node; every child starts collapsed. */
+  /** Fully controlled — whoever owns this node decides when to fetch.
+   * The root passes ``open`` literal true; child ``Row``s pass their
+   * own chevron state down so toggling updates the query instantly. */
   open: boolean;
   onNavigate: (path: string) => void;
   onOpenFile: (path: string) => void;
 }
 
-function DirectoryNode({
-  containerId,
-  path,
-  depth,
-  open: openInitial,
-  onNavigate,
-  onOpenFile,
-}: NodeProps) {
-  const [open, setOpen] = useState(openInitial);
+function DirectoryNode({ containerId, path, depth, open, onNavigate, onOpenFile }: NodeProps) {
   const { data, error, isFetching } = useQuery<DirectoryListing>({
     queryKey: ["fs:list", containerId, path],
     queryFn: () => listContainerDirectory(containerId, path),
@@ -118,9 +121,11 @@ function DirectoryNode({
     refetchInterval: open ? 15_000 : false,
   });
 
+  if (!open) return null;
+
   return (
     <div>
-      {open && isFetching && !data && (
+      {isFetching && !data && (
         <p
           className="px-3 py-1 text-[11px] text-[#858585]"
           style={{ paddingLeft: `${12 + depth * 12}px` }}
@@ -128,7 +133,7 @@ function DirectoryNode({
           Loading…
         </p>
       )}
-      {open && error && (
+      {error && (
         <div
           className="px-3 py-1 text-[11px] text-red-400"
           style={{ paddingLeft: `${12 + depth * 12}px` }}
@@ -141,19 +146,17 @@ function DirectoryNode({
           )}
         </div>
       )}
-      {open &&
-        data?.entries.map((entry) => (
-          <Row
-            key={entry.name}
-            entry={entry}
-            containerId={containerId}
-            parentPath={path}
-            depth={depth}
-            onNavigate={onNavigate}
-            onOpenFile={onOpenFile}
-          />
-        ))}
-      {open && data?.truncated && (
+      {data && (
+        <SortedRows
+          entries={data.entries}
+          containerId={containerId}
+          parentPath={path}
+          depth={depth}
+          onNavigate={onNavigate}
+          onOpenFile={onOpenFile}
+        />
+      )}
+      {data?.truncated && (
         <p
           className="px-3 py-1 text-[10px] text-yellow-500"
           style={{ paddingLeft: `${12 + depth * 12}px` }}
@@ -161,12 +164,40 @@ function DirectoryNode({
           Listing truncated at 1000 entries.
         </p>
       )}
-      {/* Provide a way to collapse the root; for child nodes the Row
-          component owns its own expand/collapse via the chevron. */}
-      {open && depth === 0 && (
-        <button type="button" onClick={() => setOpen(false)} hidden aria-hidden="true" />
-      )}
     </div>
+  );
+}
+
+function SortedRows({
+  entries,
+  containerId,
+  parentPath,
+  depth,
+  onNavigate,
+  onOpenFile,
+}: {
+  entries: FsEntry[];
+  containerId: number;
+  parentPath: string;
+  depth: number;
+  onNavigate: (path: string) => void;
+  onOpenFile: (path: string) => void;
+}) {
+  const sorted = useMemo(() => sortEntries(entries), [entries]);
+  return (
+    <>
+      {sorted.map((entry) => (
+        <Row
+          key={entry.name}
+          entry={entry}
+          containerId={containerId}
+          parentPath={parentPath}
+          depth={depth}
+          onNavigate={onNavigate}
+          onOpenFile={onOpenFile}
+        />
+      ))}
+    </>
   );
 }
 
@@ -185,46 +216,70 @@ function Row({
   onNavigate: (path: string) => void;
   onOpenFile: (path: string) => void;
 }) {
+  // M22.1 — a directory row exposes two distinct gestures:
+  //   chevron click    → toggle inline expansion (cheap peek)
+  //   double-click name → navigate INTO the folder (new root)
+  // A file row keeps single-click-to-open. Previously the whole row
+  // did both expansion and navigation, which made the chevron useless.
   const [open, setOpen] = useState(false);
   const childPath = joinPath(parentPath, entry.name);
   const isDir = entry.kind === "dir";
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => {
-          if (isDir) {
-            setOpen((v) => !v);
-            onNavigate(childPath);
-          } else {
-            onOpenFile(childPath);
-          }
-        }}
-        className="flex w-full items-center gap-1 text-left text-[11px] text-[#cccccc] hover:bg-[#2a2a2a]"
+      <div
+        className="flex items-center gap-1 text-[11px] text-[#cccccc] hover:bg-[#2a2a2a]"
         style={{
-          paddingLeft: `${12 + depth * 12}px`,
+          paddingLeft: `${4 + depth * 12}px`,
           paddingRight: "12px",
           paddingTop: "2px",
           paddingBottom: "2px",
         }}
-        title={entry.target ? `${entry.name} → ${entry.target}` : entry.name}
+        title={
+          isDir
+            ? `${entry.name} — double-click to navigate into, chevron to expand in place`
+            : entry.target
+              ? `${entry.name} → ${entry.target}`
+              : entry.name
+        }
       >
         {isDir ? (
-          open ? (
-            <ChevronDown size={10} className="shrink-0 text-[#858585]" />
-          ) : (
-            <ChevronRight size={10} className="shrink-0 text-[#858585]" />
-          )
+          <button
+            type="button"
+            onClick={(e) => {
+              // Stop propagation so a parent row doesn't also toggle.
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-[#3a3a3a]"
+            aria-label={open ? `Collapse ${entry.name}` : `Expand ${entry.name}`}
+          >
+            {open ? (
+              <ChevronDown size={10} className="text-[#858585]" />
+            ) : (
+              <ChevronRight size={10} className="text-[#858585]" />
+            )}
+          </button>
         ) : (
-          <span className="inline-block w-[10px]" aria-hidden="true" />
+          <span className="inline-block h-4 w-4 shrink-0" aria-hidden="true" />
         )}
-        {kindIcon(entry.kind)}
-        <span className="truncate">{entry.name}</span>
-        {entry.kind === "file" && (
-          <span className="ml-auto shrink-0 text-[10px] text-[#606060]">{entry.size}</span>
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!isDir) onOpenFile(childPath);
+          }}
+          onDoubleClick={() => {
+            if (isDir) onNavigate(childPath);
+          }}
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4] focus-visible:ring-inset"
+        >
+          {kindIcon(entry.kind)}
+          <span className="truncate">{entry.name}</span>
+          {entry.kind === "file" && (
+            <span className="ml-auto shrink-0 text-[10px] text-[#606060]">{entry.size}</span>
+          )}
+        </button>
+      </div>
       {isDir && (
         <DirectoryNode
           containerId={containerId}

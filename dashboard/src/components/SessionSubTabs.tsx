@@ -174,6 +174,11 @@ function SessionTab({
           if (editing) return;
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/x-hive-session", session.id);
+          // M22.4 — the same drag also lets the user split the editor
+          // pane by dropping on the main area. A separate MIME keeps
+          // the split handler from firing when a user only meant to
+          // reorder tabs within the strip.
+          e.dataTransfer.setData("text/x-hive-session-split", session.id);
           onDragStart(session.id);
         }}
         onDragEnter={() => onDragEnter(session.id)}
