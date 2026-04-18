@@ -1,10 +1,20 @@
-/** Unreachable-banner suppression for non-agent-expected containers (M13).
+/** Unreachable notice — suppression for non-agent-expected containers
+ * (M13), post-M22.3 rewrite.
  *
- * Regression guard: a container registered via the Discover tab with
- * ``agent_expected=false`` must not surface the yellow
- * "{name} is unreachable" banner, even when its ``agent_status`` is
- * ``unreachable`` (which is the legitimate steady state for a container
- * that never installed hive-agent).
+ * M22.3 removed the always-visible yellow banner in favour of a
+ * transition toast + a persistent ``AgentStatusDot`` on the container
+ * tab. The regression we still want to guard is the same: a container
+ * registered via Discover with ``agent_expected=false`` must never show
+ * "is unreachable" anywhere in the UI, even when its ``agent_status``
+ * is literally "unreachable" (the steady state for Discover-registered
+ * containers that never installed hive-agent).
+ *
+ * Post-M22.3: when ``agent_expected=true`` *and* the record is already
+ * unreachable at first load, no toast fires (the transition diff sees
+ * no change from the previous render), so asserting "banner renders"
+ * is no longer the right test. We assert the opposite side (no banner
+ * for agent_expected=false) and leave the toast-on-transition flow to
+ * a dedicated Vitest unit test where the container list can mutate.
  */
 
 import { expect, test } from "@playwright/test";
@@ -83,7 +93,15 @@ test.describe("Unreachable banner — agent_expected=false", () => {
     await expect(page.getByText(/is unreachable/i)).toHaveCount(0);
   });
 
-  test("DOES render the banner when agent_expected is true", async ({ context, page }) => {
+  test("does NOT render a banner even when agent_expected is true (M22.3)", async ({
+    context,
+    page,
+  }) => {
+    // M22.3 replaced the always-visible banner with a transition toast
+    // and the tab-level AgentStatusDot. A first-load record that is
+    // already ``unreachable`` never fires a transition (nothing to
+    // compare against), so the UI should be banner-free regardless of
+    // ``agent_expected``.
     await context.route("**/api/containers", (route) =>
       route.fulfill({
         status: 200,
@@ -93,6 +111,7 @@ test.describe("Unreachable banner — agent_expected=false", () => {
     );
     await page.goto("/");
 
-    await expect(page.getByText(/is unreachable/i)).toBeVisible();
+    await expect(page.getByText("kibra-peptide-analysis").first()).toBeVisible();
+    await expect(page.getByText(/is unreachable/i)).toHaveCount(0);
   });
 });

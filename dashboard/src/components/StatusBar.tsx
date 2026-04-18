@@ -14,6 +14,7 @@ import { Cpu, GitBranch } from "lucide-react";
 import { listContainers } from "../lib/api";
 import { backoffRefetch } from "../hooks/useSmartPoll";
 import { ConnectivityChip } from "./ConnectivityChip";
+import { NotificationCenter } from "./NotificationCenter";
 import { ResourcePill } from "./ResourcePill";
 
 interface StatusBarProps {
@@ -49,8 +50,9 @@ export function StatusBar({ activeContainerId, activeContainerName }: StatusBarP
       </div>
       <div className="flex items-center gap-3">
         <ResourcePill containerId={activeContainerId} containerName={activeContainerName} />
+        <NotificationCenter />
         {activeContainerName && <span>{activeContainerName}</span>}
-        <span className="opacity-75">Ctrl+K · Ctrl+B · Ctrl+` · Ctrl+W · ?</span>
+        <span className="opacity-75">Ctrl+K · Ctrl+B · ?</span>
       </div>
     </footer>
   );

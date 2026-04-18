@@ -29,6 +29,10 @@ interface Props {
   prCount: number;
   problemCount?: number;
   onOpenCommandPalette: () => void;
+  /** M22.2 — double-click any activity icon toggles the sidebar. The
+   * single-click ``onChange`` still fires; double-click is an
+   * additive "also collapse" gesture matching VSCode. */
+  onToggleSidebar?: () => void;
 }
 
 interface Item {
@@ -95,6 +99,7 @@ export function ActivityBar({
   prCount,
   problemCount = 0,
   onOpenCommandPalette,
+  onToggleSidebar,
 }: Props) {
   return (
     <nav
@@ -116,7 +121,8 @@ export function ActivityBar({
                     onChange(item.id);
                   }
                 }}
-                title={`${item.label} (${item.shortcut})`}
+                onDoubleClick={() => onToggleSidebar?.()}
+                title={`${item.label} (${item.shortcut}) — double-click to toggle sidebar`}
                 aria-label={item.label}
                 aria-pressed={isActive}
                 className={`relative flex h-10 w-10 items-center justify-center rounded transition-colors ${
@@ -141,7 +147,8 @@ export function ActivityBar({
           <button
             type="button"
             onClick={() => onChange("keybindings")}
-            title="Keybindings"
+            onDoubleClick={() => onToggleSidebar?.()}
+            title="Keybindings — double-click to toggle sidebar"
             aria-label="Keybindings"
             aria-pressed={active === "keybindings"}
             className={`flex h-10 w-10 items-center justify-center rounded transition-colors ${
@@ -157,7 +164,8 @@ export function ActivityBar({
           <button
             type="button"
             onClick={() => onChange("settings")}
-            title="Settings"
+            onDoubleClick={() => onToggleSidebar?.()}
+            title="Settings — double-click to toggle sidebar"
             aria-label="Settings"
             aria-pressed={active === "settings"}
             className={`flex h-10 w-10 items-center justify-center rounded transition-colors ${
