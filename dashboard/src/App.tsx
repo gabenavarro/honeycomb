@@ -49,7 +49,14 @@ import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
 import { useToasts } from "./hooks/useToasts";
 import { backoffRefetch } from "./hooks/useSmartPoll";
-import { listContainerSessions, listContainers, listPRs, listProblems } from "./lib/api";
+import { dispatchPretype } from "./lib/pretypeBus";
+import {
+  getContainerWorkdir,
+  listContainerSessions,
+  listContainers,
+  listPRs,
+  listProblems,
+} from "./lib/api";
 import type { ContainerRecord } from "./lib/types";
 
 // Storage keys for layout state. Remembering these across reloads is
@@ -249,6 +256,16 @@ export default function App() {
     [openTabs, containers],
   );
   const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
+
+  // M23 — WORKDIR for the active container, fed to the palette for
+  // suggestion parsing + the walk endpoint's default root.
+  const { data: activeWorkdirData } = useQuery({
+    queryKey: ["workdir", active?.id ?? 0],
+    queryFn: () => getContainerWorkdir(active!.id),
+    enabled: active !== undefined,
+    staleTime: 60_000,
+  });
+  const activeWorkdir = activeWorkdirData?.path ?? "";
 
   // M16 — session list for the active container. Auto-seed an implicit
   // "Main" session so a freshly-opened container always has exactly one
@@ -831,6 +848,8 @@ export default function App() {
           open={paletteOpen}
           onClose={() => setPaletteOpen(false)}
           containers={containers}
+          activeContainerId={active?.id ?? null}
+          activeWorkdir={activeWorkdir}
           onFocusContainer={openContainer}
           onCloseContainer={closeTab}
           onNewClaudeSession={newClaudeSession}
@@ -839,6 +858,23 @@ export default function App() {
             setSidebarOpen(true);
           }}
           onOpenProvisioner={() => setShowProvisioner(true)}
+          onOpenFile={(path) => {
+            if (active !== undefined) {
+              setOpenedFile(path);
+            }
+          }}
+          onRunSuggestion={(command) => {
+            if (active === undefined) return;
+            // Ensure the container tab is open and focused. subscribePretype
+            // filters on (recordId, sessionKey), so the send is a no-op if
+            // the PTY is still mounting. Users can re-run from the palette.
+            openContainer(active.id);
+            dispatchPretype({
+              recordId: active.id,
+              sessionKey: activeSessionId,
+              text: command,
+            });
+          }}
         />
       </div>
     </AuthGate>
