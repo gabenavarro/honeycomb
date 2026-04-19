@@ -60,9 +60,9 @@ function suggestionsFromPyproject(content: string): ContainerSuggestion[] {
   const obj = (doc ?? {}) as Record<string, unknown>;
   const projectScripts = ((obj.project as Record<string, unknown> | undefined)?.scripts ??
     {}) as Record<string, string>;
-  const poetryScripts = (((obj.tool as Record<string, unknown> | undefined)?.poetry as
-    | Record<string, unknown>
-    | undefined)?.scripts ?? {}) as Record<string, string>;
+  const poetryScripts = ((
+    (obj.tool as Record<string, unknown> | undefined)?.poetry as Record<string, unknown> | undefined
+  )?.scripts ?? {}) as Record<string, string>;
   const seen = new Set<string>();
   for (const [name, cmd] of Object.entries({ ...projectScripts, ...poetryScripts })) {
     if (seen.has(name)) continue;

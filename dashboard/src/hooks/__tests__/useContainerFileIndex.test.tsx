@@ -60,10 +60,7 @@ describe("useContainerFileIndex", () => {
       truncated: false,
       elapsed_ms: 5,
     });
-    const { result } = renderHook(
-      () => useContainerFileIndex(1, { enabled: true }),
-      { wrapper },
-    );
+    const { result } = renderHook(() => useContainerFileIndex(1, { enabled: true }), { wrapper });
     await waitFor(() => expect(result.current.entries.length).toBe(1));
     expect(result.current.entries[0].name).toBe("/workspace/a.ts");
     expect(result.current.truncated).toBe(false);
@@ -71,10 +68,7 @@ describe("useContainerFileIndex", () => {
 
   it("surfaces errors from the API call", async () => {
     mockListContainerFiles.mockRejectedValue(new Error("504: walk timed out"));
-    const { result } = renderHook(
-      () => useContainerFileIndex(1, { enabled: true }),
-      { wrapper },
-    );
+    const { result } = renderHook(() => useContainerFileIndex(1, { enabled: true }), { wrapper });
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(String(result.current.error)).toContain("504");
   });

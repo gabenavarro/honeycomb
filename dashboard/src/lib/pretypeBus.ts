@@ -23,9 +23,7 @@ export function dispatchPretype(detail: PretypeDetail): void {
   window.dispatchEvent(new CustomEvent<PretypeDetail>(EVENT_NAME, { detail }));
 }
 
-export function subscribePretype(
-  listener: (detail: PretypeDetail) => void,
-): () => void {
+export function subscribePretype(listener: (detail: PretypeDetail) => void): () => void {
   const handler = (e: Event) => {
     const ev = e as CustomEvent<PretypeDetail>;
     if (ev.detail) listener(ev.detail);

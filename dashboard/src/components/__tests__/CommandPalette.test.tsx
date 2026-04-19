@@ -14,13 +14,15 @@ import type { ContainerSuggestion } from "../../hooks/useContainerSuggestions";
 import { CommandPalette } from "../CommandPalette";
 
 const mockUseFileIndex = vi.hoisted(() =>
-  vi.fn((): UseContainerFileIndexResult => ({
-    entries: [],
-    truncated: false,
-    isLoading: false,
-    error: null,
-    refetch: () => {},
-  })),
+  vi.fn(
+    (): UseContainerFileIndexResult => ({
+      entries: [],
+      truncated: false,
+      isLoading: false,
+      error: null,
+      refetch: () => {},
+    }),
+  ),
 );
 const mockUseSuggestions = vi.hoisted(() => vi.fn((): ContainerSuggestion[] => []));
 
@@ -93,7 +95,9 @@ afterEach(() => vi.restoreAllMocks());
 describe("CommandPalette — M23", () => {
   it("typing 'file:' flips to file mode and shows the Files group", async () => {
     mockUseFileIndex.mockReturnValue({
-      entries: [{ name: "/w/a.ts", kind: "file" as const, size: 1, mode: "", mtime: "", target: null }],
+      entries: [
+        { name: "/w/a.ts", kind: "file" as const, size: 1, mode: "", mtime: "", target: null },
+      ],
       truncated: false,
       isLoading: false,
       error: null,
@@ -108,7 +112,9 @@ describe("CommandPalette — M23", () => {
 
   it("pressing Enter on a file entry calls onOpenFile", async () => {
     mockUseFileIndex.mockReturnValue({
-      entries: [{ name: "/w/a.ts", kind: "file" as const, size: 1, mode: "", mtime: "", target: null }],
+      entries: [
+        { name: "/w/a.ts", kind: "file" as const, size: 1, mode: "", mtime: "", target: null },
+      ],
       truncated: false,
       isLoading: false,
       error: null,

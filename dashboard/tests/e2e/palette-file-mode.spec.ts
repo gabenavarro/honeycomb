@@ -47,9 +47,7 @@ test("? prints the prefix cheat-sheet", async ({ page, context }) => {
   );
   await context.route("**/api/gitops/prs**", (route) => route.fulfill(mockJson([])));
   await context.route("**/api/gitops/repos**", (route) => route.fulfill(mockJson([])));
-  await context.route("**/api/problems**", (route) =>
-    route.fulfill(mockJson({ problems: [] })),
-  );
+  await context.route("**/api/problems**", (route) => route.fulfill(mockJson({ problems: [] })));
   await context.route("**/api/settings", (route) =>
     route.fulfill(
       mockJson({
@@ -58,9 +56,7 @@ test("? prints the prefix cheat-sheet", async ({ page, context }) => {
       }),
     ),
   );
-  await context.route("**/api/keybindings**", (route) =>
-    route.fulfill(mockJson({ bindings: {} })),
-  );
+  await context.route("**/api/keybindings**", (route) => route.fulfill(mockJson({ bindings: {} })));
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
@@ -105,9 +101,7 @@ test("Ctrl+K → file: shows walk results; Enter opens the file", async ({ page,
   );
   await context.route("**/api/gitops/prs**", (route) => route.fulfill(mockJson([])));
   await context.route("**/api/gitops/repos**", (route) => route.fulfill(mockJson([])));
-  await context.route("**/api/problems**", (route) =>
-    route.fulfill(mockJson({ problems: [] })),
-  );
+  await context.route("**/api/problems**", (route) => route.fulfill(mockJson({ problems: [] })));
   await context.route("**/api/settings", (route) =>
     route.fulfill(
       mockJson({
@@ -116,9 +110,7 @@ test("Ctrl+K → file: shows walk results; Enter opens the file", async ({ page,
       }),
     ),
   );
-  await context.route("**/api/keybindings**", (route) =>
-    route.fulfill(mockJson({ bindings: {} })),
-  );
+  await context.route("**/api/keybindings**", (route) => route.fulfill(mockJson({ bindings: {} })));
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );

@@ -75,10 +75,7 @@ describe("useContainerSuggestions", () => {
     });
     const { result } = renderHook(() => useContainerSuggestions(1, "/app"), { wrapper });
     await waitFor(() => expect(result.current.length).toBe(2));
-    expect(result.current.map((s) => s.title).sort()).toEqual([
-      "Run npm: dev",
-      "Run npm: test",
-    ]);
+    expect(result.current.map((s) => s.title).sort()).toEqual(["Run npm: dev", "Run npm: test"]);
   });
 
   it("parses pyproject.toml project + poetry scripts", async () => {
