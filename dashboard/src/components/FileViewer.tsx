@@ -1,30 +1,47 @@
-/** Read-only file viewer for container files (M18).
+/** File viewer with write-back editing (M18 + M24).
  *
- * Dispatches by MIME type reported by the hub's ``file --mime-type``
- * sniff:
- *
- * - ``text/*``, JSON, YAML, XML, ``.ipynb`` → ``<pre>`` with the raw
- *   content. Syntax highlighting is deliberately deferred to M19+ —
- *   a monospace pre-formatted block is useful enough for v1 and keeps
- *   the bundle trim.
- * - ``image/*`` → data-URL ``<img>`` using the base64 payload.
- * - anything oversize → explicit "File is too large to preview" state
- *   with a download link that hits the streaming endpoint.
- * - the ``.ipynb`` special case is handled by a separate milestone
- *   component; for M18 we just render the JSON verbatim.
+ * Read mode: dispatches by MIME ({text, image, notebook, oversize}).
+ * Edit mode: swaps the ``<pre>`` for a ``<CodeEditor>`` (CodeMirror
+ * 6) with a textarea ErrorBoundary fallback. Save posts the current
+ * draft with ``if_match_mtime_ns`` = last-read mtime; 409 responses
+ * surface a yellow conflict banner.
  */
 
-import { useQuery } from "@tanstack/react-query";
-import { Download, FileText, Image as ImageIcon, Notebook, X } from "lucide-react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Download, FileText, Image as ImageIcon, Notebook, Pencil, Save, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
-import { readContainerFile, containerFileDownloadUrl } from "../lib/api";
+import {
+  containerFileDownloadUrl,
+  readContainerFile,
+  writeContainerFile,
+} from "../lib/api";
 import type { FileContent } from "../lib/types";
+import { useToasts } from "../hooks/useToasts";
+import { CodeEditor, languageForPath } from "./CodeEditor";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { NotebookViewer } from "./NotebookViewer";
 
 interface Props {
   containerId: number;
   path: string;
   onClose: () => void;
+}
+
+const TEXT_MIME_PREFIXES = [
+  "text/",
+  "application/json",
+  "application/javascript",
+  "application/xml",
+  "application/x-sh",
+  "application/x-yaml",
+  "application/toml",
+  "application/x-ipynb+json",
+];
+
+function isTextMime(mime: string): boolean {
+  const m = mime.toLowerCase();
+  return TEXT_MIME_PREFIXES.some((p) => m.startsWith(p));
 }
 
 function humanSize(bytes: number): string {
@@ -35,14 +52,114 @@ function humanSize(bytes: number): string {
 }
 
 export function FileViewer({ containerId, path, onClose }: Props) {
+  const queryClient = useQueryClient();
+  const { toast } = useToasts();
   const { data, error, isLoading } = useQuery<FileContent>({
     queryKey: ["fs:read", containerId, path],
     queryFn: () => readContainerFile(containerId, path),
     staleTime: 30_000,
   });
 
-  const downloadUrl = containerFileDownloadUrl(containerId, path);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [baseMtime, setBaseMtime] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [conflict, setConflict] = useState(false);
+
   const isNotebook = path.toLowerCase().endsWith(".ipynb");
+  const canEdit =
+    data !== undefined &&
+    data.content !== null &&
+    data.content !== undefined &&
+    !data.truncated &&
+    !isNotebook &&
+    isTextMime(data.mime_type);
+
+  // Seed draft whenever we enter edit mode or swap files.
+  useEffect(() => {
+    if (!editing) return;
+    if (!data) return;
+    setDraft(data.content ?? "");
+    setBaseMtime(data.mtime_ns ?? 0);
+    setConflict(false);
+  }, [editing, data]);
+
+  const dirty = editing && data !== undefined && draft !== (data.content ?? "");
+
+  const handleClose = useCallback(() => {
+    if (dirty && !window.confirm("Discard unsaved changes?")) return;
+    onClose();
+  }, [dirty, onClose]);
+
+  const handleCancel = useCallback(() => {
+    if (dirty && !window.confirm("Discard unsaved changes?")) return;
+    setEditing(false);
+    setDraft("");
+    setConflict(false);
+  }, [dirty]);
+
+  const handleSave = useCallback(async () => {
+    if (!data || baseMtime === null) return;
+    setSaving(true);
+    try {
+      const updated = (await writeContainerFile(containerId, {
+        path,
+        content: draft,
+        if_match_mtime_ns: baseMtime,
+      })) as FileContent;
+      toast("success", "Saved", `${humanSize(updated.size_bytes)} written to ${path}`);
+      queryClient.setQueryData<FileContent>(["fs:read", containerId, path], updated);
+      setBaseMtime(updated.mtime_ns);
+      setConflict(false);
+      setEditing(false);
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 409) {
+        setConflict(true);
+      } else {
+        toast("error", "Save failed", err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [containerId, path, draft, baseMtime, data, toast, queryClient]);
+
+  const handleReload = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ["fs:read", containerId, path] });
+    // The refetch lands asynchronously; rely on the ``useEffect``
+    // above keying on ``data`` to reseed once the new content arrives.
+    setConflict(false);
+  }, [queryClient, containerId, path]);
+
+  const handleSaveAnyway = useCallback(async () => {
+    // Re-read to obtain the current mtime; write with that echo so
+    // the hub accepts the write. Draft is preserved verbatim.
+    const latest = await readContainerFile(containerId, path);
+    if (!latest.mtime_ns) {
+      toast("error", "Save failed", "Could not re-read file for baseline");
+      return;
+    }
+    setBaseMtime(latest.mtime_ns);
+    setSaving(true);
+    try {
+      const updated = (await writeContainerFile(containerId, {
+        path,
+        content: draft,
+        if_match_mtime_ns: latest.mtime_ns,
+      })) as FileContent;
+      toast("success", "Saved", `${humanSize(updated.size_bytes)} written to ${path}`);
+      queryClient.setQueryData<FileContent>(["fs:read", containerId, path], updated);
+      setBaseMtime(updated.mtime_ns);
+      setConflict(false);
+      setEditing(false);
+    } catch (err) {
+      toast("error", "Save failed", err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }, [containerId, path, draft, toast, queryClient]);
+
+  const downloadUrl = containerFileDownloadUrl(containerId, path);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#1e1e1e]">
@@ -62,24 +179,93 @@ export function FileViewer({ containerId, path, onClose }: Props) {
             {data.mime_type} · {humanSize(data.size_bytes)}
           </span>
         )}
-        <a
-          href={downloadUrl}
-          className="ml-auto flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
-          title="Download"
-        >
-          <Download size={11} />
-          Download
-        </a>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded p-0.5 text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
-          aria-label="Close file viewer"
-          title="Close"
-        >
-          <X size={11} />
-        </button>
+        {editing && dirty && (
+          <span className="text-[10px] text-yellow-400" aria-live="polite">
+            Modified
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1">
+          {!editing && canEdit && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+              title="Edit"
+            >
+              <Pencil size={11} />
+              Edit
+            </button>
+          )}
+          {editing && (
+            <>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1 rounded bg-[#0078d4] px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-[#1188e0] disabled:opacity-60"
+                title="Save"
+              >
+                <Save size={11} />
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={saving}
+                className="rounded px-1.5 py-0.5 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                title="Cancel"
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          <a
+            href={downloadUrl}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+            title="Download"
+          >
+            <Download size={11} />
+            Download
+          </a>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="rounded p-0.5 text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+            aria-label="Close file viewer"
+            title="Close"
+          >
+            <X size={11} />
+          </button>
+        </div>
       </header>
+
+      {editing && conflict && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 border-b border-[#3a3a0a] bg-[#2a2410] px-3 py-1.5 text-[11px] text-yellow-300"
+        >
+          <span>File changed on disk.</span>
+          <button
+            type="button"
+            onClick={handleReload}
+            className="rounded border border-yellow-700 px-1.5 py-0.5 text-[10px] hover:bg-yellow-900/40"
+          >
+            Reload
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveAnyway}
+            className="rounded border border-yellow-700 px-1.5 py-0.5 text-[10px] hover:bg-yellow-900/40"
+          >
+            Save anyway
+          </button>
+          <span className="text-[10px] text-yellow-400/80">
+            Reload fetches the latest; Save anyway re-reads the on-disk baseline and writes your
+            draft.
+          </span>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-auto">
         {isLoading && <p className="p-4 text-xs text-[#858585]">Loading…</p>}
         {error && (
@@ -87,7 +273,33 @@ export function FileViewer({ containerId, path, onClose }: Props) {
             Failed to read: {error instanceof Error ? error.message : String(error)}
           </p>
         )}
-        {data && <FileBody data={data} downloadUrl={downloadUrl} isNotebook={isNotebook} />}
+        {data && editing && (
+          <ErrorBoundary
+            label={`the editor for ${path}`}
+            onError={() => toast("warning", "Editor failed", "Using plain-text fallback.")}
+            fallback={
+              <textarea
+                className="m-0 block h-full min-h-full w-full resize-none border-0 bg-[#1e1e1e] px-4 py-3 font-mono text-[12px] leading-relaxed text-[#cccccc] outline-none"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                spellCheck={false}
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                wrap="off"
+              />
+            }
+          >
+            <CodeEditor
+              value={draft}
+              onChange={setDraft}
+              language={languageForPath(path)}
+            />
+          </ErrorBoundary>
+        )}
+        {data && !editing && (
+          <FileBody data={data} downloadUrl={downloadUrl} isNotebook={isNotebook} />
+        )}
       </div>
     </div>
   );
@@ -102,11 +314,6 @@ function FileBody({
   downloadUrl: string;
   isNotebook: boolean;
 }) {
-  // M19 — .ipynb files dispatch to the NotebookViewer. We detect on
-  // extension rather than MIME because ``file --mime-type`` typically
-  // reports ``application/json`` for notebooks, which already has a
-  // perfectly good plain renderer below — the extension is the
-  // unambiguous signal.
   if (isNotebook && data.content !== null && data.content !== undefined) {
     return <NotebookViewer source={data.content} />;
   }
