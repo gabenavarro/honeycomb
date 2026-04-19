@@ -8,6 +8,9 @@ route test that mocks `container.exec_run`.
 
 from __future__ import annotations
 
+import time
+from unittest.mock import MagicMock
+
 import pytest
 
 from hub.services.fs_browser import (
@@ -110,3 +113,75 @@ class TestParseFindOutput:
             max_entries=10,
         )
         assert [e.name for e in entries] == ["/r/b.py"]
+
+
+class TestWalkPaths:
+    def _container(self, exit_code: int, output: bytes) -> MagicMock:
+        container = MagicMock()
+        container.exec_run = MagicMock(return_value=(exit_code, output))
+        return container
+
+    def test_happy_path(self) -> None:
+        from hub.services.fs_browser import walk_paths
+
+        payload = b"d\t4096\tsrc\nf\t10\tREADME.md\n"
+        result = walk_paths(
+            self._container(0, payload),
+            root="/workspace",
+            excludes=(),
+            max_entries=100,
+            max_depth=8,
+        )
+        assert result.root == "/workspace"
+        assert [e.name for e in result.entries] == [
+            "/workspace/src",
+            "/workspace/README.md",
+        ]
+        assert result.truncated is False
+        assert result.elapsed_ms >= 0
+
+    def test_truncated_flag_surfaces(self) -> None:
+        from hub.services.fs_browser import walk_paths
+
+        lines = b"".join(f"f\t10\t{i}.py\n".encode() for i in range(12))
+        result = walk_paths(
+            self._container(0, lines),
+            root="/r",
+            excludes=(),
+            max_entries=5,
+            max_depth=8,
+        )
+        assert result.truncated is True
+        assert len(result.entries) == 5
+
+    def test_non_zero_exit_raises_runtime_error(self) -> None:
+        from hub.services.fs_browser import WalkError, walk_paths
+
+        with pytest.raises(WalkError) as ei:
+            walk_paths(
+                self._container(2, b"find: bad path\n"),
+                root="/bad",
+                excludes=(),
+                max_entries=10,
+                max_depth=8,
+            )
+        assert "find: bad path" in str(ei.value)
+
+    def test_timeout_raises_walk_timeout(self) -> None:
+        from hub.services.fs_browser import WalkTimeout, walk_paths
+
+        def slow_exec(*a, **kw):
+            time.sleep(0.2)
+            return (0, b"")
+
+        slow = MagicMock()
+        slow.exec_run = slow_exec
+        with pytest.raises(WalkTimeout):
+            walk_paths(
+                slow,
+                root="/r",
+                excludes=(),
+                max_entries=10,
+                max_depth=8,
+                timeout_s=0.05,
+            )

@@ -29,6 +29,8 @@ those in a web UI anyway).
 from __future__ import annotations
 
 import re
+import threading
+import time as _time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -312,3 +314,86 @@ def parse_find_output(
             )
         )
     return entries, total > max_entries
+
+
+class WalkError(RuntimeError):
+    """Raised when `find` exits non-zero inside the container. The
+    stderr/stdout blob is propagated as the exception message so the
+    router can surface it verbatim."""
+
+
+class WalkTimeout(TimeoutError):
+    """Raised when the walk exceeds its wall-clock budget. The router
+    translates this into 504 with a structured body."""
+
+
+@dataclass(frozen=True, slots=True)
+class WalkResultData:
+    """Internal return shape. The router wraps this into the Pydantic
+    ``WalkResult`` for JSON serialisation."""
+
+    root: str
+    entries: list[Entry]
+    truncated: bool
+    elapsed_ms: int
+
+    def to_dict(self) -> dict:
+        return {
+            "root": self.root,
+            "entries": [e.to_dict() for e in self.entries],
+            "truncated": self.truncated,
+            "elapsed_ms": self.elapsed_ms,
+        }
+
+
+def walk_paths(
+    container,
+    *,
+    root: str,
+    excludes: tuple[str, ...],
+    max_entries: int,
+    max_depth: int,
+    timeout_s: float = 10.0,
+) -> WalkResultData:
+    """Run ``find`` inside the container and return parsed entries.
+
+    Wall-clock timeout is enforced via a worker thread: ``docker-py``'s
+    ``exec_run`` is blocking with no native deadline, and the walk path
+    is rare enough that one throwaway thread per call is fine.
+    """
+    argv = build_find_argv(root, excludes, max_depth=max_depth)
+
+    result: dict[str, object] = {}
+
+    def _run() -> None:
+        try:
+            ec, out = container.exec_run(argv, tty=False, demux=False)
+            result["ec"] = ec
+            result["out"] = out
+        except Exception as exc:
+            result["exc"] = exc
+
+    start = _time.monotonic()
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        raise WalkTimeout(f"walk timed out after {timeout_s}s for {root}")
+    elapsed_ms = int((_time.monotonic() - start) * 1000)
+
+    if "exc" in result:
+        raise WalkError(str(result["exc"]))
+    ec = result.get("ec", 1)
+    out = result.get("out", b"")
+    if ec != 0:
+        text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out or "")
+        raise WalkError(text.strip() or f"find exited with {ec}")
+
+    text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out)
+    entries, truncated = parse_find_output(text, root=root, max_entries=max_entries)
+    return WalkResultData(
+        root=root,
+        entries=entries,
+        truncated=truncated,
+        elapsed_ms=elapsed_ms,
+    )
