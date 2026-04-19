@@ -37,6 +37,7 @@ from hub.services.fs_browser import (
     WalkTimeout,
     is_text_mime,
     parse_ls_output,
+    parse_stat_size_mtime,
     validate_path,
     validate_walk_params,
     walk_paths,
@@ -174,10 +175,10 @@ async def read_file(
     except docker.errors.DockerException as exc:
         raise HTTPException(502, f"Docker unavailable: {exc}") from exc
 
-    # ``stat -c %s`` gives the size cheaply without reading the body.
+    # ``stat -c %s|%Y.%N`` gives size + nanosecond mtime cheaply.
     try:
         exit_code, output = container.exec_run(
-            ["stat", "-c", "%s", "--", clean_path], tty=False, demux=False
+            ["stat", "-c", "%s|%Y.%N", "--", clean_path], tty=False, demux=False
         )
     except docker.errors.APIError as exc:
         raise HTTPException(502, f"stat failed: {exc}") from exc
@@ -185,9 +186,9 @@ async def read_file(
         text = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else ""
         raise HTTPException(400, text.strip() or f"stat exited with {exit_code}")
     try:
-        size_bytes = int(output.decode("utf-8").strip())
+        size_bytes, mtime_ns = parse_stat_size_mtime(output.decode("utf-8"))
     except (ValueError, AttributeError):
-        raise HTTPException(502, "stat returned unparseable size")
+        raise HTTPException(502, "stat returned unparseable size/mtime")
 
     mime = _sniff_mime(container, clean_path)
     text_like = is_text_mime(mime)
@@ -197,6 +198,7 @@ async def read_file(
             path=clean_path,
             mime_type=mime,
             size_bytes=size_bytes,
+            mtime_ns=mtime_ns,
             truncated=True,
         )
 
@@ -216,6 +218,7 @@ async def read_file(
                 path=clean_path,
                 mime_type=mime,
                 size_bytes=size_bytes,
+                mtime_ns=mtime_ns,
                 content=body.decode("utf-8"),
             )
         except UnicodeDecodeError:
@@ -225,6 +228,7 @@ async def read_file(
         path=clean_path,
         mime_type=mime,
         size_bytes=size_bytes,
+        mtime_ns=mtime_ns,
         content_base64=base64.b64encode(body).decode("ascii"),
     )
 
