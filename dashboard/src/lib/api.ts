@@ -60,7 +60,11 @@ async function request<T>(path: string, init?: RequestInit, schema?: z.ZodType<T
   }
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`${res.status}: ${body}`);
+    const err = new Error(`${res.status}: ${body}`);
+    // Attach the HTTP status so callers can distinguish e.g. 409 Conflict
+    // from generic 5xx errors without parsing the message string.
+    (err as Error & { status: number }).status = res.status;
+    throw err;
   }
   const json = (await res.json()) as unknown;
   if (schema) return validateResponse(schema, path, json);
