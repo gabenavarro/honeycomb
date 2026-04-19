@@ -25,22 +25,28 @@ import docker.errors
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from hub.models.schemas import FileContent
+from hub.models.schemas import FileContent, FileWriteRequest
 from hub.services.fs_browser import (
     DEFAULT_WALK_EXCLUDES,
     MAX_BINARY_BYTES,
     MAX_TEXT_BYTES,
     MAX_WALK_DEPTH,
     MAX_WALK_ENTRIES,
+    FileNotFound,
     InvalidFsPath,
     WalkError,
     WalkTimeout,
+    WriteConflict,
+    WriteError,
+    WriteTooLarge,
+    decode_write_payload,
     is_text_mime,
     parse_ls_output,
     parse_stat_size_mtime,
     validate_path,
     validate_walk_params,
     walk_paths,
+    write_file,
 )
 
 logger = logging.getLogger("hub.routers.fs")
@@ -348,3 +354,84 @@ async def walk_container_fs(
         raise HTTPException(502, f"docker exec failed: {exc}") from exc
 
     return result.to_dict()
+
+
+@router.put("/{record_id}/fs/write", response_model=FileContent)
+async def write_container_file(
+    record_id: int,
+    request: Request,
+    body: FileWriteRequest,
+) -> FileContent:
+    """Overwrite ``body.path`` inside the container with the
+    supplied content.
+
+    Returns the fresh ``FileContent`` (content echoed back; new
+    mtime_ns + size populated). See the M24 spec for the full
+    contract: 404 on missing file, 409 on mtime mismatch, 413 on
+    >5 MiB, 502 on put_archive / permission failures.
+    """
+    try:
+        clean_path = validate_path(body.path)
+    except InvalidFsPath as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    try:
+        payload = decode_write_payload(
+            content=body.content,
+            content_base64=body.content_base64,
+        )
+    except InvalidFsPath as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except WriteTooLarge as exc:
+        raise HTTPException(413, str(exc)) from exc
+
+    registry = request.app.state.registry
+    container_id = await _lookup_container_id(registry, record_id)
+
+    try:
+        client = docker.from_env()
+        container = client.containers.get(container_id)
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Docker container {container_id} not found")
+    except docker.errors.DockerException as exc:
+        raise HTTPException(502, f"Docker unavailable: {exc}") from exc
+
+    try:
+        result = write_file(
+            container,
+            path=clean_path,
+            payload=payload,
+            if_match_mtime_ns=body.if_match_mtime_ns,
+        )
+    except FileNotFound as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except WriteConflict as exc:
+        raise HTTPException(
+            409,
+            detail={"detail": str(exc), "current_mtime_ns": exc.current_mtime_ns},
+        ) from exc
+    except WriteError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except docker.errors.APIError as exc:
+        raise HTTPException(502, f"docker exec failed: {exc}") from exc
+
+    # Build the FileContent echo. Prefer base64 echo when the client
+    # sent base64; otherwise echo the text content as-is. MIME is
+    # re-sniffed so the response matches what a subsequent GET would
+    # see.
+    mime = _sniff_mime(container, clean_path)
+    if body.content_base64 is not None:
+        return FileContent(
+            path=result.path,
+            mime_type=mime,
+            size_bytes=result.size,
+            mtime_ns=result.mtime_ns,
+            content_base64=body.content_base64,
+        )
+    return FileContent(
+        path=result.path,
+        mime_type=mime,
+        size_bytes=result.size,
+        mtime_ns=result.mtime_ns,
+        content=body.content,
+    )
