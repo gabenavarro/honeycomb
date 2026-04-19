@@ -11,11 +11,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Download, FileText, Image as ImageIcon, Notebook, Pencil, Save, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  containerFileDownloadUrl,
-  readContainerFile,
-  writeContainerFile,
-} from "../lib/api";
+import { containerFileDownloadUrl, readContainerFile, writeContainerFile } from "../lib/api";
 import type { FileContent } from "../lib/types";
 import { useToasts } from "../hooks/useToasts";
 import { CodeEditor, languageForPath } from "./CodeEditor";
@@ -290,11 +286,7 @@ export function FileViewer({ containerId, path, onClose }: Props) {
               />
             }
           >
-            <CodeEditor
-              value={draft}
-              onChange={setDraft}
-              language={languageForPath(path)}
-            />
+            <CodeEditor value={draft} onChange={setDraft} language={languageForPath(path)} />
           </ErrorBoundary>
         )}
         {data && !editing && (

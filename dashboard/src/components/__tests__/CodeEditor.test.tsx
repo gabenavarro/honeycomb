@@ -42,9 +42,7 @@ describe("CodeEditor", () => {
 
   it("fires onChange when the user types", async () => {
     const onChange = vi.fn();
-    const { container } = render(
-      <CodeEditor value="" onChange={onChange} language="plaintext" />,
-    );
+    const { container } = render(<CodeEditor value="" onChange={onChange} language="plaintext" />);
     const content = container.querySelector<HTMLElement>(".cm-content");
     expect(content).not.toBeNull();
     content!.focus();

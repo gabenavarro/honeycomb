@@ -71,9 +71,7 @@ test.beforeEach(async ({ context }) => {
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
-  await context.route("**/api/containers/7/resources", (route) =>
-    route.fulfill(mockJson(null)),
-  );
+  await context.route("**/api/containers/7/resources", (route) => route.fulfill(mockJson(null)));
   await context.route("**/api/health", (route) =>
     route.fulfill(mockJson({ status: "ok", version: "0.2.0" })),
   );
@@ -155,7 +153,10 @@ test("Edit → type → Save posts the draft + echoes new mtime", async ({ conte
   );
 });
 
-test("409 response shows the conflict banner with Reload + Save anyway", async ({ context, page }) => {
+test("409 response shows the conflict banner with Reload + Save anyway", async ({
+  context,
+  page,
+}) => {
   await context.route("**/api/containers/7/fs/read*", (route) =>
     route.fulfill({
       status: 200,

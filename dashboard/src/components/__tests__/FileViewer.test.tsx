@@ -42,7 +42,12 @@ const mockWrite = vi.hoisted(() =>
   vi.fn<
     (
       id: number,
-      body: { path: string; content?: string | null; content_base64?: string | null; if_match_mtime_ns: number },
+      body: {
+        path: string;
+        content?: string | null;
+        content_base64?: string | null;
+        if_match_mtime_ns: number;
+      },
     ) => Promise<unknown>
   >(),
 );
