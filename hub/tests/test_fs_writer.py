@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import tarfile
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -104,3 +105,90 @@ class TestDecodeWritePayload:
         oversized = "a" * (MAX_WRITE_BYTES + 1)
         with pytest.raises(WriteTooLarge):
             decode_write_payload(content=oversized, content_base64=None)
+
+
+class TestWriteFile:
+    def _container(
+        self,
+        stat_responses: list[tuple[int, bytes]],
+        put_archive_result: bool = True,
+    ) -> MagicMock:
+        """Return a container mock whose successive ``exec_run`` calls
+        yield the given (exit_code, bytes) tuples and whose
+        ``put_archive`` returns ``put_archive_result``."""
+        container = MagicMock()
+        container.exec_run = MagicMock(side_effect=stat_responses)
+        container.put_archive = MagicMock(return_value=put_archive_result)
+        return container
+
+    def test_happy_path_text(self) -> None:
+        from hub.services.fs_browser import write_file
+
+        stat_responses = [
+            # stat -c '%s|%Y.%N' — pre-write
+            (0, b"100|1700000000.000000000"),
+            # stat -c '%a|%u|%g'
+            (0, b"644|0|0"),
+            # stat -c '%s|%Y.%N' — post-write
+            (0, b"200|1700000100.500000000"),
+        ]
+        container = self._container(stat_responses, put_archive_result=True)
+        result = write_file(
+            container,
+            path="/workspace/foo.txt",
+            payload=b"new content",
+            if_match_mtime_ns=1_700_000_000_000_000_000,
+        )
+        assert result.path == "/workspace/foo.txt"
+        assert result.size == 200
+        assert result.mtime_ns == 1_700_000_100_500_000_000
+        assert container.put_archive.called
+        # put_archive target dir is the parent.
+        (args, kwargs) = container.put_archive.call_args
+        assert kwargs.get("path") == "/workspace"
+        assert kwargs.get("data") or args[1]  # tar bytes present
+
+    def test_file_not_found_raises(self) -> None:
+        from hub.services.fs_browser import FileNotFound, write_file
+
+        container = self._container(
+            [(1, b"stat: cannot stat '/nope': No such file or directory\n")],
+        )
+        with pytest.raises(FileNotFound):
+            write_file(
+                container,
+                path="/nope",
+                payload=b"x",
+                if_match_mtime_ns=0,
+            )
+
+    def test_mtime_mismatch_raises(self) -> None:
+        from hub.services.fs_browser import WriteConflict, write_file
+
+        container = self._container(
+            [(0, b"100|1700000000.000000000")],
+        )
+        with pytest.raises(WriteConflict) as ei:
+            write_file(
+                container,
+                path="/workspace/foo",
+                payload=b"x",
+                if_match_mtime_ns=1_699_000_000_000_000_000,
+            )
+        assert ei.value.current_mtime_ns == 1_700_000_000_000_000_000
+
+    def test_put_archive_failure_raises(self) -> None:
+        from hub.services.fs_browser import WriteError, write_file
+
+        stat_responses = [
+            (0, b"100|1700000000.000000000"),
+            (0, b"644|0|0"),
+        ]
+        container = self._container(stat_responses, put_archive_result=False)
+        with pytest.raises(WriteError):
+            write_file(
+                container,
+                path="/workspace/foo",
+                payload=b"x",
+                if_match_mtime_ns=1_700_000_000_000_000_000,
+            )

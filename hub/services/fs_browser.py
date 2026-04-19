@@ -532,3 +532,76 @@ def build_write_tar(
     with tarfile.open(fileobj=buf, mode="w", format=tarfile.PAX_FORMAT) as tf:
         tf.addfile(info, io.BytesIO(content))
     return buf.getvalue()
+
+
+@dataclass(frozen=True, slots=True)
+class WriteResultData:
+    """Return shape from ``write_file``. The router wraps this +
+    the client-submitted content into the ``FileContent`` response."""
+
+    path: str
+    size: int
+    mtime_ns: int
+
+    def to_dict(self) -> dict:
+        return {"path": self.path, "size": self.size, "mtime_ns": self.mtime_ns}
+
+
+def write_file(
+    container,
+    *,
+    path: str,
+    payload: bytes,
+    if_match_mtime_ns: int,
+) -> WriteResultData:
+    """Atomically replace ``path`` inside the container with
+    ``payload``.
+
+    Steps: stat the existing file (404 if absent, 409 on mtime
+    mismatch), read its mode/uid/gid, build a single-entry tar,
+    ``put_archive`` the tar into the parent directory, and re-stat
+    to produce the post-write mtime.
+    """
+    # Pre-write stat — gets size + mtime.
+    ec, out = container.exec_run(["stat", "-c", "%s|%Y.%N", "--", path], tty=False, demux=False)
+    text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out or "")
+    if ec != 0:
+        raise FileNotFound(text.strip() or f"stat exited with {ec}")
+    try:
+        _current_size, current_mtime_ns = parse_stat_size_mtime(text)
+    except ValueError as exc:
+        raise WriteError(f"unparseable stat output: {text!r}") from exc
+    if current_mtime_ns != if_match_mtime_ns:
+        raise WriteConflict(current_mtime_ns)
+
+    # Mode / uid / gid — copied into the tar header so the written
+    # file inherits the original ownership bits.
+    ec2, out2 = container.exec_run(["stat", "-c", "%a|%u|%g", "--", path], tty=False, demux=False)
+    text2 = out2.decode("utf-8", errors="replace") if isinstance(out2, bytes) else str(out2 or "")
+    if ec2 != 0:
+        raise WriteError(text2.strip() or f"stat-mode exited with {ec2}")
+    try:
+        mode, uid, gid = parse_stat_mode_ownership(text2)
+    except ValueError as exc:
+        raise WriteError(f"unparseable mode/uid/gid: {text2!r}") from exc
+
+    # Split path into parent + basename for put_archive.
+    parent = path.rsplit("/", 1)[0] or "/"
+    basename = path.rsplit("/", 1)[-1]
+    tar_bytes = build_write_tar(basename, payload, mode, uid, gid)
+
+    ok = container.put_archive(path=parent, data=tar_bytes)
+    if not ok:
+        raise WriteError("put_archive returned falsy")
+
+    # Post-write stat — surfaces the new mtime/size.
+    ec3, out3 = container.exec_run(["stat", "-c", "%s|%Y.%N", "--", path], tty=False, demux=False)
+    text3 = out3.decode("utf-8", errors="replace") if isinstance(out3, bytes) else str(out3 or "")
+    if ec3 != 0:
+        raise WriteError(text3.strip() or f"post-stat exited with {ec3}")
+    try:
+        new_size, new_mtime_ns = parse_stat_size_mtime(text3)
+    except ValueError as exc:
+        raise WriteError(f"unparseable post-stat output: {text3!r}") from exc
+
+    return WriteResultData(path=path, size=new_size, mtime_ns=new_mtime_ns)
