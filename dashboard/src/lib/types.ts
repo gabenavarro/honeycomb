@@ -202,6 +202,15 @@ export interface ContainerWorkdir {
   path: string;
 }
 
+// M23 — palette file-index walk result.
+
+export interface WalkResult {
+  root: string;
+  entries: FsEntry[];
+  truncated: boolean;
+  elapsed_ms: number;
+}
+
 // M18 — file viewer payloads.
 
 export interface FileContent {

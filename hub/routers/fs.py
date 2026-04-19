@@ -27,12 +27,19 @@ from fastapi.responses import StreamingResponse
 
 from hub.models.schemas import FileContent
 from hub.services.fs_browser import (
+    DEFAULT_WALK_EXCLUDES,
     MAX_BINARY_BYTES,
     MAX_TEXT_BYTES,
+    MAX_WALK_DEPTH,
+    MAX_WALK_ENTRIES,
     InvalidFsPath,
+    WalkError,
+    WalkTimeout,
     is_text_mime,
     parse_ls_output,
     validate_path,
+    validate_walk_params,
+    walk_paths,
 )
 
 logger = logging.getLogger("hub.routers.fs")
@@ -264,3 +271,76 @@ async def download_file(
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{record_id}/fs/walk")
+async def walk_container_fs(
+    record_id: int,
+    request: Request,
+    root: str | None = Query(
+        None,
+        description=("Absolute root path inside the container. Defaults to Config.WorkingDir."),
+    ),
+    max_entries: int = Query(MAX_WALK_ENTRIES, ge=1, le=20_000),
+    max_depth: int = Query(MAX_WALK_DEPTH, ge=1, le=16),
+    excludes: str | None = Query(
+        None,
+        description=(
+            "Comma-separated dir basenames to prune. Falls back to "
+            "the default junk list when omitted."
+        ),
+    ),
+) -> dict:
+    """Walk the container's filesystem and return a flat list of entries.
+
+    Powered by ``find -printf`` for one-shot traversal; pruned by the
+    ``excludes`` list (default: ``.git``, ``node_modules``, …) and
+    bounded by ``max_entries`` / ``max_depth``. See the M23 spec for
+    the reusable-file-index rationale.
+    """
+    # Path validation — same sanitiser as the other /fs routes.
+    # Root may be omitted; we then pull it from the container config.
+    registry = request.app.state.registry
+    container_id = await _lookup_container_id(registry, record_id)
+
+    try:
+        client = docker.from_env()
+        container = client.containers.get(container_id)
+    except docker.errors.NotFound:
+        raise HTTPException(404, f"Docker container {container_id} not found")
+    except docker.errors.DockerException as exc:
+        raise HTTPException(502, f"Docker unavailable: {exc}") from exc
+
+    if root is None or root.strip() == "":
+        root = container.attrs.get("Config", {}).get("WorkingDir") or "/"
+
+    try:
+        clean_root = validate_path(root)
+        clean_entries, clean_depth = validate_walk_params(
+            max_entries=max_entries, max_depth=max_depth
+        )
+    except InvalidFsPath as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    if excludes is None:
+        exclude_tuple = DEFAULT_WALK_EXCLUDES
+    else:
+        # Drop empties after the csv split so `?excludes=` means "none".
+        exclude_tuple = tuple(x.strip() for x in excludes.split(",") if x.strip())
+
+    try:
+        result = walk_paths(
+            container,
+            root=clean_root,
+            excludes=exclude_tuple,
+            max_entries=clean_entries,
+            max_depth=clean_depth,
+        )
+    except WalkTimeout as exc:
+        raise HTTPException(504, str(exc)) from exc
+    except WalkError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except docker.errors.APIError as exc:
+        raise HTTPException(502, f"docker exec failed: {exc}") from exc
+
+    return result.to_dict()

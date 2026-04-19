@@ -27,6 +27,7 @@ import { getAuthToken } from "../lib/auth";
 import { scanForAttention } from "../hooks/useAttention";
 import { useTerminalPrefs } from "../hooks/useTerminalPrefs";
 import { useToasts } from "../hooks/useToasts";
+import { subscribePretype } from "../lib/pretypeBus";
 
 type PtyStatus = "connecting" | "connected" | "reattached" | "disconnected" | "closed";
 
@@ -218,6 +219,21 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
       fitRef.current = null;
     };
   }, [recordId, sessionKey, sendCtrl, prefs.fontSize, prefs.cursorStyle, prefs.copyOnSelect]);
+
+  // M23 — palette "run suggestion" dispatches text at us via
+  // ``dispatchPretype``. Match on (recordId, sessionKey) and forward
+  // to the live WS. The text is NOT auto-submitted — we strip any
+  // trailing newline so the user still sees the command in their
+  // prompt and presses Enter themselves.
+  useEffect(() => {
+    return subscribePretype(({ recordId: targetId, sessionKey: targetKey, text }) => {
+      if (targetId !== recordId || targetKey !== sessionKey) return;
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const sanitised = text.replace(/\r?\n+$/, "");
+      ws.send(new TextEncoder().encode(sanitised));
+    });
+  }, [recordId, sessionKey]);
 
   // WebSocket lifecycle. Separate from the terminal effect so we can
   // reconnect without remounting the Terminal — keeps scrollback.

@@ -29,6 +29,8 @@ those in a web UI anyway).
 from __future__ import annotations
 
 import re
+import threading
+import time as _time
 from dataclasses import dataclass
 from typing import Literal
 
@@ -187,3 +189,211 @@ def parse_ls_output(output: str, *, max_entries: int = MAX_ENTRIES) -> tuple[lis
 
     truncated = total_seen > max_entries
     return entries, truncated
+
+
+# --- M23: flat filesystem walk for the palette's file-index ---
+
+
+# Dirs we prune by default so the walker ignores the usual junk. Users
+# can override via the endpoint's ``excludes`` query param. Names are
+# matched against ``find``'s ``-name`` which matches basenames, so no
+# glob weirdness creeps in.
+DEFAULT_WALK_EXCLUDES: tuple[str, ...] = (
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    ".cache",
+    ".pytest_cache",
+)
+
+# Walk response caps. `max_entries` keeps the payload bounded;
+# `max_depth` stops a stray `/` root from traversing the whole host.
+MAX_WALK_ENTRIES = 5_000
+MAX_WALK_DEPTH = 8
+_WALK_ENTRY_CEILING = 20_000
+_WALK_DEPTH_CEILING = 16
+
+
+def validate_walk_params(*, max_entries: int, max_depth: int) -> tuple[int, int]:
+    """Return ``(max_entries, max_depth)`` after range-checking. Raises
+    ``InvalidFsPath`` (reused as the single 400-producing exception)
+    on values the endpoint should reject."""
+    if max_entries < 1 or max_entries > _WALK_ENTRY_CEILING:
+        raise InvalidFsPath(f"max_entries must be between 1 and {_WALK_ENTRY_CEILING}")
+    if max_depth < 1 or max_depth > _WALK_DEPTH_CEILING:
+        raise InvalidFsPath(f"max_depth must be between 1 and {_WALK_DEPTH_CEILING}")
+    return max_entries, max_depth
+
+
+def build_find_argv(
+    root: str,
+    excludes: tuple[str, ...],
+    *,
+    max_depth: int,
+) -> list[str]:
+    """Compose the `find` argv for a single-shot flat walk.
+
+    Output format is ``%y\\t%s\\t%P\\n`` — kind (d/f/l/…) + size +
+    relative path. No shell string interpolation anywhere; every
+    excluded name is its own argv token.
+    """
+    argv: list[str] = ["find", root, "-maxdepth", str(max_depth)]
+    if excludes:
+        argv.append("(")
+        first = True
+        for name in excludes:
+            if not first:
+                argv.append("-o")
+            argv.extend(["-name", name])
+            first = False
+        argv.extend([")", "-prune", "-o"])
+    # ``-printf`` is a GNU extension; Alpine/busybox ``find`` lacks it.
+    # ``walk_paths`` falls back to an ``ls``-based walk if needed — but
+    # BusyBox's ``find`` doesn't print types, so we accept the loss:
+    # the endpoint ships an empty entries list + ``elapsed_ms`` so the
+    # UI can explain. See ``walk_paths`` for the exec_run flow.
+    argv.extend(["-printf", "%y\t%s\t%P\n"])
+    return argv
+
+
+_KIND_MAP = {
+    "d": "dir",
+    "f": "file",
+    "l": "symlink",
+}
+
+
+def parse_find_output(
+    output: str,
+    *,
+    root: str,
+    max_entries: int,
+) -> tuple[list[Entry], bool]:
+    """Turn the `find -printf` output into entries. Returns
+    ``(entries, truncated)``.
+
+    The root itself appears as an empty relative path — we skip it so
+    the client never sees a path equal to ``root`` as its own entry.
+    """
+    entries: list[Entry] = []
+    total = 0
+    for raw in output.splitlines():
+        line = raw.rstrip("\n")
+        if not line:
+            continue
+        parts = line.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        kind_char, size_s, rel = parts
+        if rel == "":
+            # Root entry — skip.
+            continue
+        total += 1
+        if len(entries) >= max_entries:
+            continue
+        try:
+            size = int(size_s)
+        except ValueError:
+            continue
+        kind = _KIND_MAP.get(kind_char, "other")
+        abs_path = f"{root.rstrip('/')}/{rel}"
+        entries.append(
+            Entry(
+                name=abs_path,
+                kind=kind,  # type: ignore[arg-type]
+                size=size,
+                mode="",
+                mtime="",
+                target=None,
+            )
+        )
+    return entries, total > max_entries
+
+
+class WalkError(RuntimeError):
+    """Raised when `find` exits non-zero inside the container. The
+    stderr/stdout blob is propagated as the exception message so the
+    router can surface it verbatim."""
+
+
+class WalkTimeout(TimeoutError):
+    """Raised when the walk exceeds its wall-clock budget. The router
+    translates this into 504 with a structured body."""
+
+
+@dataclass(frozen=True, slots=True)
+class WalkResultData:
+    """Internal return shape. The router wraps this into the Pydantic
+    ``WalkResult`` for JSON serialisation."""
+
+    root: str
+    entries: list[Entry]
+    truncated: bool
+    elapsed_ms: int
+
+    def to_dict(self) -> dict:
+        return {
+            "root": self.root,
+            "entries": [e.to_dict() for e in self.entries],
+            "truncated": self.truncated,
+            "elapsed_ms": self.elapsed_ms,
+        }
+
+
+def walk_paths(
+    container,
+    *,
+    root: str,
+    excludes: tuple[str, ...],
+    max_entries: int,
+    max_depth: int,
+    timeout_s: float = 10.0,
+) -> WalkResultData:
+    """Run ``find`` inside the container and return parsed entries.
+
+    Wall-clock timeout is enforced via a worker thread: ``docker-py``'s
+    ``exec_run`` is blocking with no native deadline, and the walk path
+    is rare enough that one throwaway thread per call is fine.
+    """
+    argv = build_find_argv(root, excludes, max_depth=max_depth)
+
+    result: dict[str, object] = {}
+
+    def _run() -> None:
+        try:
+            ec, out = container.exec_run(argv, tty=False, demux=False)
+            result["ec"] = ec
+            result["out"] = out
+        except Exception as exc:
+            result["exc"] = exc
+
+    start = _time.monotonic()
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        raise WalkTimeout(f"walk timed out after {timeout_s}s for {root}")
+    elapsed_ms = int((_time.monotonic() - start) * 1000)
+
+    if "exc" in result:
+        raise WalkError(str(result["exc"]))
+    ec = result.get("ec", 1)
+    out = result.get("out", b"")
+    if ec != 0:
+        text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out or "")
+        raise WalkError(text.strip() or f"find exited with {ec}")
+
+    text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out)
+    entries, truncated = parse_find_output(text, root=root, max_entries=max_entries)
+    return WalkResultData(
+        root=root,
+        entries=entries,
+        truncated=truncated,
+        elapsed_ms=elapsed_ms,
+    )

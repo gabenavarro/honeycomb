@@ -34,6 +34,7 @@ import type {
   PullRequestSummary,
   RepoStatus,
   ResourceStats,
+  WalkResult,
 } from "./types";
 import { z } from "zod";
 
@@ -230,6 +231,19 @@ export const listContainerDirectory = (id: number, path: string) =>
 
 export const readContainerFile = (id: number, path: string) =>
   request<FileContent>(`/containers/${id}/fs/read?path=${encodeURIComponent(path)}`);
+
+export const listContainerFiles = (
+  id: number,
+  opts?: { root?: string; maxEntries?: number; maxDepth?: number; excludes?: string },
+) => {
+  const params = new URLSearchParams();
+  if (opts?.root) params.set("root", opts.root);
+  if (opts?.maxEntries !== undefined) params.set("max_entries", String(opts.maxEntries));
+  if (opts?.maxDepth !== undefined) params.set("max_depth", String(opts.maxDepth));
+  if (opts?.excludes !== undefined) params.set("excludes", opts.excludes);
+  const qs = params.toString();
+  return request<WalkResult>(`/containers/${id}/fs/walk${qs ? `?${qs}` : ""}`);
+};
 
 export function containerFileDownloadUrl(id: number, path: string): string {
   // Returns the hub URL the browser should GET directly (auth header
