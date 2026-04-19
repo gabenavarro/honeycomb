@@ -191,6 +191,45 @@ class FileContent(BaseModel):
     error: str | None = None
 
 
+# Keep compatible with the dict-return shape of /fs that test_api uses:
+# hub/routers/fs.py currently returns plain dicts for /fs, so we only
+# need a Pydantic response_model for /fs/walk where the new code wants
+# typed output. No refactor of the existing /fs return shape.
+
+
+class FsEntry(BaseModel):
+    """One directory entry — same shape the `/fs` endpoint returns.
+
+    Kept as a Pydantic model (not just a TypedDict) so FastAPI can
+    type-validate the walk payload and so we inherit OpenAPI schema
+    generation. The existing `/fs` endpoint still hand-rolls its dict
+    response — no churn there.
+    """
+
+    name: str
+    kind: str  # "file" | "dir" | "symlink" | "other"
+    size: int
+    mode: str
+    mtime: str
+    target: str | None = None
+
+
+class WalkResult(BaseModel):
+    """Body returned by `GET /api/containers/{id}/fs/walk`.
+
+    A flat list of every entry under `root`, depth-bounded and
+    pruning well-known junk dirs (`.git`, `node_modules`, …). The
+    dashboard indexes this for the palette's `file:` mode, the file
+    viewer's cross-directory lookups (M24+), and future Claude diff
+    hooks (M26 ε).
+    """
+
+    root: str
+    entries: list[FsEntry]
+    truncated: bool
+    elapsed_ms: int
+
+
 # --- Resources ---
 
 
