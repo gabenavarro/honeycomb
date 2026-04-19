@@ -25,6 +25,7 @@ import type {
   DiscoverRegisterRequest,
   DiscoveryResponse,
   FileContent,
+  FileWriteRequest,
   GitFileStatus,
   HubHealth,
   HubSettings,
@@ -231,6 +232,13 @@ export const listContainerDirectory = (id: number, path: string) =>
 
 export const readContainerFile = (id: number, path: string) =>
   request<FileContent>(`/containers/${id}/fs/read?path=${encodeURIComponent(path)}`);
+
+export const writeContainerFile = (id: number, body: FileWriteRequest) =>
+  request<FileContent>(`/containers/${id}/fs/write`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
 export const listContainerFiles = (
   id: number,
