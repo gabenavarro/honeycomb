@@ -84,7 +84,7 @@ function suggestionsFromMakefile(content: string): ContainerSuggestion[] {
     // Reject lines that start with whitespace (recipe body) or `.` or `#`.
     if (!raw || raw.startsWith("\t") || raw.startsWith(" ")) continue;
     if (raw.startsWith("#") || raw.startsWith(".")) continue;
-    const m = raw.match(/^([A-Za-z0-9_\-]+):(\s|$)/);
+    const m = raw.match(/^([A-Za-z0-9_-]+):(\s|$)/);
     if (!m) continue;
     const name = m[1];
     targets.add(name);
