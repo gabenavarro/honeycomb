@@ -19,7 +19,7 @@ interface UseContainerFileIndexOptions {
   enabled?: boolean;
 }
 
-interface UseContainerFileIndexResult {
+export interface UseContainerFileIndexResult {
   entries: FsEntry[];
   truncated: boolean;
   isLoading: boolean;
