@@ -185,10 +185,30 @@ class FileContent(BaseModel):
     path: str
     mime_type: str
     size_bytes: int
+    # M24 — nanosecond-resolution mtime echoed back on every read so
+    # the dashboard can guard against concurrent on-disk edits when it
+    # later writes via PUT /fs/write. 0 when the stat call failed
+    # (preserved for back-compat with the single "truncated" branch).
+    mtime_ns: int = 0
     content: str | None = None
     content_base64: str | None = None
     truncated: bool = False
     error: str | None = None
+
+
+class FileWriteRequest(BaseModel):
+    """Body for ``PUT /api/containers/{id}/fs/write`` (M24).
+
+    Exactly one of ``content`` / ``content_base64`` must be set. The
+    ``if_match_mtime_ns`` echo comes from the most recent ``GET
+    /fs/read`` — the hub refuses the write if the file on disk has
+    changed since then (409).
+    """
+
+    path: str
+    content: str | None = None
+    content_base64: str | None = None
+    if_match_mtime_ns: int
 
 
 # Keep compatible with the dict-return shape of /fs that test_api uses:

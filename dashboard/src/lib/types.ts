@@ -217,8 +217,21 @@ export interface FileContent {
   path: string;
   mime_type: string;
   size_bytes: number;
-  content: string | null;
-  content_base64: string | null;
-  truncated: boolean;
-  error: string | null;
+  /** M24 — nanosecond-resolution mtime, echoed back on every read
+   * so the client can send it as ``if_match_mtime_ns`` on PUT. 0
+   * when the backend's stat failed. */
+  mtime_ns: number;
+  content?: string | null;
+  content_base64?: string | null;
+  truncated?: boolean;
+  error?: string | null;
+}
+
+// M24 — write-back editing.
+
+export interface FileWriteRequest {
+  path: string;
+  content?: string | null;
+  content_base64?: string | null;
+  if_match_mtime_ns: number;
 }

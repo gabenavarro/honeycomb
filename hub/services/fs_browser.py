@@ -28,7 +28,10 @@ those in a web UI anyway).
 
 from __future__ import annotations
 
+import base64
+import io
 import re
+import tarfile
 import threading
 import time as _time
 from dataclasses import dataclass
@@ -397,3 +400,208 @@ def walk_paths(
         truncated=truncated,
         elapsed_ms=elapsed_ms,
     )
+
+
+# --- M24: write-back editing ---
+
+
+MAX_WRITE_BYTES = 5 * 1024 * 1024
+
+
+class FileNotFound(RuntimeError):
+    """Raised when the target file doesn't exist at write time. The
+    router translates this into 404 (overwrite-only contract)."""
+
+
+class WriteConflict(RuntimeError):
+    """Raised when the on-disk mtime differs from the client's
+    ``if_match_mtime_ns`` echo. The router translates into 409 and
+    includes ``current_mtime_ns`` in the response body so the client
+    can offer a 'Save anyway' affordance without a second round trip."""
+
+    def __init__(self, current_mtime_ns: int) -> None:
+        super().__init__("File changed on disk")
+        self.current_mtime_ns = current_mtime_ns
+
+
+class WriteTooLarge(RuntimeError):
+    """Raised when the decoded payload exceeds ``MAX_WRITE_BYTES``.
+    Router → 413."""
+
+
+class WriteError(RuntimeError):
+    """Raised when ``put_archive`` signals failure (permission denied,
+    read-only bind mount, docker daemon hiccup). Router → 502 with the
+    error message propagated verbatim."""
+
+
+def parse_stat_size_mtime(raw: str) -> tuple[int, int]:
+    """Parse ``stat -c '%s|%Y.%N'`` output into ``(size, mtime_ns)``.
+
+    The format is deliberately unusual — ``%s`` is bytes, ``%Y`` is
+    seconds-since-epoch, ``%N`` is nanoseconds (GNU coreutils
+    extension). We combine ``%Y`` + ``%N`` into a single nanosecond
+    integer so the client can echo it back verbatim.
+    """
+    if "|" not in raw:
+        raise ValueError(f"expected 'size|secs.nanos', got {raw!r}")
+    size_s, secs_nanos = raw.strip().split("|", 1)
+    size = int(size_s)
+    # ``%N`` is nine digits; pad with zeros if upstream rounded.
+    if "." not in secs_nanos:
+        secs, nanos = secs_nanos, "0"
+    else:
+        secs, nanos = secs_nanos.split(".", 1)
+    nanos = (nanos + "000000000")[:9]
+    mtime_ns = int(secs) * 1_000_000_000 + int(nanos)
+    return size, mtime_ns
+
+
+def parse_stat_mode_ownership(raw: str) -> tuple[int, int, int]:
+    """Parse ``stat -c '%a|%u|%g'`` into ``(mode, uid, gid)``.
+
+    ``%a`` is octal permissions without the leading ``0o``. We accept
+    three- or four-digit values (setuid/setgid/sticky prefix).
+    """
+    parts = raw.strip().split("|")
+    if len(parts) != 3:
+        raise ValueError(f"expected 'mode|uid|gid', got {raw!r}")
+    mode_s, uid_s, gid_s = parts
+    mode = int(mode_s, 8)
+    return mode, int(uid_s), int(gid_s)
+
+
+def decode_write_payload(
+    *,
+    content: str | None,
+    content_base64: str | None,
+) -> bytes:
+    """Validate + decode the FileWriteRequest body into raw bytes.
+
+    Exactly one of ``content`` / ``content_base64`` must be set. Raises
+    ``InvalidFsPath`` (re-used as the 400-mapping exception) on both-
+    or-neither; ``WriteTooLarge`` if the decoded payload exceeds the
+    5 MiB cap.
+    """
+    if content is not None and content_base64 is not None:
+        raise InvalidFsPath("set exactly one of content / content_base64, not both")
+    if content is None and content_base64 is None:
+        raise InvalidFsPath("set exactly one of content / content_base64")
+    if content is not None:
+        data = content.encode("utf-8")
+    else:
+        try:
+            data = base64.b64decode(content_base64 or "", validate=True)
+        except (ValueError, _binascii_error()) as exc:
+            raise InvalidFsPath(f"content_base64 is not valid base64: {exc}") from exc
+    if len(data) > MAX_WRITE_BYTES:
+        raise WriteTooLarge(f"payload is {len(data)} bytes, exceeds {MAX_WRITE_BYTES}-byte cap")
+    return data
+
+
+def _binascii_error() -> type[BaseException]:
+    """Return the Error class of ``binascii`` without importing it at
+    module load — keeps import time tight."""
+    import binascii
+
+    return binascii.Error
+
+
+def build_write_tar(
+    basename: str,
+    content: bytes,
+    mode: int,
+    uid: int,
+    gid: int,
+) -> bytes:
+    """Build an in-memory tar holding a single file entry.
+
+    ``docker-py``'s ``container.put_archive(path=parent_dir, data=...)``
+    expects a tar stream. We use ``PAX_FORMAT`` so large files and
+    non-ASCII filenames survive the round trip; the Docker daemon
+    accepts all three format flavours in practice but PAX is the most
+    forward-compatible.
+    """
+    info = tarfile.TarInfo(name=basename)
+    info.size = len(content)
+    info.mode = mode
+    info.uid = uid
+    info.gid = gid
+    info.mtime = int(_time.time())
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w", format=tarfile.PAX_FORMAT) as tf:
+        tf.addfile(info, io.BytesIO(content))
+    return buf.getvalue()
+
+
+@dataclass(frozen=True, slots=True)
+class WriteResultData:
+    """Return shape from ``write_file``. The router wraps this +
+    the client-submitted content into the ``FileContent`` response."""
+
+    path: str
+    size: int
+    mtime_ns: int
+
+    def to_dict(self) -> dict:
+        return {"path": self.path, "size": self.size, "mtime_ns": self.mtime_ns}
+
+
+def write_file(
+    container,
+    *,
+    path: str,
+    payload: bytes,
+    if_match_mtime_ns: int,
+) -> WriteResultData:
+    """Atomically replace ``path`` inside the container with
+    ``payload``.
+
+    Steps: stat the existing file (404 if absent, 409 on mtime
+    mismatch), read its mode/uid/gid, build a single-entry tar,
+    ``put_archive`` the tar into the parent directory, and re-stat
+    to produce the post-write mtime.
+    """
+    # Pre-write stat — gets size + mtime.
+    ec, out = container.exec_run(["stat", "-c", "%s|%Y.%N", "--", path], tty=False, demux=False)
+    text = out.decode("utf-8", errors="replace") if isinstance(out, bytes) else str(out or "")
+    if ec != 0:
+        raise FileNotFound(text.strip() or f"stat exited with {ec}")
+    try:
+        _current_size, current_mtime_ns = parse_stat_size_mtime(text)
+    except ValueError as exc:
+        raise WriteError(f"unparseable stat output: {text!r}") from exc
+    if current_mtime_ns != if_match_mtime_ns:
+        raise WriteConflict(current_mtime_ns)
+
+    # Mode / uid / gid — copied into the tar header so the written
+    # file inherits the original ownership bits.
+    ec2, out2 = container.exec_run(["stat", "-c", "%a|%u|%g", "--", path], tty=False, demux=False)
+    text2 = out2.decode("utf-8", errors="replace") if isinstance(out2, bytes) else str(out2 or "")
+    if ec2 != 0:
+        raise WriteError(text2.strip() or f"stat-mode exited with {ec2}")
+    try:
+        mode, uid, gid = parse_stat_mode_ownership(text2)
+    except ValueError as exc:
+        raise WriteError(f"unparseable mode/uid/gid: {text2!r}") from exc
+
+    # Split path into parent + basename for put_archive.
+    parent = path.rsplit("/", 1)[0] or "/"
+    basename = path.rsplit("/", 1)[-1]
+    tar_bytes = build_write_tar(basename, payload, mode, uid, gid)
+
+    ok = container.put_archive(path=parent, data=tar_bytes)
+    if not ok:
+        raise WriteError("put_archive returned falsy")
+
+    # Post-write stat — surfaces the new mtime/size.
+    ec3, out3 = container.exec_run(["stat", "-c", "%s|%Y.%N", "--", path], tty=False, demux=False)
+    text3 = out3.decode("utf-8", errors="replace") if isinstance(out3, bytes) else str(out3 or "")
+    if ec3 != 0:
+        raise WriteError(text3.strip() or f"post-stat exited with {ec3}")
+    try:
+        new_size, new_mtime_ns = parse_stat_size_mtime(text3)
+    except ValueError as exc:
+        raise WriteError(f"unparseable post-stat output: {text3!r}") from exc
+
+    return WriteResultData(path=path, size=new_size, mtime_ns=new_mtime_ns)

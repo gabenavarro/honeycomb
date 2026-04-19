@@ -23,6 +23,11 @@ interface Props {
   label?: string;
   /** Called with every caught error; useful for tests + logging hooks. */
   onError?: (error: Error, info: ErrorInfo) => void;
+  /** M24 — when set, replaces the default "Try again" card with the
+   * supplied node. Consumers that want to preserve operation despite
+   * a child crash (e.g., the FileViewer's textarea fallback when
+   * CodeMirror fails to load) opt in via this prop. */
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -53,6 +58,12 @@ export class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) {
       return this.props.children;
+    }
+
+    // M24 — fall back to the consumer-supplied node if present. No
+    // label / reset button in this path; the consumer owns recovery.
+    if (this.props.fallback !== undefined) {
+      return this.props.fallback;
     }
 
     const label = this.props.label ?? "the editor";
