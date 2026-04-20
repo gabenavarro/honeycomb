@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections import deque
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,12 @@ from hub.models.schemas import ResourceStats
 
 logger = logging.getLogger("hub.resource_monitor")
 
+# M25 — one ring buffer per container_id; capped at 60 samples
+# (= 5 minutes at the default 5s poll cadence). Lives on the
+# ResourceMonitor instance rather than module state so tests can
+# instantiate multiple monitors without cross-test bleed.
+HISTORY_CAP = 60
+
 
 class ResourceMonitor:
     """Monitors CPU, memory, and GPU usage per container."""
@@ -23,6 +30,7 @@ class ResourceMonitor:
         self.poll_interval = poll_interval
         self._docker: docker.DockerClient | None = None
         self._stats_cache: dict[str, ResourceStats] = {}
+        self._history: dict[str, deque[ResourceStats]] = {}
         self._poll_task: asyncio.Task[None] | None = None
 
     @property
@@ -38,6 +46,29 @@ class ResourceMonitor:
     def get_all_stats(self) -> dict[str, ResourceStats]:
         """Get all cached stats."""
         return dict(self._stats_cache)
+
+    def _record_sample(self, container_id: str, stats: ResourceStats) -> None:
+        """Append a sample to the per-container ring buffer. Creates
+        the buffer on first use."""
+        buf = self._history.get(container_id)
+        if buf is None:
+            buf = deque(maxlen=HISTORY_CAP)
+            self._history[container_id] = buf
+        buf.append(stats)
+
+    def get_history(self, container_id: str) -> list[ResourceStats]:
+        """Return the last ``HISTORY_CAP`` samples for a container.
+
+        Returns an empty list when the container hasn't been sampled
+        yet (or was cleared). The returned list is a snapshot —
+        mutating it does not affect the internal buffer.
+        """
+        return list(self._history.get(container_id, ()))
+
+    def clear_history(self, container_id: str) -> None:
+        """Drop the buffer for ``container_id``. Idempotent — safe to
+        call for containers that were never sampled."""
+        self._history.pop(container_id, None)
 
     async def start(self, container_ids: list[str] | None = None) -> None:
         """Start the polling loop."""
@@ -135,6 +166,7 @@ class ResourceMonitor:
                 stats.gpu_memory_total_mb = gpu_stats["gpu_memory_total_mb"]
 
             self._stats_cache[cid] = stats
+            self._record_sample(cid, stats)
 
         return {cid: self._stats_cache[cid] for cid in container_ids if cid in self._stats_cache}
 
