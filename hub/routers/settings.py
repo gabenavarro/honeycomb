@@ -43,6 +43,7 @@ class SettingsPatch(BaseModel):
     log_level: str | None = None
     discover_roots: list[str] | None = None
     metrics_enabled: bool | None = None
+    timeline_visible: bool | None = None
 
 
 def _settings_to_dict(settings: HiveSettings) -> dict[str, Any]:

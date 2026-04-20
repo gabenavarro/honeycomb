@@ -147,6 +147,16 @@ class HiveSettings(BaseSettings):
         description="When True, /metrics exposes Prometheus counters/gauges.",
     )
 
+    # ── Dashboard UI ────────────────────────────────────────────────
+    timeline_visible: bool = Field(
+        default=True,
+        description=(
+            "Whether the dashboard shows the three-sparkline health "
+            "timeline above the session tabs. Shared across all "
+            "devices that sync via this hub."
+        ),
+    )
+
     # ── PTY + session caching (M15) ────────────────────────────────
     pty_grace_seconds: int = Field(
         default=3600,

@@ -39,7 +39,12 @@ async def test_get_settings_returns_mutable_fields(monkeypatch):
     body = response.json()
     assert "values" in body
     assert "mutable_fields" in body
-    assert set(body["mutable_fields"]) == {"log_level", "discover_roots", "metrics_enabled"}
+    assert set(body["mutable_fields"]) == {
+        "log_level",
+        "discover_roots",
+        "metrics_enabled",
+        "timeline_visible",
+    }
 
 
 @pytest.mark.asyncio
