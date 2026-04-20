@@ -71,9 +71,18 @@ test.beforeEach(async ({ context }) => {
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
+  await context.route("**/api/containers/7/resources/history", (route) =>
+    route.fulfill(mockJson([])),
+  );
   await context.route("**/api/containers/7/resources", (route) => route.fulfill(mockJson(null)));
   await context.route("**/api/health", (route) =>
     route.fulfill(mockJson({ status: "ok", version: "0.2.0" })),
+  );
+  // Catch-all for fs/read (project-detection probes). Per-test stubs registered
+  // after this are tried first (Playwright matches last-registered first), so
+  // individual tests can still override specific paths.
+  await context.route("**/api/containers/7/fs/read*", (route) =>
+    route.fulfill(mockJson(null)),
   );
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
   await context.route("**/api/containers/7/fs/walk*", (route) =>
