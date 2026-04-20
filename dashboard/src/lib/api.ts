@@ -141,6 +141,9 @@ export const getResources = (id: number) =>
     ResourceStatsSchema.nullable(),
   );
 
+export const getResourceHistory = (id: number) =>
+  request<ResourceStats[]>(`/containers/${id}/resources/history`);
+
 // --- Commands ---
 export const execCommand = (containerId: number, command: string) =>
   request<CommandResponse>(
