@@ -34,6 +34,7 @@ export function SettingsView() {
   const [logLevel, setLogLevel] = useState<string>("INFO");
   const [discoverRoots, setDiscoverRoots] = useState<string>("");
   const [metricsEnabled, setMetricsEnabled] = useState<boolean>(true);
+  const [timelineVisible, setTimelineVisible] = useState<boolean>(true);
 
   // Sync editable fields from the server whenever the query resolves
   // or re-resolves (post-mutation).
@@ -44,6 +45,7 @@ export function SettingsView() {
     if (Array.isArray(v.discover_roots))
       setDiscoverRoots((v.discover_roots as string[]).join("\n"));
     if (typeof v.metrics_enabled === "boolean") setMetricsEnabled(v.metrics_enabled);
+    if (typeof v.timeline_visible === "boolean") setTimelineVisible(v.timeline_visible);
   }, [data]);
 
   const mutation = useMutation({
@@ -86,6 +88,8 @@ export function SettingsView() {
     if (rootsChanged) patch.discover_roots = parsedRoots;
     const prevMetrics = Boolean(values.metrics_enabled);
     if (metricsEnabled !== prevMetrics) patch.metrics_enabled = metricsEnabled;
+    const prevTimeline = Boolean(values.timeline_visible);
+    if (timelineVisible !== prevTimeline) patch.timeline_visible = timelineVisible;
 
     if (Object.keys(patch).length === 0) {
       toast("info", "Nothing to save");
@@ -145,6 +149,20 @@ export function SettingsView() {
                 className="h-4 w-4"
               />
               <span>{metricsEnabled ? "on" : "off"}</span>
+            </label>
+          </Row>
+          <Row
+            label="timeline_visible"
+            tooltip="Show the three-sparkline health timeline above the session tabs. Shared across every device that syncs via this hub."
+          >
+            <label className="inline-flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={timelineVisible}
+                onChange={(e) => setTimelineVisible(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>{timelineVisible ? "on" : "off"}</span>
             </label>
           </Row>
         </div>
