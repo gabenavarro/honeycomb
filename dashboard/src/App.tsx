@@ -52,12 +52,14 @@ import { backoffRefetch } from "./hooks/useSmartPoll";
 import { dispatchPretype } from "./lib/pretypeBus";
 import {
   getContainerWorkdir,
+  getSettings,
   listContainerSessions,
   listContainers,
   listPRs,
   listProblems,
 } from "./lib/api";
 import type { ContainerRecord } from "./lib/types";
+import { HealthTimeline } from "./components/HealthTimeline";
 
 // Storage keys for layout state. Remembering these across reloads is
 // expected behavior for an IDE-style app.
@@ -201,6 +203,17 @@ export default function App() {
     queryFn: listContainers,
     refetchInterval: backoffRefetch(),
   });
+  // M25 — read settings so the health timeline can be toggled off
+  // globally. 30s staleTime since settings rarely change.
+  const { data: settingsData } = useQuery({
+    queryKey: ["settings"],
+    queryFn: getSettings,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const timelineVisible = Boolean(
+    (settingsData?.values as { timeline_visible?: boolean } | undefined)?.timeline_visible ?? true,
+  );
   const { data: prs = [] } = useQuery({
     queryKey: ["prs"],
     queryFn: () => listPRs("open"),
@@ -782,6 +795,11 @@ export default function App() {
                           path={activeFsPath}
                           onPathChange={setActiveFsPath}
                         />
+                        {/* M25 — three-sparkline health strip. Gated by
+                            the ``timeline_visible`` hub setting so users
+                            can hide it globally across every device that
+                            syncs via this hub. */}
+                        {timelineVisible && <HealthTimeline containerId={active.id} />}
                         {/* M16 — nested session tabs under the container. */}
                         <SessionSubTabs
                           sessions={activeSessions}
