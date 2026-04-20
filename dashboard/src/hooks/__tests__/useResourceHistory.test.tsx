@@ -102,9 +102,7 @@ describe("useResourceHistory", () => {
   });
 
   it("caps buffer at 60 entries", async () => {
-    mockHistory.mockResolvedValue(
-      Array.from({ length: 60 }, (_v, i) => sample(`t${i}`, i)),
-    );
+    mockHistory.mockResolvedValue(Array.from({ length: 60 }, (_v, i) => sample(`t${i}`, i)));
     mockLive.mockResolvedValue(sample("t60", 60));
     const { result } = renderHook(() => useResourceHistory(1), { wrapper });
     await waitFor(() => expect(result.current.length).toBe(60));

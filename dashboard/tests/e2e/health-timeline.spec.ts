@@ -54,9 +54,7 @@ async function seedAuthAndSharedRoutes(
     [TOKEN, "[7]", "7"],
   );
 
-  await context.route("**/api/containers", (route) =>
-    route.fulfill(mockJson([containerFixture])),
-  );
+  await context.route("**/api/containers", (route) => route.fulfill(mockJson([containerFixture])));
   await context.route("**/api/containers/7/workdir", (route) =>
     route.fulfill(mockJson({ path: "/w" })),
   );
@@ -73,33 +71,22 @@ async function seedAuthAndSharedRoutes(
           timeline_visible: true,
           ...(settingsOverride ?? {}),
         },
-        mutable_fields: [
-          "log_level",
-          "discover_roots",
-          "metrics_enabled",
-          "timeline_visible",
-        ],
+        mutable_fields: ["log_level", "discover_roots", "metrics_enabled", "timeline_visible"],
       }),
     ),
   );
-  await context.route("**/api/keybindings**", (route) =>
-    route.fulfill(mockJson({ bindings: {} })),
-  );
+  await context.route("**/api/keybindings**", (route) => route.fulfill(mockJson({ bindings: {} })));
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
   await context.route("**/api/health**", (route) => route.fulfill(mockJson({ status: "ok" })));
   // Stub fs routes so unhandled ones don't fall through to the hub and
   // return 401 (which would clear the test token and open the AuthGate).
-  await context.route("**/api/containers/7/fs/**", (route) =>
-    route.fulfill(mockJson(null)),
-  );
+  await context.route("**/api/containers/7/fs/**", (route) => route.fulfill(mockJson(null)));
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
 }
 
-async function seedTimelineRoutes(
-  context: import("@playwright/test").BrowserContext,
-) {
+async function seedTimelineRoutes(context: import("@playwright/test").BrowserContext) {
   const history = Array.from({ length: 12 }, (_v, i) => ({
     container_id: "dead",
     cpu_percent: i * 5,
@@ -154,16 +141,11 @@ test("timeline strip renders and click opens the resource monitor popover", asyn
   await expect(page.locator("[role='dialog']").first()).toBeVisible();
 });
 
-test("timeline strip hides when timeline_visible is false", async ({
-  context,
-  page,
-}) => {
+test("timeline strip hides when timeline_visible is false", async ({ context, page }) => {
   await seedAuthAndSharedRoutes(context, { timeline_visible: false });
   await seedTimelineRoutes(context);
 
   await page.goto("/");
   // Timeline button should not be present when the setting is off.
-  await expect(
-    page.getByRole("button", { name: /open resource monitor/i }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /open resource monitor/i })).toHaveCount(0);
 });

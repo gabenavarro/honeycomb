@@ -19,9 +19,7 @@ import type { ResourceStats } from "../lib/types";
 
 const HISTORY_CAP = 60;
 
-export function useResourceHistory(
-  containerId: number | null,
-): ResourceStats[] {
+export function useResourceHistory(containerId: number | null): ResourceStats[] {
   const { data: seed } = useQuery({
     queryKey: ["resources:history", containerId],
     queryFn: () => getResourceHistory(containerId as number),
@@ -49,16 +47,11 @@ export function useResourceHistory(
   useEffect(() => {
     if (!live) return;
     setBuffer((prev) => {
-      if (
-        prev.length > 0 &&
-        prev[prev.length - 1].timestamp === live.timestamp
-      ) {
+      if (prev.length > 0 && prev[prev.length - 1].timestamp === live.timestamp) {
         return prev;
       }
       const next = [...prev, live];
-      return next.length > HISTORY_CAP
-        ? next.slice(next.length - HISTORY_CAP)
-        : next;
+      return next.length > HISTORY_CAP ? next.slice(next.length - HISTORY_CAP) : next;
     });
   }, [live]);
 

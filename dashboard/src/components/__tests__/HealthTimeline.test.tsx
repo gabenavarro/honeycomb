@@ -30,12 +30,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-function sample(
-  cpu = 10,
-  mem = 20,
-  gpu: number | null = 30,
-  ts = "2026-04-19T00:00:00",
-) {
+function sample(cpu = 10, mem = 20, gpu: number | null = 30, ts = "2026-04-19T00:00:00") {
   return {
     container_id: "c1",
     cpu_percent: cpu,

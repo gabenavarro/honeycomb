@@ -73,9 +73,7 @@ export function HealthTimeline({ containerId }: Props) {
   const gpuMissing = useMemo(
     () =>
       samples.length > 0 &&
-      samples.every(
-        (s) => s.gpu_utilization === null || s.gpu_utilization === undefined,
-      ),
+      samples.every((s) => s.gpu_utilization === null || s.gpu_utilization === undefined),
     [samples],
   );
 
@@ -168,10 +166,7 @@ function Sparkline({ spec }: { spec: SparklineSpec }) {
           <div className="h-full min-w-0 flex-1">
             {spec.data.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={spec.data}
-                  margin={{ top: 4, right: 4, left: 4, bottom: 4 }}
-                >
+                <AreaChart data={spec.data} margin={{ top: 4, right: 4, left: 4, bottom: 4 }}>
                   <YAxis hide domain={[0, 100]} />
                   <Area
                     type="monotone"
@@ -188,7 +183,7 @@ function Sparkline({ spec }: { spec: SparklineSpec }) {
               <div className="h-full w-full" aria-hidden="true" />
             )}
           </div>
-          <span className="w-10 shrink-0 font-mono text-right text-[#c0c0c0]">{spec.last}%</span>
+          <span className="w-10 shrink-0 text-right font-mono text-[#c0c0c0]">{spec.last}%</span>
         </div>
       </Tooltip.Trigger>
       <Tooltip.Portal>
