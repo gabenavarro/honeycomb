@@ -153,6 +153,7 @@ export interface HubSettingsPatch {
   log_level?: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
   discover_roots?: string[];
   metrics_enabled?: boolean;
+  timeline_visible?: boolean;
 }
 
 export type ProblemSeverity = "info" | "warning" | "error";

@@ -30,6 +30,7 @@ MUTABLE_FIELDS: frozenset[str] = frozenset(
         "log_level",
         "discover_roots",
         "metrics_enabled",
+        "timeline_visible",
     }
 )
 
