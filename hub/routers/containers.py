@@ -294,6 +294,32 @@ async def get_resources(request: Request, record_id: int) -> ResourceStats | Non
     return resource_monitor.get_stats(record.container_id)
 
 
+@router.get(
+    "/{record_id}/resources/history",
+    response_model=list[ResourceStats],
+)
+async def get_resources_history(request: Request, record_id: int) -> list[ResourceStats]:
+    """Return the last 60 resource samples (5 min at 5s cadence) for
+    the given container.
+
+    Returns an empty list when the container was just registered and
+    hasn't been sampled yet, when its container_id is still unset, or
+    after ``clear_history`` was called. An empty buffer is a valid
+    state — clients render a muted "Collecting…" placeholder rather
+    than treating it as an error.
+    """
+    registry = request.app.state.registry
+    resource_monitor = request.app.state.resource_monitor
+    try:
+        record = await registry.get(record_id)
+    except KeyError:
+        raise HTTPException(404)
+
+    if not record.container_id:
+        return []
+    return resource_monitor.get_history(record.container_id)
+
+
 @router.post("/{record_id}/install-claude-cli")
 async def install_claude_cli(request: Request, record_id: int) -> dict[str, Any]:
     """Install the Claude Code CLI inside the container via npm.
