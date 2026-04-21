@@ -94,6 +94,12 @@ def _legacy_schema_needs_reset(db_path: Path) -> str | None:
     return None
 
 
+def apply_migrations_sync(db_path: Path) -> None:
+    """Alias for :func:`run_migrations` — used by tests that prefer the
+    more explicit name."""
+    run_migrations(db_path)
+
+
 def run_migrations(db_path: Path) -> None:
     """Ensure the DB file exists and is at the latest Alembic revision.
 

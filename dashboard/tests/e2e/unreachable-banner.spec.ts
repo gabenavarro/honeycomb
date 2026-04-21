@@ -75,6 +75,11 @@ test.describe("Unreachable banner — agent_expected=false", () => {
       route.fulfill(mockJson({ bindings: {} })),
     );
     await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
+    // M26 — stub named-sessions so useSessions doesn't fall through to
+    // the hub and return 401, which would clear the auth token.
+    await context.route("**/api/containers/*/named-sessions", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: "[]" }),
+    );
   });
 
   test("does NOT render the banner when agent_expected is false", async ({ context, page }) => {
