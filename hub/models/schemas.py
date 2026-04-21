@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -248,6 +248,38 @@ class WalkResult(BaseModel):
     entries: list[FsEntry]
     truncated: bool
     elapsed_ms: int
+
+
+# --- M26: persistent named sessions ---
+
+
+class NamedSession(BaseModel):
+    """One persistent session row (M26).
+
+    Returned by the new CRUD routes at
+    ``/api/containers/{id}/named-sessions`` and
+    ``/api/named-sessions/{session_id}``.
+    """
+
+    session_id: str
+    container_id: int
+    name: str
+    kind: Literal["shell", "claude"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class NamedSessionCreate(BaseModel):
+    """Body for ``POST /api/containers/{id}/named-sessions``."""
+
+    name: str = Field(..., min_length=1, max_length=64)
+    kind: Literal["shell", "claude"] = "shell"
+
+
+class NamedSessionPatch(BaseModel):
+    """Body for ``PATCH /api/named-sessions/{session_id}``."""
+
+    name: str = Field(..., min_length=1, max_length=64)
 
 
 # --- Resources ---
