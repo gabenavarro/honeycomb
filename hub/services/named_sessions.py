@@ -36,6 +36,7 @@ def _row_to_model(row) -> NamedSession:
         container_id=row["container_id"],
         name=row["name"],
         kind=row["kind"],
+        position=row["position"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -70,7 +71,7 @@ async def create_session(
             (
                 await conn.execute(
                     sa.text(
-                        "SELECT session_id, container_id, name, kind, "
+                        "SELECT session_id, container_id, name, kind, position, "
                         "created_at, updated_at FROM sessions "
                         "WHERE session_id = :sid"
                     ),
@@ -98,7 +99,7 @@ async def list_sessions(
             (
                 await conn.execute(
                     sa.text(
-                        "SELECT session_id, container_id, name, kind, "
+                        "SELECT session_id, container_id, name, kind, position, "
                         "created_at, updated_at FROM sessions "
                         "WHERE container_id = :cid "
                         "ORDER BY created_at ASC, session_id ASC"
@@ -132,7 +133,7 @@ async def rename_session(
             (
                 await conn.execute(
                     sa.text(
-                        "SELECT session_id, container_id, name, kind, "
+                        "SELECT session_id, container_id, name, kind, position, "
                         "created_at, updated_at FROM sessions "
                         "WHERE session_id = :sid"
                     ),
