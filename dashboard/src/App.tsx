@@ -273,6 +273,7 @@ export default function App() {
   // from the session list itself).
   const {
     sessions: namedSessions,
+    isLoading: sessionsLoading,
     create: createSessionApi,
     rename: renameSessionApi,
     close: closeSessionApi,
@@ -296,14 +297,18 @@ export default function App() {
 
   // M26 — first-load-empty guard: auto-create a default shell session
   // so the tab strip never renders blank after migration.
+  // Gate on !sessionsLoading so we don't fire before the hub has had a
+  // chance to respond — avoids cancelling the in-flight GET and losing
+  // any sessions the hub already knows about.
   const firstEmptyGuardRef = useRef(false);
   useEffect(() => {
     if (active === undefined) return;
+    if (sessionsLoading) return;
     if (namedSessions.length > 0) return;
     if (firstEmptyGuardRef.current) return;
     firstEmptyGuardRef.current = true;
     void createSessionApi({ name: "Main", kind: "shell" });
-  }, [active, namedSessions, createSessionApi]);
+  }, [active, namedSessions, sessionsLoading, createSessionApi]);
   useEffect(() => {
     // Reset the guard when the active container changes.
     firstEmptyGuardRef.current = false;

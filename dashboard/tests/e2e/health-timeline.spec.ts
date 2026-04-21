@@ -84,6 +84,11 @@ async function seedAuthAndSharedRoutes(
   // return 401 (which would clear the test token and open the AuthGate).
   await context.route("**/api/containers/7/fs/**", (route) => route.fulfill(mockJson(null)));
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
+  // M26 — stub named-sessions so useSessions doesn't fall through to
+  // the hub and return 401, which would clear the auth token.
+  await context.route("**/api/containers/7/named-sessions", (route) =>
+    route.fulfill(mockJson([])),
+  );
 }
 
 async function seedTimelineRoutes(context: import("@playwright/test").BrowserContext) {
