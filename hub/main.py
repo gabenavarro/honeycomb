@@ -32,6 +32,7 @@ from hub.routers import (
     fs,
     gitops,
     keybindings,
+    named_sessions,
     problems,
     pty,
     sessions,
@@ -356,6 +357,7 @@ app.include_router(discover.router)
 app.include_router(fs.router)
 app.include_router(gitops.router)
 app.include_router(keybindings.router)
+app.include_router(named_sessions.router)
 app.include_router(problems.router)
 app.include_router(pty.router)
 app.include_router(sessions.router)
