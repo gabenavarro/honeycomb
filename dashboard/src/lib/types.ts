@@ -236,3 +236,21 @@ export interface FileWriteRequest {
   content_base64?: string | null;
   if_match_mtime_ns: number;
 }
+
+// M26 — persistent named sessions.
+
+export type SessionKind = "shell" | "claude";
+
+export interface NamedSession {
+  session_id: string;
+  container_id: number;
+  name: string;
+  kind: SessionKind;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NamedSessionCreate {
+  name: string;
+  kind?: SessionKind;
+}

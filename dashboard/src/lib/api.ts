@@ -31,6 +31,8 @@ import type {
   HubSettings,
   HubSettingsPatch,
   KeybindingsPayload,
+  NamedSession,
+  NamedSessionCreate,
   Problem,
   PullRequestSummary,
   RepoStatus,
@@ -282,6 +284,26 @@ export interface ContainerSessionInfo {
 
 export const listContainerSessions = (id: number) =>
   request<{ sessions: ContainerSessionInfo[] }>(`/containers/${id}/sessions`);
+
+export const listNamedSessions = (id: number) =>
+  request<NamedSession[]>(`/containers/${id}/named-sessions`);
+
+export const createNamedSession = (id: number, body: NamedSessionCreate) =>
+  request<NamedSession>(`/containers/${id}/named-sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const renameNamedSession = (sessionId: string, name: string) =>
+  request<NamedSession>(`/named-sessions/${sessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+export const deleteNamedSession = (sessionId: string) =>
+  request<void>(`/named-sessions/${sessionId}`, { method: "DELETE" });
 
 export const commitChanges = (
   workspace_folder: string,
