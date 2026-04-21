@@ -23,7 +23,7 @@ from hub.services.named_sessions import (
     create_session,
     delete_session,
     list_sessions,
-    rename_session,
+    patch_session,
 )
 
 router = APIRouter(tags=["named-sessions"])
@@ -78,7 +78,7 @@ async def rename_named_session_endpoint(
     """Update the name + bump ``updated_at``."""
     registry = request.app.state.registry
     try:
-        return await rename_session(
+        return await patch_session(
             registry.engine,
             session_id=session_id,
             name=body.name,

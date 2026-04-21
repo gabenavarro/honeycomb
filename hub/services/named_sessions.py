@@ -49,21 +49,35 @@ async def create_session(
     name: str,
     kind: str,
 ) -> NamedSession:
-    """Insert a new session row and return the populated model."""
+    """Insert a new session row and return the populated model.
+
+    Position is assigned as ``max(position) + 1`` within the same
+    container — sessions always slot in at the end.
+    """
     session_id = uuid.uuid4().hex
     now = datetime.now().isoformat()
     async with engine.begin() as conn:
+        next_pos = (
+            await conn.execute(
+                sa.text(
+                    "SELECT COALESCE(MAX(position), 0) + 1 FROM sessions WHERE container_id = :cid"
+                ),
+                {"cid": container_id},
+            )
+        ).scalar_one()
         await conn.execute(
             sa.text(
                 "INSERT INTO sessions "
-                "(session_id, container_id, name, kind, created_at, updated_at) "
-                "VALUES (:sid, :cid, :name, :kind, :now, :now)"
+                "(session_id, container_id, name, kind, position, "
+                "created_at, updated_at) "
+                "VALUES (:sid, :cid, :name, :kind, :pos, :now, :now)"
             ),
             {
                 "sid": session_id,
                 "cid": container_id,
                 "name": name,
                 "kind": kind,
+                "pos": next_pos,
                 "now": now,
             },
         )
@@ -102,7 +116,7 @@ async def list_sessions(
                         "SELECT session_id, container_id, name, kind, position, "
                         "created_at, updated_at FROM sessions "
                         "WHERE container_id = :cid "
-                        "ORDER BY created_at ASC, session_id ASC"
+                        "ORDER BY position ASC, created_at ASC, session_id ASC"
                     ),
                     {"cid": container_id},
                 )
@@ -113,22 +127,58 @@ async def list_sessions(
     return [_row_to_model(r) for r in rows]
 
 
-async def rename_session(
+async def patch_session(
     engine: AsyncEngine,
     *,
     session_id: str,
-    name: str,
+    name: str | None = None,
+    position: int | None = None,
 ) -> NamedSession:
-    """Update the name + bump ``updated_at``. Raises
-    ``SessionNotFound`` when ``session_id`` doesn't exist."""
+    """Apply a partial update to a session row.
+
+    Raises ``SessionNotFound`` when ``session_id`` doesn't exist.
+    Raises ``ValueError`` when neither ``name`` nor ``position`` is
+    provided (router translates to 422).
+
+    When ``position`` is set, the service opens a transaction,
+    removes the moved row from the current ordering, reinserts at
+    the (clamped) requested index, and renumbers every row in the
+    same container to positions 1..N.
+    """
+    if name is None and position is None:
+        raise ValueError("patch requires at least one field")
+
     now = datetime.now().isoformat()
     async with engine.begin() as conn:
-        result = await conn.execute(
-            sa.text("UPDATE sessions SET name = :name, updated_at = :now WHERE session_id = :sid"),
-            {"name": name, "now": now, "sid": session_id},
+        current = (
+            (
+                await conn.execute(
+                    sa.text("SELECT container_id, position FROM sessions WHERE session_id = :sid"),
+                    {"sid": session_id},
+                )
+            )
+            .mappings()
+            .first()
         )
-        if result.rowcount == 0:
+        if current is None:
             raise SessionNotFound(session_id)
+
+        if position is not None:
+            await _reorder_within_container(
+                conn,
+                container_id=current["container_id"],
+                moved_session_id=session_id,
+                new_position=position,
+            )
+
+        if name is not None:
+            await conn.execute(
+                sa.text(
+                    "UPDATE sessions SET name = :name, updated_at = :now WHERE session_id = :sid"
+                ),
+                {"name": name, "now": now, "sid": session_id},
+            )
+
         row = (
             (
                 await conn.execute(
@@ -144,6 +194,46 @@ async def rename_session(
             .one()
         )
     return _row_to_model(row)
+
+
+async def _reorder_within_container(
+    conn,
+    *,
+    container_id: int,
+    moved_session_id: str,
+    new_position: int,
+) -> None:
+    """Move one session to ``new_position`` and renumber the rest
+    atomically inside an open transaction.
+
+    Positions are rewritten to contiguous 1..N after the move. The
+    ``new_position`` is clamped to ``[1, len(ids)+1]``.
+    """
+    rows = (
+        (
+            await conn.execute(
+                sa.text(
+                    "SELECT session_id FROM sessions "
+                    "WHERE container_id = :cid "
+                    "ORDER BY position ASC, created_at ASC, session_id ASC"
+                ),
+                {"cid": container_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    ids = [r["session_id"] for r in rows]
+    if moved_session_id not in ids:
+        raise SessionNotFound(moved_session_id)
+    ids.remove(moved_session_id)
+    target = max(1, min(new_position, len(ids) + 1))
+    ids.insert(target - 1, moved_session_id)
+    for new_pos, sid in enumerate(ids, start=1):
+        await conn.execute(
+            sa.text("UPDATE sessions SET position = :pos WHERE session_id = :sid"),
+            {"pos": new_pos, "sid": sid},
+        )
 
 
 async def delete_session(
