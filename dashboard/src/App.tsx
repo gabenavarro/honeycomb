@@ -47,10 +47,13 @@ import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErr
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
+import { useSessions } from "./hooks/useSessions";
 import { useToasts } from "./hooks/useToasts";
 import { backoffRefetch } from "./hooks/useSmartPoll";
 import { dispatchPretype } from "./lib/pretypeBus";
+import { runSessionMigration } from "./lib/migrateSessions";
 import {
+  createNamedSession,
   getContainerWorkdir,
   getSettings,
   listContainerSessions,
@@ -70,33 +73,14 @@ const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
 const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
 const LS_ROOT_LAYOUT_BY_CONTAINER = "hive:layout:rootPanelsByContainer"; // M21 L
-const LS_SESSIONS = "hive:layout:sessions"; // M16 — per-container nested sessions
-const LS_ACTIVE_SESSION = "hive:layout:activeSession"; // M16
+// M26 — active-session id per container (client-only; the authoritative
+// session list + names come from /api/containers/{id}/named-sessions).
+const LS_ACTIVE_SESSION_ID = "hive:layout:activeSessionByContainer";
 const LS_FS_PATHS = "hive:layout:fsPaths"; // M17 — per-container browsed path
 const LS_SESSION_SPLIT = "hive:layout:sessionSplit"; // M22.4 — per-container secondary session
 const LS_LAST_KIND_PREFIX = "hive:terminal-last-kind:";
 
-// M16 — client-side session registry.
-// Shape: { [containerId]: [{id, name}, ...] }.
-// Default per container is a single "Main" session whose id is literally
-// "default" so pre-M16 sessionStorage labels keep resolving.
-type SessionsByContainer = Record<string, SessionInfo[]>;
-
-function isSessionsByContainer(v: unknown): v is SessionsByContainer {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  return Object.values(v).every(
-    (arr) =>
-      Array.isArray(arr) &&
-      arr.every(
-        (it) =>
-          typeof it === "object" &&
-          it !== null &&
-          typeof (it as SessionInfo).id === "string" &&
-          typeof (it as SessionInfo).name === "string",
-      ),
-  );
-}
-function isActiveSessionMap(v: unknown): v is Record<string, string> {
+function isActiveSessionIdMap(v: unknown): v is Record<string, string> {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
   return Object.values(v).every((s) => typeof s === "string");
 }
@@ -153,6 +137,18 @@ const DEFAULT_ROOT_LAYOUT: Layout = {
 export default function App() {
   const queryClient = useQueryClient();
 
+  // M26 — one-shot migration from legacy localStorage to the hub.
+  // Idempotent via the guard key; this effect fires at most once
+  // per mount (React StrictMode double-runs effects; the guard
+  // makes the second call a no-op).
+  useEffect(() => {
+    void runSessionMigration().then((result) => {
+      if (result.migrated > 0) {
+        console.info("[m26] migrated", result.migrated, "sessions");
+      }
+    });
+  }, []);
+
   const [activity, setActivity] = useLocalStorage<Activity>(LS_ACTIVITY, "containers", {
     validate: isActivity,
   });
@@ -172,17 +168,9 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // M16 — nested sessions per container. The active-session map tracks
-  // which session is focused within each container tab; switching
-  // containers preserves each container's selection.
-  const [sessionsByContainer, setSessionsByContainer] = useLocalStorage<SessionsByContainer>(
-    LS_SESSIONS,
-    {},
-    { validate: isSessionsByContainer },
-  );
   const [activeSessionByContainer, setActiveSessionByContainer] = useLocalStorage<
     Record<string, string>
-  >(LS_ACTIVE_SESSION, {}, { validate: isActiveSessionMap });
+  >(LS_ACTIVE_SESSION_ID, {}, { validate: isActiveSessionIdMap });
   // M17 — the currently browsed container-filesystem path per container.
   // Empty until the user (or Breadcrumbs' mount effect) picks one up
   // from the container's WORKDIR.
@@ -280,45 +268,54 @@ export default function App() {
   });
   const activeWorkdir = activeWorkdirData?.path ?? "";
 
-  // M16 — session list for the active container. Auto-seed an implicit
-  // "Main" session so a freshly-opened container always has exactly one
-  // tab sitting underneath it; users never see an "empty editor with no
-  // sessions" state.
-  const activeSessions: SessionInfo[] = useMemo(() => {
-    if (active === undefined) return [];
-    const stored = sessionsByContainer[String(active.id)] ?? [];
-    if (stored.length > 0) return stored;
-    return [{ id: "default", name: "Main" }];
-  }, [active, sessionsByContainer]);
+  // M26 — sessions come from the hub. The active-session ID per
+  // container stays client-side (which tab is focused — different
+  // from the session list itself).
+  const {
+    sessions: namedSessions,
+    create: createSessionApi,
+    rename: renameSessionApi,
+    close: closeSessionApi,
+  } = useSessions(active?.id ?? null);
+
+  // Map NamedSession → SessionInfo ({id, name}) for SessionSubTabs.
+  const activeSessions: SessionInfo[] = useMemo(
+    () =>
+      active === undefined
+        ? []
+        : namedSessions.map((s) => ({ id: s.session_id, name: s.name })),
+    [active, namedSessions],
+  );
+
   const activeSessionId: string = useMemo(() => {
-    if (active === undefined) return "default";
+    if (active === undefined) return "";
     const stored = activeSessionByContainer[String(active.id)];
     if (stored && activeSessions.some((s) => s.id === stored)) return stored;
-    return activeSessions[0]?.id ?? "default";
+    return activeSessions[0]?.id ?? "";
   }, [active, activeSessionByContainer, activeSessions]);
 
-  const newSession = useCallback(() => {
+  // M26 — first-load-empty guard: auto-create a default shell session
+  // so the tab strip never renders blank after migration.
+  const firstEmptyGuardRef = useRef(false);
+  useEffect(() => {
     if (active === undefined) return;
-    const existing = sessionsByContainer[String(active.id)] ?? [{ id: "default", name: "Main" }];
-    const nextNumber = existing.length + 1;
-    const rawName = window.prompt(
-      `Name for the new session on ${active.project_name}:`,
-      `session ${nextNumber}`,
-    );
-    if (rawName === null) return; // cancelled
-    const name = rawName.trim() || `session ${nextNumber}`;
-    const id = `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    setSessionsByContainer((prev) => ({
-      ...prev,
-      [String(active.id)]: [...existing, { id, name }],
-    }));
-    setActiveSessionByContainer((prev) => ({ ...prev, [String(active.id)]: id }));
-  }, [active, sessionsByContainer, setSessionsByContainer, setActiveSessionByContainer]);
+    if (namedSessions.length > 0) return;
+    if (firstEmptyGuardRef.current) return;
+    firstEmptyGuardRef.current = true;
+    void createSessionApi({ name: "Main", kind: "shell" });
+  }, [active, namedSessions, createSessionApi]);
+  useEffect(() => {
+    // Reset the guard when the active container changes.
+    firstEmptyGuardRef.current = false;
+  }, [active?.id]);
 
   const focusSession = useCallback(
-    (id: string) => {
+    (sessionId: string) => {
       if (active === undefined) return;
-      setActiveSessionByContainer((prev) => ({ ...prev, [String(active.id)]: id }));
+      setActiveSessionByContainer((prev) => ({
+        ...prev,
+        [String(active.id)]: sessionId,
+      }));
     },
     [active, setActiveSessionByContainer],
   );
@@ -367,64 +364,46 @@ export default function App() {
     [active, setFsPathByContainer],
   );
 
-  const renameSession = useCallback(
-    (id: string, nextName: string) => {
-      if (active === undefined) return;
-      const containerKey = String(active.id);
-      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
-      const trimmed = nextName.trim();
-      if (!trimmed) return;
-      if (!existing.some((s) => s.id === id)) return;
-      const next = existing.map((s) => (s.id === id ? { ...s, name: trimmed } : s));
-      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
-    },
-    [active, sessionsByContainer, setSessionsByContainer],
-  );
+  const newSession = useCallback(async () => {
+    if (active === undefined) return;
+    const rawName = window.prompt(
+      `Name for the new session on ${active.project_name}:`,
+      `session ${namedSessions.length + 1}`,
+    );
+    if (rawName === null) return;
+    const name = rawName.trim() || `session ${namedSessions.length + 1}`;
+    const created = await createSessionApi({ name, kind: "shell" });
+    focusSession(created.session_id);
+  }, [active, namedSessions.length, createSessionApi, focusSession]);
 
-  const reorderSession = useCallback(
-    (fromId: string, toId: string) => {
-      if (active === undefined) return;
-      if (fromId === toId) return;
-      const containerKey = String(active.id);
-      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
-      const fromIdx = existing.findIndex((s) => s.id === fromId);
-      const toIdx = existing.findIndex((s) => s.id === toId);
-      if (fromIdx < 0 || toIdx < 0) return;
-      const next = existing.slice();
-      const [moved] = next.splice(fromIdx, 1);
-      // Insert BEFORE the target: matches VSCode's drag-tab behaviour.
-      const insertAt = fromIdx < toIdx ? toIdx - 1 : toIdx;
-      next.splice(insertAt, 0, moved);
-      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
+  const renameSession = useCallback(
+    async (sessionId: string, nextName: string) => {
+      await renameSessionApi(sessionId, nextName);
     },
-    [active, sessionsByContainer, setSessionsByContainer],
+    [renameSessionApi],
   );
 
   const closeSession = useCallback(
-    (id: string) => {
+    async (sessionId: string) => {
+      if (namedSessions.length <= 1) return; // keep at least one
+      await closeSessionApi(sessionId);
       if (active === undefined) return;
-      const containerKey = String(active.id);
-      const existing = sessionsByContainer[containerKey] ?? [{ id: "default", name: "Main" }];
-      // Guard: never let the user close the last session — the container
-      // tab would otherwise render an empty editor region.
-      if (existing.length <= 1) return;
-      const next = existing.filter((s) => s.id !== id);
-      setSessionsByContainer((prev) => ({ ...prev, [containerKey]: next }));
-      if (activeSessionByContainer[containerKey] === id) {
+      // If the closed session was active, pivot to the first remaining.
+      if (activeSessionByContainer[String(active.id)] === sessionId) {
+        const remaining = namedSessions.filter((s) => s.session_id !== sessionId);
         setActiveSessionByContainer((prev) => ({
           ...prev,
-          [containerKey]: next[0]?.id ?? "default",
+          [String(active.id)]: remaining[0]?.session_id ?? "",
         }));
       }
     },
-    [
-      active,
-      sessionsByContainer,
-      activeSessionByContainer,
-      setSessionsByContainer,
-      setActiveSessionByContainer,
-    ],
+    [active, namedSessions, activeSessionByContainer, closeSessionApi, setActiveSessionByContainer],
   );
+
+  // M26: reorder is a no-op for now. Future M28 adds drag-to-reorder.
+  const reorderSession = useCallback(() => {
+    /* M28 */
+  }, []);
   const splitContainer: ContainerRecord | null =
     splitId !== null && splitId !== activeTabId
       ? (containers.find((c) => c.id === splitId) ?? null)
@@ -458,12 +437,20 @@ export default function App() {
   );
 
   const newClaudeSession = useCallback(
-    (id: number) => {
+    async (id: number) => {
       localStorage.setItem(`${LS_LAST_KIND_PREFIX}${id}`, "claude");
       setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
       setActiveTabId(id);
+      // Create a Claude session for the newly focused container.
+      const target = containers.find((c) => c.id === id);
+      if (target === undefined) return;
+      const created = await createNamedSession(id, { name: "Claude", kind: "claude" });
+      setActiveSessionByContainer((prev) => ({
+        ...prev,
+        [String(id)]: created.session_id,
+      }));
     },
-    [setOpenTabs, setActiveTabId],
+    [containers, setOpenTabs, setActiveTabId, setActiveSessionByContainer],
   );
 
   const toggleSplit = useCallback(() => {
