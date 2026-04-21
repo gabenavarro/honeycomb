@@ -97,8 +97,7 @@ export async function runSessionMigration(): Promise<MigrationResult> {
         idMap[containerIdStr][entry.id] = row.session_id;
         migrated += 1;
       } catch (err) {
-        const reason =
-          err instanceof Error ? err.message : String(err ?? "unknown");
+        const reason = err instanceof Error ? err.message : String(err ?? "unknown");
         skipped.push({
           containerId: containerIdStr,
           oldId: entry.id,

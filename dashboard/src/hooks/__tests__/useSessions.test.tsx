@@ -11,18 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSessions } from "../useSessions";
 
-const mockList = vi.hoisted(() =>
-  vi.fn<(id: number) => Promise<unknown>>(),
-);
-const mockCreate = vi.hoisted(() =>
-  vi.fn<(id: number, body: unknown) => Promise<unknown>>(),
-);
-const mockRename = vi.hoisted(() =>
-  vi.fn<(sid: string, name: string) => Promise<unknown>>(),
-);
-const mockDelete = vi.hoisted(() =>
-  vi.fn<(sid: string) => Promise<void>>(),
-);
+const mockList = vi.hoisted(() => vi.fn<(id: number) => Promise<unknown>>());
+const mockCreate = vi.hoisted(() => vi.fn<(id: number, body: unknown) => Promise<unknown>>());
+const mockRename = vi.hoisted(() => vi.fn<(sid: string, name: string) => Promise<unknown>>());
+const mockDelete = vi.hoisted(() => vi.fn<(sid: string) => Promise<void>>());
 
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();

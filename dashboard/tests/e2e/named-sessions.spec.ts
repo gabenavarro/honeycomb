@@ -47,10 +47,7 @@ async function seedRoutes(
         window.localStorage.setItem("hive:layout:openTabs", openTab);
         window.localStorage.setItem("hive:layout:activeTab", activeTab);
         // Pre-mark the guard so auto-migration skips during this test.
-        window.localStorage.setItem(
-          "hive:layout:sessionsMigratedAt",
-          "2026-04-20T00:00:00",
-        );
+        window.localStorage.setItem("hive:layout:sessionsMigratedAt", "2026-04-20T00:00:00");
       } catch {
         // ignore
       }
@@ -58,9 +55,7 @@ async function seedRoutes(
     [TOKEN, "[7]", "7"],
   );
 
-  await context.route("**/api/containers", (route) =>
-    route.fulfill(mockJson([containerFixture])),
-  );
+  await context.route("**/api/containers", (route) => route.fulfill(mockJson([containerFixture])));
   await context.route("**/api/containers/7/workdir", (route) =>
     route.fulfill(mockJson({ path: "/w" })),
   );
@@ -80,15 +75,11 @@ async function seedRoutes(
       }),
     ),
   );
-  await context.route("**/api/keybindings**", (route) =>
-    route.fulfill(mockJson({ bindings: {} })),
-  );
+  await context.route("**/api/keybindings**", (route) => route.fulfill(mockJson({ bindings: {} })));
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
-  await context.route("**/api/containers/7/resources**", (route) =>
-    route.fulfill(mockJson(null)),
-  );
+  await context.route("**/api/containers/7/resources**", (route) => route.fulfill(mockJson(null)));
   await context.route("**/api/containers/7/fs/**", (route) =>
     route.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
   );
@@ -155,26 +146,23 @@ test("first-empty container auto-creates a Main session", async ({ context, page
 
   // Capture POST body; respond with a server-assigned UUID.
   const posts: unknown[] = [];
-  await context.route(
-    "**/api/containers/7/named-sessions",
-    async (route) => {
-      if (route.request().method() === "POST") {
-        posts.push(JSON.parse(route.request().postData() ?? "null"));
-        await route.fulfill(
-          mockJson({
-            session_id: "auto",
-            container_id: 7,
-            name: "Main",
-            kind: "shell",
-            created_at: "2026-04-20T00:00:00",
-            updated_at: "2026-04-20T00:00:00",
-          }),
-        );
-      } else {
-        await route.fulfill(mockJson([]));
-      }
-    },
-  );
+  await context.route("**/api/containers/7/named-sessions", async (route) => {
+    if (route.request().method() === "POST") {
+      posts.push(JSON.parse(route.request().postData() ?? "null"));
+      await route.fulfill(
+        mockJson({
+          session_id: "auto",
+          container_id: 7,
+          name: "Main",
+          kind: "shell",
+          created_at: "2026-04-20T00:00:00",
+          updated_at: "2026-04-20T00:00:00",
+        }),
+      );
+    } else {
+      await route.fulfill(mockJson([]));
+    }
+  });
   await page.goto("/");
   const tablist = page.getByRole("tablist", { name: /container sessions/i });
   await expect(tablist.getByRole("tab", { name: /Main/ }).first()).toBeVisible();

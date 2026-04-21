@@ -86,9 +86,7 @@ async function seedAuthAndSharedRoutes(
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
   // M26 — stub named-sessions so useSessions doesn't fall through to
   // the hub and return 401, which would clear the auth token.
-  await context.route("**/api/containers/7/named-sessions", (route) =>
-    route.fulfill(mockJson([])),
-  );
+  await context.route("**/api/containers/7/named-sessions", (route) => route.fulfill(mockJson([])));
 }
 
 async function seedTimelineRoutes(context: import("@playwright/test").BrowserContext) {

@@ -282,9 +282,7 @@ export default function App() {
   // Map NamedSession → SessionInfo ({id, name}) for SessionSubTabs.
   const activeSessions: SessionInfo[] = useMemo(
     () =>
-      active === undefined
-        ? []
-        : namedSessions.map((s) => ({ id: s.session_id, name: s.name })),
+      active === undefined ? [] : namedSessions.map((s) => ({ id: s.session_id, name: s.name })),
     [active, namedSessions],
   );
 

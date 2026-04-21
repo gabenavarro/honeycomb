@@ -54,8 +54,7 @@ export function useSessions(containerId: number | null): UseSessionsResult {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: NamedSessionCreate) =>
-      createNamedSession(containerId as number, input),
+    mutationFn: (input: NamedSessionCreate) => createNamedSession(containerId as number, input),
     onMutate: async (input) => {
       if (containerId === null) return { previous: [] as NamedSession[], pending: null };
       await qc.cancelQueries({ queryKey });

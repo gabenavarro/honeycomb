@@ -10,9 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runSessionMigration } from "../migrateSessions";
 
-const mockCreate = vi.hoisted(() =>
-  vi.fn<(id: number, body: unknown) => Promise<unknown>>(),
-);
+const mockCreate = vi.hoisted(() => vi.fn<(id: number, body: unknown) => Promise<unknown>>());
 
 vi.mock("../api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api")>();
@@ -64,10 +62,7 @@ describe("runSessionMigration", () => {
         ],
       }),
     );
-    localStorage.setItem(
-      "hive:layout:activeSession",
-      JSON.stringify({ "7": "s-abc" }),
-    );
+    localStorage.setItem("hive:layout:activeSession", JSON.stringify({ "7": "s-abc" }));
     localStorage.setItem("hive:terminal-last-kind:7:s-abc", "claude");
     sessionStorage.setItem("hive:pty:label:7:default", "default-abcdef01");
     sessionStorage.setItem("hive:pty:label:7:s-abc", "s-abc-deadbeef");
@@ -89,9 +84,7 @@ describe("runSessionMigration", () => {
     expect(calledWith).toContainEqual({ name: "Build", kind: "claude" });
 
     // activeSession rewritten: s-abc → srv-build.
-    const active = JSON.parse(
-      localStorage.getItem("hive:layout:activeSession") ?? "{}",
-    );
+    const active = JSON.parse(localStorage.getItem("hive:layout:activeSession") ?? "{}");
     expect(active).toEqual({ "7": "srv-build" });
 
     // terminal-last-kind moved to the new id.
