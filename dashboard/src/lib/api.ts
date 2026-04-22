@@ -302,6 +302,13 @@ export const renameNamedSession = (sessionId: string, name: string) =>
     body: JSON.stringify({ name }),
   });
 
+export const reorderNamedSession = (sessionId: string, position: number) =>
+  request<NamedSession>(`/named-sessions/${sessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ position }),
+  });
+
 export const deleteNamedSession = (sessionId: string) =>
   request<void>(`/named-sessions/${sessionId}`, { method: "DELETE" });
 

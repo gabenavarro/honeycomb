@@ -33,12 +33,13 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
-function session(id: string, name = "Main", kind = "shell") {
+function session(id: string, name = "Main", kind: "shell" | "claude" = "shell", position = 0) {
   return {
     session_id: id,
     container_id: 1,
     name,
     kind,
+    position,
     created_at: "2026-04-20T00:00:00",
     updated_at: "2026-04-20T00:00:00",
   };

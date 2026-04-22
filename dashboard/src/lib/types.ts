@@ -246,6 +246,8 @@ export interface NamedSession {
   container_id: number;
   name: string;
   kind: SessionKind;
+  /** M28 — 1-based slot. 0 = legacy row, never renumbered. */
+  position: number;
   created_at: string;
   updated_at: string;
 }
