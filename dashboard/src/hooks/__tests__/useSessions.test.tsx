@@ -15,9 +15,7 @@ const mockList = vi.hoisted(() => vi.fn<(id: number) => Promise<unknown>>());
 const mockCreate = vi.hoisted(() => vi.fn<(id: number, body: unknown) => Promise<unknown>>());
 const mockRename = vi.hoisted(() => vi.fn<(sid: string, name: string) => Promise<unknown>>());
 const mockDelete = vi.hoisted(() => vi.fn<(sid: string) => Promise<void>>());
-const mockReorder = vi.hoisted(() =>
-  vi.fn<(sid: string, position: number) => Promise<unknown>>(),
-);
+const mockReorder = vi.hoisted(() => vi.fn<(sid: string, position: number) => Promise<unknown>>());
 
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();
@@ -154,10 +152,7 @@ describe("useSessions.reorder", () => {
   });
 
   it("clamps out-of-range targets", async () => {
-    mockList.mockResolvedValue([
-      session("a", "a", "shell", 1),
-      session("b", "b", "shell", 2),
-    ]);
+    mockList.mockResolvedValue([session("a", "a", "shell", 1), session("b", "b", "shell", 2)]);
     mockReorder.mockResolvedValue(session("a", "a", "shell", 2));
     const { result } = renderHook(() => useSessions(1), { wrapper });
     await waitFor(() => expect(result.current.sessions.length).toBe(2));

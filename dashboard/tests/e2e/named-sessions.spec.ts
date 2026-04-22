@@ -234,26 +234,27 @@ test("drag a session tab to position 1 reorders via PATCH", async ({ context, pa
   // from React state (draggingId), not dataTransfer — Playwright's dragTo()
   // sometimes fails to trigger React synthetic events on tab strips, so we
   // fire the events manually for reliability.
-  await tabC.evaluate((el, target) => {
-    const dt = new DataTransfer();
-    dt.setData("text/x-hive-session", el.getAttribute("data-session-id") ?? "s-c");
-    el.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true }));
-    (target as HTMLElement).dispatchEvent(
-      new DragEvent("dragenter", { dataTransfer: dt, bubbles: true }),
-    );
-    (target as HTMLElement).dispatchEvent(
-      new DragEvent("dragover", { dataTransfer: dt, bubbles: true }),
-    );
-    (target as HTMLElement).dispatchEvent(
-      new DragEvent("drop", { dataTransfer: dt, bubbles: true }),
-    );
-    el.dispatchEvent(new DragEvent("dragend", { dataTransfer: dt, bubbles: true }));
-  }, await tabA.elementHandle());
+  await tabC.evaluate(
+    (el, target) => {
+      const dt = new DataTransfer();
+      dt.setData("text/x-hive-session", el.getAttribute("data-session-id") ?? "s-c");
+      el.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true }));
+      (target as HTMLElement).dispatchEvent(
+        new DragEvent("dragenter", { dataTransfer: dt, bubbles: true }),
+      );
+      (target as HTMLElement).dispatchEvent(
+        new DragEvent("dragover", { dataTransfer: dt, bubbles: true }),
+      );
+      (target as HTMLElement).dispatchEvent(
+        new DragEvent("drop", { dataTransfer: dt, bubbles: true }),
+      );
+      el.dispatchEvent(new DragEvent("dragend", { dataTransfer: dt, bubbles: true }));
+    },
+    await tabA.elementHandle(),
+  );
 
   // Expect one PATCH to s-c with position=1.
-  await expect
-    .poll(() => patches.length, { timeout: 3000 })
-    .toBeGreaterThan(0);
+  await expect.poll(() => patches.length, { timeout: 3000 }).toBeGreaterThan(0);
   const call = patches[0];
   expect(call.sid).toBe("s-c");
   expect(call.body).toEqual({ position: 1 });
