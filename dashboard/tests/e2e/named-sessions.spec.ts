@@ -169,3 +169,92 @@ test("first-empty container auto-creates a Main session", async ({ context, page
   // The auto-seed POST fired with the expected body.
   expect(posts).toContainEqual({ name: "Main", kind: "shell" });
 });
+
+test("drag a session tab to position 1 reorders via PATCH", async ({ context, page }) => {
+  const initialSessions = [
+    {
+      session_id: "s-a",
+      container_id: 7,
+      name: "a",
+      kind: "shell",
+      position: 1,
+      created_at: "2026-04-21T00:00:00",
+      updated_at: "2026-04-21T00:00:00",
+    },
+    {
+      session_id: "s-b",
+      container_id: 7,
+      name: "b",
+      kind: "shell",
+      position: 2,
+      created_at: "2026-04-21T00:00:01",
+      updated_at: "2026-04-21T00:00:01",
+    },
+    {
+      session_id: "s-c",
+      container_id: 7,
+      name: "c",
+      kind: "shell",
+      position: 3,
+      created_at: "2026-04-21T00:00:02",
+      updated_at: "2026-04-21T00:00:02",
+    },
+  ];
+
+  await seedRoutes(context, initialSessions);
+
+  // Capture PATCH calls to /named-sessions/*.
+  const patches: Array<{ sid: string; body: unknown }> = [];
+  await context.route("**/api/named-sessions/*", async (route) => {
+    const url = new URL(route.request().url());
+    const sid = url.pathname.split("/").pop() ?? "";
+    if (route.request().method() === "PATCH") {
+      patches.push({ sid, body: JSON.parse(route.request().postData() ?? "null") });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ...initialSessions[2], position: 1 }),
+      });
+    } else {
+      await route.fallback();
+    }
+  });
+
+  await page.goto("/");
+
+  // Wait for the session tabs to render.
+  const tabList = page.getByRole("tablist", { name: /container sessions/i });
+  const tabC = tabList.getByRole("tab", { name: /^c/ }).first();
+  const tabA = tabList.getByRole("tab", { name: /^a/ }).first();
+  await expect(tabC).toBeVisible();
+  await expect(tabA).toBeVisible();
+
+  // Drag tab c onto tab a's slot using manual HTML5 DnD event dispatch.
+  // SessionSubTabs uses onDragStart/onDragEnter/onDrop handlers that read
+  // from React state (draggingId), not dataTransfer — Playwright's dragTo()
+  // sometimes fails to trigger React synthetic events on tab strips, so we
+  // fire the events manually for reliability.
+  await tabC.evaluate((el, target) => {
+    const dt = new DataTransfer();
+    dt.setData("text/x-hive-session", el.getAttribute("data-session-id") ?? "s-c");
+    el.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true }));
+    (target as HTMLElement).dispatchEvent(
+      new DragEvent("dragenter", { dataTransfer: dt, bubbles: true }),
+    );
+    (target as HTMLElement).dispatchEvent(
+      new DragEvent("dragover", { dataTransfer: dt, bubbles: true }),
+    );
+    (target as HTMLElement).dispatchEvent(
+      new DragEvent("drop", { dataTransfer: dt, bubbles: true }),
+    );
+    el.dispatchEvent(new DragEvent("dragend", { dataTransfer: dt, bubbles: true }));
+  }, await tabA.elementHandle());
+
+  // Expect one PATCH to s-c with position=1.
+  await expect
+    .poll(() => patches.length, { timeout: 3000 })
+    .toBeGreaterThan(0);
+  const call = patches[0];
+  expect(call.sid).toBe("s-c");
+  expect(call.body).toEqual({ position: 1 });
+});
