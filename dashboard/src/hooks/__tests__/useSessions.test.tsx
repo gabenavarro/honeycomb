@@ -15,6 +15,9 @@ const mockList = vi.hoisted(() => vi.fn<(id: number) => Promise<unknown>>());
 const mockCreate = vi.hoisted(() => vi.fn<(id: number, body: unknown) => Promise<unknown>>());
 const mockRename = vi.hoisted(() => vi.fn<(sid: string, name: string) => Promise<unknown>>());
 const mockDelete = vi.hoisted(() => vi.fn<(sid: string) => Promise<void>>());
+const mockReorder = vi.hoisted(() =>
+  vi.fn<(sid: string, position: number) => Promise<unknown>>(),
+);
 
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();
@@ -24,6 +27,7 @@ vi.mock("../../lib/api", async (importOriginal) => {
     createNamedSession: mockCreate,
     renameNamedSession: mockRename,
     deleteNamedSession: mockDelete,
+    reorderNamedSession: mockReorder,
   };
 });
 
@@ -50,6 +54,7 @@ beforeEach(() => {
   mockCreate.mockReset();
   mockRename.mockReset();
   mockDelete.mockReset();
+  mockReorder.mockReset();
   qc = new QueryClient({
     defaultOptions: { queries: { retry: false, throwOnError: false } },
   });
@@ -124,5 +129,64 @@ describe("useSessions", () => {
     });
     await waitFor(() => expect(result.current.sessions.length).toBe(1));
     expect(result.current.sessions[0].session_id).toBe("b");
+  });
+});
+
+// --- M28: reorder ---
+
+describe("useSessions.reorder", () => {
+  it("reorders cache optimistically and renumbers 1..N", async () => {
+    mockList.mockResolvedValue([
+      session("a", "a", "shell", 1),
+      session("b", "b", "shell", 2),
+      session("c", "c", "shell", 3),
+    ]);
+    mockReorder.mockResolvedValue(session("c", "c", "shell", 1));
+    const { result } = renderHook(() => useSessions(1), { wrapper });
+    await waitFor(() => expect(result.current.sessions.length).toBe(3));
+    await act(async () => {
+      await result.current.reorder("c", 1);
+    });
+    await waitFor(() =>
+      expect(result.current.sessions.map((s) => s.session_id)).toEqual(["c", "a", "b"]),
+    );
+    expect(result.current.sessions.map((s) => s.position)).toEqual([1, 2, 3]);
+  });
+
+  it("clamps out-of-range targets", async () => {
+    mockList.mockResolvedValue([
+      session("a", "a", "shell", 1),
+      session("b", "b", "shell", 2),
+    ]);
+    mockReorder.mockResolvedValue(session("a", "a", "shell", 2));
+    const { result } = renderHook(() => useSessions(1), { wrapper });
+    await waitFor(() => expect(result.current.sessions.length).toBe(2));
+    await act(async () => {
+      await result.current.reorder("a", 999);
+    });
+    await waitFor(() =>
+      expect(result.current.sessions.map((s) => s.session_id)).toEqual(["b", "a"]),
+    );
+  });
+
+  it("rolls back on server error", async () => {
+    mockList.mockResolvedValue([
+      session("a", "a", "shell", 1),
+      session("b", "b", "shell", 2),
+      session("c", "c", "shell", 3),
+    ]);
+    mockReorder.mockRejectedValue(new Error("500"));
+    const { result } = renderHook(() => useSessions(1), { wrapper });
+    await waitFor(() => expect(result.current.sessions.length).toBe(3));
+    await act(async () => {
+      try {
+        await result.current.reorder("c", 1);
+      } catch {
+        // expected
+      }
+    });
+    await waitFor(() =>
+      expect(result.current.sessions.map((s) => s.session_id)).toEqual(["a", "b", "c"]),
+    );
   });
 });
