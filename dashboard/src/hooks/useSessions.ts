@@ -38,6 +38,9 @@ function provisional(containerId: number, name: string, kind: SessionKind): Name
     container_id: containerId,
     name,
     kind,
+    // M28 — provisional rows slot at the end; the server's renumber
+    // on first refetch corrects to the canonical position.
+    position: 0,
     created_at: now,
     updated_at: now,
   };
