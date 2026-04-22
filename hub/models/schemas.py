@@ -254,7 +254,12 @@ class WalkResult(BaseModel):
 
 
 class NamedSession(BaseModel):
-    """One persistent session row (M26).
+    """One persistent session row (M26; extended M28 with position).
+
+    ``position`` is a 1-based slot within the container's ordering.
+    A value of 0 means "legacy row, never renumbered" — rendered in
+    creation order until the next reorder triggers a full 1..N
+    renumber.
 
     Returned by the new CRUD routes at
     ``/api/containers/{id}/named-sessions`` and
@@ -265,6 +270,7 @@ class NamedSession(BaseModel):
     container_id: int
     name: str
     kind: Literal["shell", "claude"]
+    position: int
     created_at: datetime
     updated_at: datetime
 
@@ -277,9 +283,15 @@ class NamedSessionCreate(BaseModel):
 
 
 class NamedSessionPatch(BaseModel):
-    """Body for ``PATCH /api/named-sessions/{session_id}``."""
+    """Body for ``PATCH /api/named-sessions/{session_id}`` (M26; M28
+    adds optional ``position``).
 
-    name: str = Field(..., min_length=1, max_length=64)
+    Partial update. At least one field must be set — the router
+    rejects an empty body with 422.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    position: int | None = Field(default=None, ge=1)
 
 
 # --- Resources ---

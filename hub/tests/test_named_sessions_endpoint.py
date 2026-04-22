@@ -176,3 +176,104 @@ async def test_create_422_on_bad_kind(client: AsyncClient) -> None:
         json={"name": "x", "kind": "weird"},
     )
     assert resp.status_code == 422
+
+
+# --- M28: PATCH position + empty-body handling ---
+
+
+@pytest.mark.asyncio
+async def test_patch_empty_body_returns_422(client: AsyncClient) -> None:
+    create = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "x"},
+    )
+    sid = create.json()["session_id"]
+    resp = await client.patch(
+        f"/api/named-sessions/{sid}",
+        headers=AUTH,
+        json={},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_position_renumbers(client: AsyncClient) -> None:
+    a = (
+        await client.post(
+            "/api/containers/1/named-sessions",
+            headers=AUTH,
+            json={"name": "a"},
+        )
+    ).json()
+    b = (
+        await client.post(
+            "/api/containers/1/named-sessions",
+            headers=AUTH,
+            json={"name": "b"},
+        )
+    ).json()
+    c = (
+        await client.post(
+            "/api/containers/1/named-sessions",
+            headers=AUTH,
+            json={"name": "c"},
+        )
+    ).json()
+    resp = await client.patch(
+        f"/api/named-sessions/{c['session_id']}",
+        headers=AUTH,
+        json={"position": 1},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["position"] == 1
+
+    listed = await client.get("/api/containers/1/named-sessions", headers=AUTH)
+    body = listed.json()
+    assert [s["session_id"] for s in body] == [
+        c["session_id"],
+        a["session_id"],
+        b["session_id"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_patch_name_and_position_atomic(client: AsyncClient) -> None:
+    a = (
+        await client.post(
+            "/api/containers/1/named-sessions",
+            headers=AUTH,
+            json={"name": "a"},
+        )
+    ).json()
+    await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "b"},
+    )
+    resp = await client.patch(
+        f"/api/named-sessions/{a['session_id']}",
+        headers=AUTH,
+        json={"name": "renamed", "position": 2},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "renamed"
+    assert body["position"] == 2
+
+
+@pytest.mark.asyncio
+async def test_patch_position_zero_is_422(client: AsyncClient) -> None:
+    a = (
+        await client.post(
+            "/api/containers/1/named-sessions",
+            headers=AUTH,
+            json={"name": "a"},
+        )
+    ).json()
+    resp = await client.patch(
+        f"/api/named-sessions/{a['session_id']}",
+        headers=AUTH,
+        json={"position": 0},
+    )
+    assert resp.status_code == 422

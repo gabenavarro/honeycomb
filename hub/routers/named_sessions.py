@@ -23,7 +23,7 @@ from hub.services.named_sessions import (
     create_session,
     delete_session,
     list_sessions,
-    rename_session,
+    patch_session,
 )
 
 router = APIRouter(tags=["named-sessions"])
@@ -75,13 +75,21 @@ async def create_named_session_endpoint(
 async def rename_named_session_endpoint(
     session_id: str, request: Request, body: NamedSessionPatch
 ) -> NamedSession:
-    """Update the name + bump ``updated_at``."""
+    """Partial update (M26; M28 adds optional ``position``).
+
+    Empty body → 422. ``SessionNotFound`` → 404. Otherwise returns
+    the updated row (with renumbered position if ``position`` was
+    set).
+    """
+    if body.name is None and body.position is None:
+        raise HTTPException(422, "patch requires at least one field")
     registry = request.app.state.registry
     try:
-        return await rename_session(
+        return await patch_session(
             registry.engine,
             session_id=session_id,
             name=body.name,
+            position=body.position,
         )
     except SessionNotFound:
         raise HTTPException(404, f"Session {session_id} not found")

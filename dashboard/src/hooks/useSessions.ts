@@ -17,6 +17,7 @@ import {
   deleteNamedSession,
   listNamedSessions,
   renameNamedSession,
+  reorderNamedSession,
 } from "../lib/api";
 import type { NamedSession, NamedSessionCreate, SessionKind } from "../lib/types";
 
@@ -27,6 +28,7 @@ export interface UseSessionsResult {
   create: (input: NamedSessionCreate) => Promise<NamedSession>;
   rename: (sessionId: string, name: string) => Promise<void>;
   close: (sessionId: string) => Promise<void>;
+  reorder: (sessionId: string, newPosition: number) => Promise<void>;
 }
 
 function provisional(containerId: number, name: string, kind: SessionKind): NamedSession {
@@ -112,6 +114,26 @@ export function useSessions(containerId: number | null): UseSessionsResult {
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: ({ sessionId, position }: { sessionId: string; position: number }) =>
+      reorderNamedSession(sessionId, position),
+    onMutate: async ({ sessionId, position }) => {
+      await qc.cancelQueries({ queryKey });
+      const previous = qc.getQueryData<NamedSession[]>(queryKey) ?? [];
+      const moved = previous.find((s) => s.session_id === sessionId);
+      if (!moved) return { previous };
+      const without = previous.filter((s) => s.session_id !== sessionId);
+      const target = Math.max(1, Math.min(position, without.length + 1));
+      without.splice(target - 1, 0, moved);
+      const renumbered = without.map((s, i) => ({ ...s, position: i + 1 }));
+      qc.setQueryData<NamedSession[]>(queryKey, renumbered);
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx) qc.setQueryData(queryKey, ctx.previous);
+    },
+  });
+
   const create = useCallback(
     (input: NamedSessionCreate) => createMutation.mutateAsync(input),
     [createMutation],
@@ -129,6 +151,13 @@ export function useSessions(containerId: number | null): UseSessionsResult {
     [closeMutation],
   );
 
+  const reorder = useCallback(
+    async (sessionId: string, newPosition: number) => {
+      await reorderMutation.mutateAsync({ sessionId, position: newPosition });
+    },
+    [reorderMutation],
+  );
+
   return {
     sessions: query.data ?? [],
     isLoading: query.isFetching,
@@ -136,5 +165,6 @@ export function useSessions(containerId: number | null): UseSessionsResult {
     create,
     rename,
     close,
+    reorder,
   };
 }

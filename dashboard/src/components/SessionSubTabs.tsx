@@ -73,8 +73,11 @@ export function SessionSubTabs({
             setDraggingId(null);
             setDragOverId(null);
           }}
-          onDrop={(toId) => {
-            if (draggingId && draggingId !== toId) onReorder(draggingId, toId);
+          onDrop={(fromIdDt, toId) => {
+            // Prefer the id from dataTransfer (reliable with synthetic events);
+            // fall back to React state for native drags.
+            const from = fromIdDt || draggingId;
+            if (from && from !== toId) onReorder(from, toId);
             setDraggingId(null);
             setDragOverId(null);
           }}
@@ -109,7 +112,7 @@ interface TabProps {
   onDragStart: (id: string) => void;
   onDragEnter: (id: string) => void;
   onDragEnd: () => void;
-  onDrop: (toId: string) => void;
+  onDrop: (fromId: string | null, toId: string) => void;
 }
 
 function SessionTab({
@@ -189,7 +192,11 @@ function SessionTab({
         }}
         onDrop={(e) => {
           e.preventDefault();
-          onDrop(session.id);
+          // Read the dragged session id from dataTransfer so synthetic-event
+          // test dispatches work even when React state (draggingId) hasn't
+          // flushed yet.
+          const fromId = e.dataTransfer.getData("text/x-hive-session");
+          onDrop(fromId || null, session.id);
         }}
         onDragEnd={onDragEnd}
         onClick={() => {

@@ -277,6 +277,7 @@ export default function App() {
     create: createSessionApi,
     rename: renameSessionApi,
     close: closeSessionApi,
+    reorder: reorderSessionApi,
   } = useSessions(active?.id ?? null);
 
   // Map NamedSession → SessionInfo ({id, name}) for SessionSubTabs.
@@ -403,10 +404,22 @@ export default function App() {
     [active, namedSessions, activeSessionByContainer, closeSessionApi, setActiveSessionByContainer],
   );
 
-  // M26: reorder is a no-op for now. Future M28 adds drag-to-reorder.
-  const reorderSession = useCallback(() => {
-    /* M28 */
-  }, []);
+  // M28 — translate M21 D's (fromId, toId) drag signal into a
+  // position for the server. The target's current position is where
+  // the moved row lands; patch_session's renumber absorbs the shift.
+  // Legacy rows at position 0 fall back to their array index + 1.
+  const reorderSession = useCallback(
+    (fromId: string, toId: string) => {
+      if (fromId === toId) return;
+      const fromIdx = namedSessions.findIndex((s) => s.session_id === fromId);
+      const toIdx = namedSessions.findIndex((s) => s.session_id === toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const target = namedSessions[toIdx];
+      const newPosition = target.position > 0 ? target.position : toIdx + 1;
+      void reorderSessionApi(fromId, newPosition);
+    },
+    [namedSessions, reorderSessionApi],
+  );
   const splitContainer: ContainerRecord | null =
     splitId !== null && splitId !== activeTabId
       ? (containers.find((c) => c.id === splitId) ?? null)
