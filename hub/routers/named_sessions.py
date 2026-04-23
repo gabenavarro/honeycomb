@@ -15,9 +15,13 @@ container-agnostic.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 
 from hub.models.schemas import NamedSession, NamedSessionCreate, NamedSessionPatch
+from hub.routers.ws import WSFrame
+from hub.routers.ws import manager as ws_manager
 from hub.services.named_sessions import (
     SessionNotFound,
     create_session,
@@ -26,7 +30,31 @@ from hub.services.named_sessions import (
     patch_session,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["named-sessions"])
+
+
+async def _broadcast_sessions_list(engine, container_id: int) -> None:
+    """Re-query the full named-sessions list for ``container_id`` and
+    publish it on the ``sessions:<container_id>`` channel. Best-effort
+    — broadcast failures are logged and swallowed so CRUD success is
+    independent of WS health. Event name is always ``list``; clients
+    replace the TanStack Query cache wholesale."""
+    try:
+        sessions = await list_sessions(engine, container_id=container_id)
+        frame = WSFrame(
+            channel=f"sessions:{container_id}",
+            event="list",
+            data=[s.model_dump(mode="json") for s in sessions],
+        )
+        await ws_manager.broadcast(frame)
+    except Exception as exc:
+        logger.warning(
+            "Failed to broadcast sessions list for container %s: %s",
+            container_id,
+            exc,
+        )
 
 
 async def _lookup_container_record(registry, record_id: int) -> None:

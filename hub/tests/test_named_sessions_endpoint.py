@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -47,6 +48,23 @@ async def client(tmp_path: Path):
         yield c
 
     await reg.close()
+
+
+@pytest.fixture
+def mock_ws_manager(monkeypatch):
+    """Replace the ``ws_manager`` alias imported into
+    ``hub.routers.named_sessions`` at module load.
+
+    Individual tests assert on ``mock.broadcast.await_args`` to
+    confirm the WSFrame shape without reaching into
+    ``ConnectionManager``'s internal subscription set.
+    """
+    from hub.routers import named_sessions as router_module
+
+    mock = MagicMock()
+    mock.broadcast = AsyncMock()
+    monkeypatch.setattr(router_module, "ws_manager", mock)
+    return mock
 
 
 AUTH = {"Authorization": "Bearer test-token"}
