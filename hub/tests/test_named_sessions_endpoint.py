@@ -379,3 +379,22 @@ async def test_delete_missing_does_not_broadcast(client: AsyncClient, mock_ws_ma
     resp = await client.delete("/api/named-sessions/nope", headers=AUTH)
     assert resp.status_code == 204
     assert mock_ws_manager.broadcast.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_broadcast_failure_does_not_block_crud(client: AsyncClient, mock_ws_manager) -> None:
+    """If the WS broadcast raises, the CRUD response must still
+    succeed. The helper logs + swallows; success/failure of the
+    transport is orthogonal to success of the write."""
+    mock_ws_manager.broadcast.side_effect = RuntimeError("ws boom")
+
+    resp = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "still-works", "kind": "shell"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "still-works"
+    # The helper still attempted to broadcast — the exception was
+    # raised on the await, then caught by the helper.
+    assert mock_ws_manager.broadcast.await_count == 1
