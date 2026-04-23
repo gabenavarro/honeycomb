@@ -347,3 +347,35 @@ async def test_patch_broadcasts_list(client: AsyncClient, mock_ws_manager) -> No
     assert frame.event == "list"
     assert len(frame.data) == 1
     assert frame.data[0]["name"] == "renamed"
+
+
+@pytest.mark.asyncio
+async def test_delete_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """DELETE /api/named-sessions/{id} must broadcast the post-commit
+    list for the deleted row's container. When the deleted row was
+    the last one, the list is empty."""
+    create = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "bye"},
+    )
+    sid = create.json()["session_id"]
+    mock_ws_manager.broadcast.reset_mock()
+
+    resp = await client.delete(f"/api/named-sessions/{sid}", headers=AUTH)
+    assert resp.status_code == 204
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert frame.data == []
+
+
+@pytest.mark.asyncio
+async def test_delete_missing_does_not_broadcast(client: AsyncClient, mock_ws_manager) -> None:
+    """DELETE on a nonexistent session returns 204 but must NOT
+    broadcast — nothing changed, no need to announce."""
+    resp = await client.delete("/api/named-sessions/nope", headers=AUTH)
+    assert resp.status_code == 204
+    assert mock_ws_manager.broadcast.await_count == 0

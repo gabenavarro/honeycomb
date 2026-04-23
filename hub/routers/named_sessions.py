@@ -135,6 +135,10 @@ async def rename_named_session_endpoint(
 
 @router.delete("/api/named-sessions/{session_id}", status_code=204)
 async def delete_named_session_endpoint(session_id: str, request: Request) -> None:
-    """Delete a session. Idempotent — 204 even when the row didn't exist."""
+    """Delete a session. Idempotent — 204 even when the row didn't
+    exist. Broadcasts ``sessions:<cid>`` only when a row was actually
+    deleted (missing rows yield None from the service)."""
     registry = request.app.state.registry
-    await delete_session(registry.engine, session_id=session_id)
+    container_id = await delete_session(registry.engine, session_id=session_id)
+    if container_id is not None:
+        await _broadcast_sessions_list(registry.engine, container_id)
