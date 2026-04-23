@@ -21,9 +21,7 @@ const mockSubscribe = vi.hoisted(() => vi.fn<(channels: string[]) => void>());
 const mockUnsubscribe = vi.hoisted(() => vi.fn<(channels: string[]) => void>());
 type WsFrame = { channel: string; event: string; data: unknown };
 type WsListener = (frame: WsFrame) => void;
-const mockOnChannel = vi.hoisted(() =>
-  vi.fn<(channel: string, cb: WsListener) => () => void>(),
-);
+const mockOnChannel = vi.hoisted(() => vi.fn<(channel: string, cb: WsListener) => () => void>());
 const mockListenerRemovers = vi.hoisted(() => [] as Array<() => void>);
 
 vi.mock("../useWebSocket", () => ({
@@ -245,9 +243,7 @@ describe("useSessions.ws", () => {
       });
     });
 
-    await waitFor(() =>
-      expect(result.current.sessions.map((s) => s.session_id)).toEqual(["z"]),
-    );
+    await waitFor(() => expect(result.current.sessions.map((s) => s.session_id)).toEqual(["z"]));
   });
 
   it("unsubscribes + removes listener on containerId change", () => {
