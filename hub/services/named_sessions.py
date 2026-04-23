@@ -240,12 +240,27 @@ async def delete_session(
     engine: AsyncEngine,
     *,
     session_id: str,
-) -> None:
+) -> int | None:
     """Remove ``session_id`` if present. Idempotent — calling for a
     nonexistent id is a silent no-op (matches ``DELETE`` REST
-    semantics)."""
+    semantics).
+
+    Returns the deleted row's ``container_id`` so callers can
+    broadcast WS events after a successful delete; returns ``None``
+    when the row didn't exist.
+    """
     async with engine.begin() as conn:
+        row = (
+            await conn.execute(
+                sa.text("SELECT container_id FROM sessions WHERE session_id = :sid"),
+                {"sid": session_id},
+            )
+        ).first()
+        if row is None:
+            return None
+        container_id = int(row[0])
         await conn.execute(
             sa.text("DELETE FROM sessions WHERE session_id = :sid"),
             {"sid": session_id},
         )
+    return container_id

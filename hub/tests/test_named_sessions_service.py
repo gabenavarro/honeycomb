@@ -218,3 +218,18 @@ async def test_patch_session_missing_raises_session_not_found(engine) -> None:
 
     with pytest.raises(SessionNotFound):
         await patch_session(engine, session_id="nope", name="x")
+
+
+@pytest.mark.asyncio
+async def test_delete_session_returns_container_id(engine) -> None:
+    """M30 — delete returns the container_id of the removed row so
+    routers can broadcast the post-delete list; returns None for a
+    missing id."""
+    from hub.services.named_sessions import create_session, delete_session
+
+    session = await create_session(engine, container_id=1, name="gone", kind="shell")
+    result = await delete_session(engine, session_id=session.session_id)
+    assert result == 1
+
+    missing = await delete_session(engine, session_id="nope")
+    assert missing is None
