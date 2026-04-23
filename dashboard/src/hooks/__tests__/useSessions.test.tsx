@@ -75,7 +75,7 @@ beforeEach(() => {
   mockUnsubscribe.mockReset();
   mockListenerRemovers.length = 0;
   mockOnChannel.mockReset();
-  mockOnChannel.mockImplementation((_channel, _cb) => {
+  mockOnChannel.mockImplementation(() => {
     const remover = vi.fn();
     mockListenerRemovers.push(remover);
     return remover;
