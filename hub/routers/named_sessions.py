@@ -15,9 +15,18 @@ container-agnostic.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+import logging
 
-from hub.models.schemas import NamedSession, NamedSessionCreate, NamedSessionPatch
+from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from hub.models.schemas import (
+    NamedSession,
+    NamedSessionCreate,
+    NamedSessionPatch,
+    WSFrame,
+)
+from hub.routers.ws import manager as ws_manager
 from hub.services.named_sessions import (
     SessionNotFound,
     create_session,
@@ -26,7 +35,31 @@ from hub.services.named_sessions import (
     patch_session,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["named-sessions"])
+
+
+async def _broadcast_sessions_list(engine: AsyncEngine, container_id: int) -> None:
+    """Re-query the full named-sessions list for ``container_id`` and
+    publish it on the ``sessions:<container_id>`` channel. Best-effort
+    — broadcast failures are logged and swallowed so CRUD success is
+    independent of WS health. Event name is always ``list``; clients
+    replace the TanStack Query cache wholesale."""
+    try:
+        sessions = await list_sessions(engine, container_id=container_id)
+        frame = WSFrame(
+            channel=f"sessions:{container_id}",
+            event="list",
+            data=[s.model_dump(mode="json") for s in sessions],
+        )
+        await ws_manager.broadcast(frame)
+    except Exception as exc:
+        logger.warning(
+            "Failed to broadcast sessions list for container %s: %s",
+            container_id,
+            exc,
+        )
 
 
 async def _lookup_container_record(registry, record_id: int) -> None:
@@ -57,15 +90,18 @@ async def list_named_sessions(record_id: int, request: Request) -> list[NamedSes
 async def create_named_session_endpoint(
     record_id: int, request: Request, body: NamedSessionCreate
 ) -> NamedSession:
-    """Create a new session row. Server generates ``session_id``."""
+    """Create a new session row. Server generates ``session_id``.
+    Broadcasts the post-commit list on ``sessions:<record_id>``."""
     registry = request.app.state.registry
     await _lookup_container_record(registry, record_id)
-    return await create_session(
+    result = await create_session(
         registry.engine,
         container_id=record_id,
         name=body.name,
         kind=body.kind,
     )
+    await _broadcast_sessions_list(registry.engine, record_id)
+    return result
 
 
 @router.patch(
@@ -79,13 +115,13 @@ async def rename_named_session_endpoint(
 
     Empty body → 422. ``SessionNotFound`` → 404. Otherwise returns
     the updated row (with renumbered position if ``position`` was
-    set).
+    set) and broadcasts the post-commit list on ``sessions:<cid>``.
     """
     if body.name is None and body.position is None:
         raise HTTPException(422, "patch requires at least one field")
     registry = request.app.state.registry
     try:
-        return await patch_session(
+        result = await patch_session(
             registry.engine,
             session_id=session_id,
             name=body.name,
@@ -93,10 +129,16 @@ async def rename_named_session_endpoint(
         )
     except SessionNotFound:
         raise HTTPException(404, f"Session {session_id} not found")
+    await _broadcast_sessions_list(registry.engine, result.container_id)
+    return result
 
 
 @router.delete("/api/named-sessions/{session_id}", status_code=204)
 async def delete_named_session_endpoint(session_id: str, request: Request) -> None:
-    """Delete a session. Idempotent — 204 even when the row didn't exist."""
+    """Delete a session. Idempotent — 204 even when the row didn't
+    exist. Broadcasts ``sessions:<cid>`` only when a row was actually
+    deleted (missing rows yield None from the service)."""
     registry = request.app.state.registry
-    await delete_session(registry.engine, session_id=session_id)
+    container_id = await delete_session(registry.engine, session_id=session_id)
+    if container_id is not None:
+        await _broadcast_sessions_list(registry.engine, container_id)

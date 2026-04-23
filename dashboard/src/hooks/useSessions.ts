@@ -10,7 +10,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 
 import {
   createNamedSession,
@@ -20,6 +20,7 @@ import {
   reorderNamedSession,
 } from "../lib/api";
 import type { NamedSession, NamedSessionCreate, SessionKind } from "../lib/types";
+import { useHiveWebSocket } from "./useWebSocket";
 
 export interface UseSessionsResult {
   sessions: NamedSession[];
@@ -57,6 +58,32 @@ export function useSessions(containerId: number | null): UseSessionsResult {
     staleTime: 30_000,
     refetchOnWindowFocus: true,
   });
+
+  const ws = useHiveWebSocket();
+
+  // M30 — WebSocket push: every hub-side CRUD commit broadcasts a
+  // ``list`` frame with the full NamedSession[] for the container.
+  // We replace the cache wholesale; TanStack Query's 30s staleTime
+  // + refetchOnWindowFocus stay as the fallback for events missed
+  // during a reconnect gap.
+  useEffect(() => {
+    if (containerId === null) return;
+    const channel = `sessions:${containerId}`;
+    ws.subscribe([channel]);
+    const removeListener = ws.onChannel(channel, (frame) => {
+      if (frame.event !== "list") return;
+      const next = frame.data as NamedSession[];
+      qc.setQueryData<NamedSession[]>(queryKey, next);
+    });
+    return () => {
+      removeListener();
+      ws.unsubscribe([channel]);
+    };
+    // queryKey is derived from containerId; ws is a stable singleton
+    // wrapper. Including them would just re-trigger the effect on
+    // every render without changing behaviour.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerId, ws, qc]);
 
   const createMutation = useMutation({
     mutationFn: (input: NamedSessionCreate) => createNamedSession(containerId as number, input),

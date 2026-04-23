@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -47,6 +48,23 @@ async def client(tmp_path: Path):
         yield c
 
     await reg.close()
+
+
+@pytest.fixture
+def mock_ws_manager(monkeypatch):
+    """Replace the ``ws_manager`` alias imported into
+    ``hub.routers.named_sessions`` at module load.
+
+    Individual tests assert on ``mock.broadcast.await_args`` to
+    confirm the WSFrame shape without reaching into
+    ``ConnectionManager``'s internal subscription set.
+    """
+    from hub.routers import named_sessions as router_module
+
+    mock = MagicMock()
+    mock.broadcast = AsyncMock()
+    monkeypatch.setattr(router_module, "ws_manager", mock)
+    return mock
 
 
 AUTH = {"Authorization": "Bearer test-token"}
@@ -277,3 +295,106 @@ async def test_patch_position_zero_is_422(client: AsyncClient) -> None:
         json={"position": 0},
     )
     assert resp.status_code == 422
+
+
+# --- M30: WS session-sync push ---
+
+
+@pytest.mark.asyncio
+async def test_create_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """POST /api/containers/{id}/named-sessions must broadcast a
+    ``list`` frame on ``sessions:{id}`` carrying the full post-commit
+    NamedSession[] for that container."""
+    resp = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "Alpha", "kind": "shell"},
+    )
+    assert resp.status_code == 200
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert isinstance(frame.data, list)
+    assert len(frame.data) == 1
+    assert frame.data[0]["session_id"] == resp.json()["session_id"]
+    assert frame.data[0]["name"] == "Alpha"
+
+
+@pytest.mark.asyncio
+async def test_patch_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """PATCH /api/named-sessions/{id} (rename or position) must
+    broadcast the full post-commit list for the session's container."""
+    create = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "orig"},
+    )
+    sid = create.json()["session_id"]
+    mock_ws_manager.broadcast.reset_mock()
+
+    resp = await client.patch(
+        f"/api/named-sessions/{sid}",
+        headers=AUTH,
+        json={"name": "renamed"},
+    )
+    assert resp.status_code == 200
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert len(frame.data) == 1
+    assert frame.data[0]["name"] == "renamed"
+
+
+@pytest.mark.asyncio
+async def test_delete_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """DELETE /api/named-sessions/{id} must broadcast the post-commit
+    list for the deleted row's container. When the deleted row was
+    the last one, the list is empty."""
+    create = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "bye"},
+    )
+    sid = create.json()["session_id"]
+    mock_ws_manager.broadcast.reset_mock()
+
+    resp = await client.delete(f"/api/named-sessions/{sid}", headers=AUTH)
+    assert resp.status_code == 204
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert frame.data == []
+
+
+@pytest.mark.asyncio
+async def test_delete_missing_does_not_broadcast(client: AsyncClient, mock_ws_manager) -> None:
+    """DELETE on a nonexistent session returns 204 but must NOT
+    broadcast — nothing changed, no need to announce."""
+    resp = await client.delete("/api/named-sessions/nope", headers=AUTH)
+    assert resp.status_code == 204
+    assert mock_ws_manager.broadcast.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_broadcast_failure_does_not_block_crud(client: AsyncClient, mock_ws_manager) -> None:
+    """If the WS broadcast raises, the CRUD response must still
+    succeed. The helper logs + swallows; success/failure of the
+    transport is orthogonal to success of the write."""
+    mock_ws_manager.broadcast.side_effect = RuntimeError("ws boom")
+
+    resp = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "still-works", "kind": "shell"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "still-works"
+    # The helper still attempted to broadcast — the exception was
+    # raised on the await, then caught by the helper.
+    assert mock_ws_manager.broadcast.await_count == 1
