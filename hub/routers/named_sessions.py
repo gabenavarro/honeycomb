@@ -90,15 +90,18 @@ async def list_named_sessions(record_id: int, request: Request) -> list[NamedSes
 async def create_named_session_endpoint(
     record_id: int, request: Request, body: NamedSessionCreate
 ) -> NamedSession:
-    """Create a new session row. Server generates ``session_id``."""
+    """Create a new session row. Server generates ``session_id``.
+    Broadcasts the post-commit list on ``sessions:<record_id>``."""
     registry = request.app.state.registry
     await _lookup_container_record(registry, record_id)
-    return await create_session(
+    result = await create_session(
         registry.engine,
         container_id=record_id,
         name=body.name,
         kind=body.kind,
     )
+    await _broadcast_sessions_list(registry.engine, record_id)
+    return result
 
 
 @router.patch(

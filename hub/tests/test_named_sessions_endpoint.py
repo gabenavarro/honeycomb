@@ -295,3 +295,28 @@ async def test_patch_position_zero_is_422(client: AsyncClient) -> None:
         json={"position": 0},
     )
     assert resp.status_code == 422
+
+
+# --- M30: WS session-sync push ---
+
+
+@pytest.mark.asyncio
+async def test_create_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """POST /api/containers/{id}/named-sessions must broadcast a
+    ``list`` frame on ``sessions:{id}`` carrying the full post-commit
+    NamedSession[] for that container."""
+    resp = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "Alpha", "kind": "shell"},
+    )
+    assert resp.status_code == 200
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert isinstance(frame.data, list)
+    assert len(frame.data) == 1
+    assert frame.data[0]["session_id"] == resp.json()["session_id"]
+    assert frame.data[0]["name"] == "Alpha"
