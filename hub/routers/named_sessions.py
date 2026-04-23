@@ -18,9 +18,14 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncEngine
 
-from hub.models.schemas import NamedSession, NamedSessionCreate, NamedSessionPatch
-from hub.routers.ws import WSFrame
+from hub.models.schemas import (
+    NamedSession,
+    NamedSessionCreate,
+    NamedSessionPatch,
+    WSFrame,
+)
 from hub.routers.ws import manager as ws_manager
 from hub.services.named_sessions import (
     SessionNotFound,
@@ -35,7 +40,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["named-sessions"])
 
 
-async def _broadcast_sessions_list(engine, container_id: int) -> None:
+async def _broadcast_sessions_list(engine: AsyncEngine, container_id: int) -> None:
     """Re-query the full named-sessions list for ``container_id`` and
     publish it on the ``sessions:<container_id>`` channel. Best-effort
     — broadcast failures are logged and swallowed so CRUD success is
