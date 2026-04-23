@@ -320,3 +320,30 @@ async def test_create_broadcasts_list(client: AsyncClient, mock_ws_manager) -> N
     assert len(frame.data) == 1
     assert frame.data[0]["session_id"] == resp.json()["session_id"]
     assert frame.data[0]["name"] == "Alpha"
+
+
+@pytest.mark.asyncio
+async def test_patch_broadcasts_list(client: AsyncClient, mock_ws_manager) -> None:
+    """PATCH /api/named-sessions/{id} (rename or position) must
+    broadcast the full post-commit list for the session's container."""
+    create = await client.post(
+        "/api/containers/1/named-sessions",
+        headers=AUTH,
+        json={"name": "orig"},
+    )
+    sid = create.json()["session_id"]
+    mock_ws_manager.broadcast.reset_mock()
+
+    resp = await client.patch(
+        f"/api/named-sessions/{sid}",
+        headers=AUTH,
+        json={"name": "renamed"},
+    )
+    assert resp.status_code == 200
+
+    assert mock_ws_manager.broadcast.await_count == 1
+    frame = mock_ws_manager.broadcast.await_args.args[0]
+    assert frame.channel == "sessions:1"
+    assert frame.event == "list"
+    assert len(frame.data) == 1
+    assert frame.data[0]["name"] == "renamed"

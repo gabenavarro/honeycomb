@@ -115,13 +115,13 @@ async def rename_named_session_endpoint(
 
     Empty body → 422. ``SessionNotFound`` → 404. Otherwise returns
     the updated row (with renumbered position if ``position`` was
-    set).
+    set) and broadcasts the post-commit list on ``sessions:<cid>``.
     """
     if body.name is None and body.position is None:
         raise HTTPException(422, "patch requires at least one field")
     registry = request.app.state.registry
     try:
-        return await patch_session(
+        result = await patch_session(
             registry.engine,
             session_id=session_id,
             name=body.name,
@@ -129,6 +129,8 @@ async def rename_named_session_endpoint(
         )
     except SessionNotFound:
         raise HTTPException(404, f"Session {session_id} not found")
+    await _broadcast_sessions_list(registry.engine, result.container_id)
+    return result
 
 
 @router.delete("/api/named-sessions/{session_id}", status_code=204)
