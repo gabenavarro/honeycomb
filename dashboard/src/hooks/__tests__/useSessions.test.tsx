@@ -17,6 +17,24 @@ const mockRename = vi.hoisted(() => vi.fn<(sid: string, name: string) => Promise
 const mockDelete = vi.hoisted(() => vi.fn<(sid: string) => Promise<void>>());
 const mockReorder = vi.hoisted(() => vi.fn<(sid: string, position: number) => Promise<unknown>>());
 
+const mockSubscribe = vi.hoisted(() => vi.fn<(channels: string[]) => void>());
+const mockUnsubscribe = vi.hoisted(() => vi.fn<(channels: string[]) => void>());
+type WsFrame = { channel: string; event: string; data: unknown };
+type WsListener = (frame: WsFrame) => void;
+const mockOnChannel = vi.hoisted(() =>
+  vi.fn<(channel: string, cb: WsListener) => () => void>(),
+);
+const mockListenerRemovers = vi.hoisted(() => [] as Array<() => void>);
+
+vi.mock("../useWebSocket", () => ({
+  useHiveWebSocket: () => ({
+    connected: true,
+    subscribe: mockSubscribe,
+    unsubscribe: mockUnsubscribe,
+    onChannel: mockOnChannel,
+  }),
+}));
+
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();
   return {
@@ -53,6 +71,15 @@ beforeEach(() => {
   mockRename.mockReset();
   mockDelete.mockReset();
   mockReorder.mockReset();
+  mockSubscribe.mockReset();
+  mockUnsubscribe.mockReset();
+  mockListenerRemovers.length = 0;
+  mockOnChannel.mockReset();
+  mockOnChannel.mockImplementation((_channel, _cb) => {
+    const remover = vi.fn();
+    mockListenerRemovers.push(remover);
+    return remover;
+  });
   qc = new QueryClient({
     defaultOptions: { queries: { retry: false, throwOnError: false } },
   });
@@ -183,5 +210,60 @@ describe("useSessions.reorder", () => {
     await waitFor(() =>
       expect(result.current.sessions.map((s) => s.session_id)).toEqual(["a", "b", "c"]),
     );
+  });
+});
+
+// --- M30: WebSocket session-sync push ---
+
+describe("useSessions.ws", () => {
+  it("subscribes on mount with non-null containerId", () => {
+    mockList.mockResolvedValue([]);
+    renderHook(() => useSessions(1), { wrapper });
+    expect(mockSubscribe).toHaveBeenCalledWith(["sessions:1"]);
+    expect(mockOnChannel).toHaveBeenCalledTimes(1);
+    expect(mockOnChannel.mock.calls[0][0]).toBe("sessions:1");
+    expect(typeof mockOnChannel.mock.calls[0][1]).toBe("function");
+  });
+
+  it("does not subscribe when containerId is null", () => {
+    renderHook(() => useSessions(null), { wrapper });
+    expect(mockSubscribe).not.toHaveBeenCalled();
+    expect(mockOnChannel).not.toHaveBeenCalled();
+  });
+
+  it("list frame replaces the cache wholesale", async () => {
+    mockList.mockResolvedValue([session("a")]);
+    const { result } = renderHook(() => useSessions(1), { wrapper });
+    await waitFor(() => expect(result.current.sessions.length).toBe(1));
+
+    const listener = mockOnChannel.mock.calls[0][1];
+    act(() => {
+      listener({
+        channel: "sessions:1",
+        event: "list",
+        data: [session("z", "z")],
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.sessions.map((s) => s.session_id)).toEqual(["z"]),
+    );
+  });
+
+  it("unsubscribes + removes listener on containerId change", () => {
+    mockList.mockResolvedValue([]);
+    const { rerender } = renderHook(({ id }) => useSessions(id), {
+      wrapper,
+      initialProps: { id: 1 as number | null },
+    });
+    expect(mockSubscribe).toHaveBeenCalledWith(["sessions:1"]);
+    const firstRemover = mockListenerRemovers[0];
+
+    rerender({ id: 2 });
+
+    expect(mockUnsubscribe).toHaveBeenCalledWith(["sessions:1"]);
+    expect(firstRemover).toHaveBeenCalled();
+    // New subscription on the new container.
+    expect(mockSubscribe).toHaveBeenCalledWith(["sessions:2"]);
   });
 });
