@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""M27 — Claude Code PreToolUse hook: snapshot the file about to
+be edited so the matching diff-post hook can compute a diff.
+
+Reads JSON from stdin (Claude Code's hook protocol). Snapshots the
+target file (if it exists and is regular) into
+``${HIVE_DIFF_STAGING}/${tool_use_id}.before``. Exits 0 unconditionally
+- hook failures must never block a tool call.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        return 0
+
+    tool_use_id = payload.get("tool_use_id")
+    if not tool_use_id:
+        return 0
+
+    file_path = (payload.get("tool_input") or {}).get("file_path")
+    if not file_path:
+        return 0
+
+    staging_dir = Path(os.environ.get("HIVE_DIFF_STAGING", "/run/honeycomb/staging"))
+    try:
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        os.chmod(staging_dir, 0o700)
+    except OSError:
+        return 0
+
+    src = Path(file_path)
+    if not src.is_file():
+        return 0
+
+    dst = staging_dir / f"{tool_use_id}.before"
+    with contextlib.suppress(OSError):
+        shutil.copyfile(src, dst)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
