@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from hub.auth import authenticate_websocket
 from hub.models.agent_protocol import (
@@ -61,7 +62,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger("hub.routers.agent")
 
 
-async def _broadcast_diff_event(engine, *, container_id: int, frame: DiffEventFrame) -> None:
+async def _broadcast_diff_event(
+    engine: AsyncEngine, *, container_id: int, frame: DiffEventFrame
+) -> None:
     """Insert the diff event row, then broadcast it on the
     ``diff-events:<container_id>`` channel. Broadcast failures are
     logged + swallowed so a WS hiccup never breaks the persistent
