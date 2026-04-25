@@ -44,10 +44,7 @@ beforeEach(() => {
 describe("DiffEventsActivity", () => {
   it("renders date-grouped events", () => {
     mockUseDiffEvents.mockReturnValue({
-      events: [
-        ev("e1", "/a/today.ts", todayIso),
-        ev("e2", "/a/y.ts", yesterday),
-      ],
+      events: [ev("e1", "/a/today.ts", todayIso), ev("e2", "/a/y.ts", yesterday)],
       isLoading: false,
       error: null,
     });
@@ -58,10 +55,7 @@ describe("DiffEventsActivity", () => {
 
   it("filters rows by path with the search input", () => {
     mockUseDiffEvents.mockReturnValue({
-      events: [
-        ev("e1", "/dashboard/App.tsx", todayIso),
-        ev("e2", "/hub/main.py", todayIso),
-      ],
+      events: [ev("e1", "/dashboard/App.tsx", todayIso), ev("e2", "/hub/main.py", todayIso)],
       isLoading: false,
       error: null,
     });

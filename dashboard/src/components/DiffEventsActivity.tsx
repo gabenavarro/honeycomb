@@ -42,7 +42,7 @@ export function DiffEventsActivity({ containerId, onOpenEvent }: Props) {
   return (
     <div className="flex h-full flex-col bg-gray-900 text-gray-200">
       <header className="border-b border-gray-800 p-3">
-        <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold tracking-wider text-gray-400 uppercase">
           <History className="h-3 w-3" strokeWidth={1.8} />
           Recent Edits
           <span className="ml-auto rounded-full bg-gray-800 px-1.5 py-px text-[10px] font-medium text-gray-500">
@@ -51,21 +51,21 @@ export function DiffEventsActivity({ containerId, onOpenEvent }: Props) {
         </div>
         <div className="relative">
           <Search
-            className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-600"
+            className="absolute top-1/2 left-2 h-3 w-3 -translate-y-1/2 text-gray-600"
             strokeWidth={1.8}
           />
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter by path…"
-            className="w-full rounded border border-gray-700 bg-gray-950 py-1.5 pl-7 pr-2 text-xs text-gray-200 placeholder:text-gray-600 focus:border-sky-500 focus:outline-none"
+            className="w-full rounded border border-gray-700 bg-gray-950 py-1.5 pr-2 pl-7 text-xs text-gray-200 placeholder:text-gray-600 focus:border-sky-500 focus:outline-none"
           />
         </div>
       </header>
       <div className="flex-1 overflow-y-auto">
         {groups.map((g) => (
           <section key={g.label}>
-            <h3 className="sticky top-0 z-10 bg-gray-900 px-4 pb-1.5 pt-3 font-mono text-[10px] font-semibold uppercase tracking-widest text-gray-600">
+            <h3 className="sticky top-0 z-10 bg-gray-900 px-4 pt-3 pb-1.5 font-mono text-[10px] font-semibold tracking-widest text-gray-600 uppercase">
               {g.label}
             </h3>
             {g.items.map((e) => {
@@ -78,7 +78,10 @@ export function DiffEventsActivity({ containerId, onOpenEvent }: Props) {
                   onClick={() => onOpenEvent(e)}
                   className={`flex cursor-pointer items-center gap-2.5 border-l-2 px-3.5 py-2 hover:bg-gray-800 ${TOOL_BORDER[e.tool]}`}
                 >
-                  <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${TOOL_TEXT[e.tool]}`} strokeWidth={1.7} />
+                  <Icon
+                    className={`h-3.5 w-3.5 flex-shrink-0 ${TOOL_TEXT[e.tool]}`}
+                    strokeWidth={1.7}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-mono text-[12px] leading-tight">
                       <span className="text-gray-600">{dirOf(e.path)}/</span>

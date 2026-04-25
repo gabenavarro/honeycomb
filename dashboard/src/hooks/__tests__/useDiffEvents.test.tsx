@@ -103,9 +103,7 @@ describe("useDiffEvents", () => {
         data: ev("z", "/z"),
       });
     });
-    await waitFor(() =>
-      expect(result.current.events.map((e) => e.event_id)).toEqual(["z", "a"]),
-    );
+    await waitFor(() => expect(result.current.events.map((e) => e.event_id)).toEqual(["z", "a"]));
   });
 
   it("caps the cache at 200 client-side", async () => {

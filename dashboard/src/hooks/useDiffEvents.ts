@@ -40,9 +40,7 @@ export function useDiffEvents(containerId: number | null): UseDiffEventsResult {
       qc.setQueryData<DiffEvent[]>(queryKey, (prev) => {
         const base = prev ?? [];
         const next = [incoming, ...base];
-        return next.length > DIFF_EVENT_CACHE_CAP
-          ? next.slice(0, DIFF_EVENT_CACHE_CAP)
-          : next;
+        return next.length > DIFF_EVENT_CACHE_CAP ? next.slice(0, DIFF_EVENT_CACHE_CAP) : next;
       });
     });
     return () => {

@@ -85,7 +85,7 @@ test.beforeEach(async ({ context }) => {
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "clipboard", {
       value: {
-        writeText: (_text: string) => Promise.resolve(),
+        writeText: () => Promise.resolve(),
         readText: () => Promise.resolve(""),
       },
       writable: true,
@@ -94,17 +94,13 @@ test.beforeEach(async ({ context }) => {
   });
 
   // ── Shared API stubs ────────────────────────────────────────────────────────
-  await context.route("**/api/containers", (route) =>
-    route.fulfill(mockJson([containerFixture])),
-  );
+  await context.route("**/api/containers", (route) => route.fulfill(mockJson([containerFixture])));
   await context.route("**/api/containers/7/workdir", (route) =>
     route.fulfill(mockJson({ path: "/w" })),
   );
   await context.route("**/api/gitops/prs**", (route) => route.fulfill(mockJson([])));
   await context.route("**/api/gitops/repos**", (route) => route.fulfill(mockJson([])));
-  await context.route("**/api/problems**", (route) =>
-    route.fulfill(mockJson({ problems: [] })),
-  );
+  await context.route("**/api/problems**", (route) => route.fulfill(mockJson({ problems: [] })));
   await context.route("**/api/settings", (route) =>
     route.fulfill(
       mockJson({
@@ -118,21 +114,15 @@ test.beforeEach(async ({ context }) => {
       }),
     ),
   );
-  await context.route("**/api/keybindings**", (route) =>
-    route.fulfill(mockJson({ bindings: {} })),
-  );
+  await context.route("**/api/keybindings**", (route) => route.fulfill(mockJson({ bindings: {} })));
   await context.route("**/api/containers/7/sessions", (route) =>
     route.fulfill(mockJson({ sessions: [] })),
   );
-  await context.route("**/api/containers/7/resources**", (route) =>
-    route.fulfill(mockJson(null)),
-  );
+  await context.route("**/api/containers/7/resources**", (route) => route.fulfill(mockJson(null)));
   await context.route("**/api/containers/7/fs/**", (route) =>
     route.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
   );
-  await context.route("**/api/health**", (route) =>
-    route.fulfill(mockJson({ status: "ok" })),
-  );
+  await context.route("**/api/health**", (route) => route.fulfill(mockJson({ status: "ok" })));
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
   // M26 — stub named-sessions to prevent 401 which would clear the token.
   await context.route("**/api/containers/7/named-sessions", async (route) => {
