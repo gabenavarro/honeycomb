@@ -8,7 +8,7 @@ accidental drift.
 
 Direction conventions (must match the hub copy):
 
-* ``agent → hub``:  hello, heartbeat, ack, output, done
+* ``agent → hub``:  hello, heartbeat, ack, output, done, diff_event
 * ``hub → agent``:  cmd_exec, cmd_kill, pong
 """
 

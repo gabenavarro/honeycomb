@@ -275,6 +275,28 @@ class NamedSession(BaseModel):
     updated_at: datetime
 
 
+class NamedSessionCreate(BaseModel):
+    """Body for ``POST /api/containers/{id}/named-sessions``."""
+
+    name: str = Field(..., min_length=1, max_length=64)
+    kind: Literal["shell", "claude"] = "shell"
+
+
+class NamedSessionPatch(BaseModel):
+    """Body for ``PATCH /api/named-sessions/{session_id}`` (M26; M28
+    adds optional ``position``).
+
+    Partial update. At least one field must be set — the router
+    rejects an empty body with 422.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    position: int | None = Field(default=None, ge=1)
+
+
+# --- M27: diff events ---
+
+
 class DiffEvent(BaseModel):
     """M27 — a single recorded Edit/Write/MultiEdit tool call in the
     diff_events table.
@@ -296,25 +318,6 @@ class DiffEvent(BaseModel):
     size_bytes: int
     timestamp: str
     created_at: str
-
-
-class NamedSessionCreate(BaseModel):
-    """Body for ``POST /api/containers/{id}/named-sessions``."""
-
-    name: str = Field(..., min_length=1, max_length=64)
-    kind: Literal["shell", "claude"] = "shell"
-
-
-class NamedSessionPatch(BaseModel):
-    """Body for ``PATCH /api/named-sessions/{session_id}`` (M26; M28
-    adds optional ``position``).
-
-    Partial update. At least one field must be set — the router
-    rejects an empty body with 422.
-    """
-
-    name: str | None = Field(default=None, min_length=1, max_length=64)
-    position: int | None = Field(default=None, ge=1)
 
 
 # --- Resources ---

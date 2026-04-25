@@ -15,7 +15,7 @@ lightweight dependency.
 
 Direction conventions:
 
-* ``agent → hub``:  hello, heartbeat, ack, output, done
+* ``agent → hub``:  hello, heartbeat, ack, output, done, diff_event
 * ``hub → agent``:  cmd_exec, cmd_kill, pong
 
 There is no bidirectional frame — each ``type`` belongs to exactly one
