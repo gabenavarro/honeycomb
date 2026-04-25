@@ -28,6 +28,7 @@ from hub.routers import (
     agent,
     commands,
     containers,
+    diff_events,
     discover,
     fs,
     gitops,
@@ -353,6 +354,7 @@ app.add_middleware(
 # Mount routers
 app.include_router(containers.router)
 app.include_router(commands.router)
+app.include_router(diff_events.router)
 app.include_router(discover.router)
 app.include_router(fs.router)
 app.include_router(gitops.router)
