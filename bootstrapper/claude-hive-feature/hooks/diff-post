@@ -99,7 +99,7 @@ def main() -> int:
 
     timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     bin_path = os.environ.get("HIVE_AGENT_BIN", "hive-agent")
-    with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         subprocess.run(
             [
                 bin_path,
