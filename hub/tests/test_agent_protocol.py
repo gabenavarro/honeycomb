@@ -83,3 +83,27 @@ def test_output_stream_enum_is_enforced() -> None:
         hub_protocol.parse_frame(
             {"type": "output", "command_id": "x", "stream": "log", "text": "t"}
         )
+
+
+def test_diff_event_frame_parity_hub_and_agent() -> None:
+    """DiffEventFrame must round-trip identically through the hub's
+    Pydantic model and the hive-agent's mirror — bytes match exactly."""
+    from hive_agent.protocol import DiffEventFrame as AgentFrame
+
+    from hub.models.agent_protocol import DiffEventFrame as HubFrame
+
+    payload = {
+        "type": "diff_event",
+        "container_id": "c-42",
+        "tool_use_id": "toolu_01ABC",
+        "claude_session_id": "session_uuid",
+        "tool": "Edit",
+        "path": "/workspace/foo.py",
+        "diff": "--- a/foo\n+++ b/foo\n@@ -1 +1 @@\n-x\n+y\n",
+        "added_lines": 1,
+        "removed_lines": 1,
+        "timestamp": "2026-04-23T07:38:00.123Z",
+    }
+    hub_frame = HubFrame.model_validate(payload)
+    agent_frame = AgentFrame.model_validate(payload)
+    assert hub_frame.model_dump_json() == agent_frame.model_dump_json()

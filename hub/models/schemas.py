@@ -275,6 +275,29 @@ class NamedSession(BaseModel):
     updated_at: datetime
 
 
+class DiffEvent(BaseModel):
+    """M27 — a single recorded Edit/Write/MultiEdit tool call in the
+    diff_events table.
+
+    Returned by ``GET /api/containers/{id}/diff-events`` and pushed on
+    the ``diff-events:<container_id>`` WebSocket channel as the ``data``
+    payload of ``event="new"`` frames.
+    """
+
+    event_id: str
+    container_id: int
+    claude_session_id: str | None
+    tool_use_id: str
+    tool: Literal["Edit", "Write", "MultiEdit"]
+    path: str
+    diff: str
+    added_lines: int
+    removed_lines: int
+    size_bytes: int
+    timestamp: str
+    created_at: str
+
+
 class NamedSessionCreate(BaseModel):
     """Body for ``POST /api/containers/{id}/named-sessions``."""
 
