@@ -151,6 +151,43 @@ class HiveAgentWS:
                 await self._run_task
             self._run_task = None
 
+    async def submit_diff(
+        self,
+        *,
+        tool: str,
+        path: str,
+        diff: str,
+        tool_use_id: str,
+        claude_session_id: str | None = None,
+        added_lines: int = 0,
+        removed_lines: int = 0,
+        timestamp: str,
+    ) -> None:
+        """Send a DiffEventFrame to the hub (M27).
+
+        Best-effort. If the WS isn't connected we log + drop —
+        diff capture must never block the calling hook script."""
+        from hive_agent.protocol import DiffEventFrame
+
+        if self._ws is None:
+            logger.warning("submit_diff: no active websocket; dropping event")
+            return
+        frame = DiffEventFrame(
+            container_id=self.container_id,
+            tool=tool,  # type: ignore[arg-type]
+            path=path,
+            diff=diff,
+            tool_use_id=tool_use_id,
+            claude_session_id=claude_session_id,
+            added_lines=added_lines,
+            removed_lines=removed_lines,
+            timestamp=timestamp,
+        )
+        try:
+            await self._send_frame(frame)
+        except Exception as exc:
+            logger.warning("submit_diff: send failed: %s", exc)
+
     # ── Run loop ─────────────────────────────────────────────────────
 
     async def _run(self) -> None:
