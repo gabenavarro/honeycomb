@@ -256,3 +256,22 @@ export interface NamedSessionCreate {
   name: string;
   kind?: SessionKind;
 }
+
+// M27 — diff events.
+
+export type DiffTool = "Edit" | "Write" | "MultiEdit";
+
+export interface DiffEvent {
+  event_id: string;
+  container_id: number;
+  claude_session_id: string | null;
+  tool_use_id: string;
+  tool: DiffTool;
+  path: string;
+  diff: string;
+  added_lines: number;
+  removed_lines: number;
+  size_bytes: number;
+  timestamp: string;
+  created_at: string;
+}
