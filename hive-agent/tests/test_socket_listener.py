@@ -50,6 +50,7 @@ async def test_listener_calls_submit_diff_on_jsonl(tmp_path: Path) -> None:
     await asyncio.wait_for(server_task, timeout=2.0)
 
     assert submit_diff.await_count == 1
+    assert submit_diff.await_args is not None
     kwargs = submit_diff.await_args.kwargs
     assert kwargs["tool"] == "Edit"
     assert kwargs["path"] == "/workspace/foo.py"

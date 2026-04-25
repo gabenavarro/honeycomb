@@ -170,7 +170,8 @@ class HiveAgentWS:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._run_task
             self._run_task = None
-        if self._socket_listener is not None:
+        if self._socket_listener_task is not None:
+            assert self._socket_listener is not None
             self._socket_listener.stop()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await asyncio.wait_for(self._socket_listener_task, timeout=2.0)
