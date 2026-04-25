@@ -51,6 +51,7 @@ from hive_agent.protocol import (
     AckFrame,
     CmdExecFrame,
     CmdKillFrame,
+    DiffEventFrame,
     DoneFrame,
     HeartbeatFrame,
     HelloFrame,
@@ -167,8 +168,6 @@ class HiveAgentWS:
 
         Best-effort. If the WS isn't connected we log + drop —
         diff capture must never block the calling hook script."""
-        from hive_agent.protocol import DiffEventFrame
-
         if self._ws is None:
             logger.warning("submit_diff: no active websocket; dropping event")
             return
