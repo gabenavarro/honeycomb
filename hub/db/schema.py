@@ -64,3 +64,31 @@ containers = sa.Table(
     sa.Column("created_at", sa.Text, nullable=False),
     sa.Column("updated_at", sa.Text, nullable=False),
 )
+
+
+# ── diff_events ──────────────────────────────────────────────────────
+
+diff_events = sa.Table(
+    "diff_events",
+    metadata,
+    sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+    sa.Column("event_id", sa.Text, nullable=False, unique=True),
+    sa.Column(
+        "container_id",
+        sa.Integer,
+        sa.ForeignKey("containers.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("claude_session_id", sa.Text, nullable=True),
+    sa.Column("tool_use_id", sa.Text, nullable=False),
+    sa.Column("tool", sa.Text, nullable=False),
+    sa.Column("path", sa.Text, nullable=False),
+    sa.Column("diff", sa.Text, nullable=False),
+    sa.Column("added_lines", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("removed_lines", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("size_bytes", sa.Integer, nullable=False),
+    sa.Column("timestamp", sa.Text, nullable=False),
+    sa.Column("created_at", sa.Text, nullable=False),
+    sa.CheckConstraint("tool IN ('Edit', 'Write', 'MultiEdit')", name="ck_diff_events_tool"),
+    sa.Index("ix_diff_events_container_created", "container_id", sa.text("created_at DESC")),
+)
