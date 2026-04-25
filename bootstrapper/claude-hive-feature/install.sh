@@ -139,4 +139,18 @@ else
     log "No skills manifest found — provision the workspace via the hub to populate one."
 fi
 
+# --- M27: Claude diff-event hooks --------------------------------------------
+HOOKS_DIR=/usr/local/share/honeycomb/hooks
+if [ -d "$(dirname "$0")/hooks" ]; then
+    log "Installing M27 diff-event hook scripts to ${HOOKS_DIR}"
+    install -d -m 0755 "${HOOKS_DIR}"
+    install -m 0755 "$(dirname "$0")/hooks/diff-pre" "${HOOKS_DIR}/diff-pre"
+    install -m 0755 "$(dirname "$0")/hooks/diff-post" "${HOOKS_DIR}/diff-post"
+
+    log "Merging hook entries into ~/.claude/settings.json"
+    python3 "$(dirname "$0")/hooks/merge_settings.py" "${HOME}/.claude/settings.json"
+
+    install -d -m 0700 /run/honeycomb/staging || true
+fi
+
 log "Claude Hive Feature installed successfully."
