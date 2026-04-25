@@ -37,10 +37,12 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from hub.auth import authenticate_websocket
 from hub.models.agent_protocol import (
     AckFrame,
+    DiffEventFrame,
     DoneFrame,
     HeartbeatFrame,
     HelloFrame,
@@ -50,6 +52,7 @@ from hub.models.agent_protocol import (
 from hub.models.schemas import AgentStatus, ProjectType, WSFrame
 from hub.routers import ws as ws_router
 from hub.services.agent_registry import AgentConnection
+from hub.services.diff_events import record_event as _record_diff_event
 
 if TYPE_CHECKING:
     from hub.services.agent_registry import AgentRegistry
@@ -57,6 +60,29 @@ if TYPE_CHECKING:
     from hub.services.registry import Registry
 
 logger = logging.getLogger("hub.routers.agent")
+
+
+async def _broadcast_diff_event(
+    engine: AsyncEngine, *, container_id: int, frame: DiffEventFrame
+) -> None:
+    """Insert the diff event row, then broadcast it on the
+    ``diff-events:<container_id>`` channel. Broadcast failures are
+    logged + swallowed so a WS hiccup never breaks the persistent
+    write — same pattern as M30's ``_broadcast_sessions_list``."""
+    event = await _record_diff_event(engine, container_id=container_id, frame=frame)
+    try:
+        wf = WSFrame(
+            channel=f"diff-events:{container_id}",
+            event="new",
+            data=event.model_dump(mode="json"),
+        )
+        await ws_router.manager.broadcast(wf)
+    except Exception as exc:
+        logger.warning(
+            "diff_event_broadcast_failed",
+            extra={"event_id": event.event_id, "error": str(exc)[:400]},
+        )
+
 
 router = APIRouter(tags=["agent"])
 
@@ -169,6 +195,21 @@ async def agent_connect(websocket: WebSocket) -> None:
                         },
                     )
                 )
+                continue
+
+            if isinstance(frame, DiffEventFrame):
+                # The URL-derived container_id is the agent's self-declared
+                # string identity (hostname / docker hash). The diff_events
+                # FK and the WS channel both need the registry's integer
+                # primary key, so look up the row first.
+                record = await registry.get_by_container_id(container_id)
+                if record is None:
+                    logger.warning(
+                        "diff_event_unknown_container",
+                        extra={"container_id": container_id},
+                    )
+                    continue
+                await _broadcast_diff_event(registry.engine, container_id=record.id, frame=frame)
                 continue
 
             if isinstance(frame, DoneFrame):

@@ -6,6 +6,7 @@ import {
   Box,
   FolderTree,
   GitBranch,
+  History,
   Keyboard,
   Search,
   Settings,
@@ -20,7 +21,8 @@ export type Activity =
   | "problems"
   | "scm"
   | "keybindings"
-  | "files";
+  | "files"
+  | "diff-events";
 
 interface Props {
   active: Activity;
@@ -75,6 +77,13 @@ const ITEMS: Item[] = [
     label: "Git Ops",
     shortcut: "Ctrl+Shift+G",
     badgeFor: ({ prCount }) => (prCount > 0 ? prCount : null),
+  },
+  {
+    id: "diff-events",
+    icon: <History size={18} />,
+    label: "Recent Edits",
+    shortcut: "Ctrl+Shift+D",
+    badgeFor: () => null,
   },
   {
     id: "problems",

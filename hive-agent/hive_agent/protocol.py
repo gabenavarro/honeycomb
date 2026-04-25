@@ -8,7 +8,7 @@ accidental drift.
 
 Direction conventions (must match the hub copy):
 
-* ``agent → hub``:  hello, heartbeat, ack, output, done
+* ``agent → hub``:  hello, heartbeat, ack, output, done, diff_event
 * ``hub → agent``:  cmd_exec, cmd_kill, pong
 """
 
@@ -57,6 +57,19 @@ class DoneFrame(BaseModel):
     reason: str | None = None
 
 
+class DiffEventFrame(BaseModel):
+    type: Literal["diff_event"] = "diff_event"
+    container_id: str
+    tool_use_id: str
+    claude_session_id: str | None = None
+    tool: Literal["Edit", "Write", "MultiEdit"]
+    path: str
+    diff: str
+    added_lines: int = 0
+    removed_lines: int = 0
+    timestamp: str
+
+
 # ── hub → agent ─────────────────────────────────────────────────────
 
 
@@ -83,6 +96,7 @@ AgentFrame = Annotated[
     | AckFrame
     | OutputFrame
     | DoneFrame
+    | DiffEventFrame
     | CmdExecFrame
     | CmdKillFrame
     | PongFrame,

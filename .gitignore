@@ -308,3 +308,6 @@ $RECYCLE.BIN/
 # Personal counterpart to the public SECURITY.md — holds specific contact
 # details and rotation checklists that should never leave the workstation.
 SECURITY.local.md
+
+# Superpowers brainstorm visual companion (local mockup files)
+.superpowers/

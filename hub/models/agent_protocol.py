@@ -15,7 +15,7 @@ lightweight dependency.
 
 Direction conventions:
 
-* ``agent → hub``:  hello, heartbeat, ack, output, done
+* ``agent → hub``:  hello, heartbeat, ack, output, done, diff_event
 * ``hub → agent``:  cmd_exec, cmd_kill, pong
 
 There is no bidirectional frame — each ``type`` belongs to exactly one
@@ -84,6 +84,22 @@ class DoneFrame(BaseModel):
     reason: str | None = None  # "completed", "killed", "timeout"
 
 
+class DiffEventFrame(BaseModel):
+    """M27 — Edit/Write/MultiEdit tool call captured by an in-container
+    PostToolUse hook and forwarded over the agent's reverse tunnel."""
+
+    type: Literal["diff_event"] = "diff_event"
+    container_id: str
+    tool_use_id: str
+    claude_session_id: str | None = None
+    tool: Literal["Edit", "Write", "MultiEdit"]
+    path: str
+    diff: str
+    added_lines: int = 0
+    removed_lines: int = 0
+    timestamp: str
+
+
 # ── hub → agent ─────────────────────────────────────────────────────
 
 
@@ -129,6 +145,7 @@ AgentFrame = Annotated[
     | AckFrame
     | OutputFrame
     | DoneFrame
+    | DiffEventFrame
     | CmdExecFrame
     | CmdKillFrame
     | PongFrame,

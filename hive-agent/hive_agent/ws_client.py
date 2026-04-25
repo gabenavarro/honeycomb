@@ -39,6 +39,7 @@ import logging
 import os
 import socket
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -51,12 +52,14 @@ from hive_agent.protocol import (
     AckFrame,
     CmdExecFrame,
     CmdKillFrame,
+    DiffEventFrame,
     DoneFrame,
     HeartbeatFrame,
     HelloFrame,
     OutputFrame,
     parse_frame,
 )
+from hive_agent.socket_listener import SocketListener
 
 logger = logging.getLogger("hive_agent.ws_client")
 
@@ -66,6 +69,7 @@ AGENT_VERSION = "0.4.0"
 DEFAULT_HEARTBEAT_S = 5.0
 DEFAULT_RECONNECT_BASE_S = 1.0
 DEFAULT_RECONNECT_MAX_S = 30.0
+DEFAULT_SOCKET_PATH = "/run/honeycomb/agent.sock"
 
 
 def _http_to_ws(url: str) -> str:
@@ -86,6 +90,7 @@ class HiveAgentWS:
         heartbeat_interval: float = DEFAULT_HEARTBEAT_S,
         reconnect_base_s: float = DEFAULT_RECONNECT_BASE_S,
         reconnect_max_s: float = DEFAULT_RECONNECT_MAX_S,
+        socket_path: str | None = None,
     ) -> None:
         self.hub_url = (
             hub_url or os.environ.get("HIVE_HUB_URL", "http://host.docker.internal:8420")
@@ -115,6 +120,13 @@ class HiveAgentWS:
         # the analogous comment in CommandRunner for why this matters.
         self._pending_tasks: set[asyncio.Task[None]] = set()
 
+        # Unix-socket listener for diff events (M27).
+        self._socket_path: str = socket_path or os.environ.get(
+            "HIVE_AGENT_SOCKET", DEFAULT_SOCKET_PATH
+        )
+        self._socket_listener: SocketListener | None = None
+        self._socket_listener_task: asyncio.Task[None] | None = None
+
     # ── Public API ───────────────────────────────────────────────────
 
     @property
@@ -138,6 +150,14 @@ class HiveAgentWS:
         self.status = "idle"
         self._run_task = asyncio.create_task(self._run(), name="hive-agent-ws-run")
 
+        self._socket_listener = SocketListener(
+            socket_path=Path(self._socket_path),
+            submit_diff=self.submit_diff,
+        )
+        self._socket_listener_task = asyncio.create_task(
+            self._socket_listener.serve(), name="hive-agent-socket-listener"
+        )
+
     async def stop(self) -> None:
         """Request shutdown, close the socket, and wait for the run loop to exit."""
         self._shutdown.set()
@@ -150,6 +170,48 @@ class HiveAgentWS:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._run_task
             self._run_task = None
+        if self._socket_listener_task is not None:
+            assert self._socket_listener is not None
+            self._socket_listener.stop()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(self._socket_listener_task, timeout=2.0)
+            self._socket_listener = None
+            self._socket_listener_task = None
+
+    async def submit_diff(
+        self,
+        *,
+        tool: str,
+        path: str,
+        diff: str,
+        tool_use_id: str,
+        claude_session_id: str | None = None,
+        added_lines: int = 0,
+        removed_lines: int = 0,
+        timestamp: str,
+    ) -> None:
+        """Send a DiffEventFrame to the hub (M27).
+
+        Best-effort. If the WS isn't connected we log + drop —
+        diff capture must never block the calling hook script."""
+        if self._ws is None:
+            logger.warning("submit_diff: no active websocket; dropping event")
+            return
+        frame = DiffEventFrame(
+            container_id=self.container_id,
+            tool=tool,  # type: ignore[arg-type]
+            path=path,
+            diff=diff,
+            tool_use_id=tool_use_id,
+            claude_session_id=claude_session_id,
+            added_lines=added_lines,
+            removed_lines=removed_lines,
+            timestamp=timestamp,
+        )
+        try:
+            await self._send_frame(frame)
+        except Exception as exc:
+            logger.warning("submit_diff: send failed: %s", exc)
 
     # ── Run loop ─────────────────────────────────────────────────────
 

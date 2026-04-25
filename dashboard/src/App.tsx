@@ -27,6 +27,8 @@ import { Breadcrumbs } from "./components/Breadcrumbs";
 import { CommandPalette } from "./components/CommandPalette";
 import { ContainerFilesView } from "./components/ContainerFilesView";
 import { ContainerList } from "./components/ContainerList";
+import { DiffEventsActivity } from "./components/DiffEventsActivity";
+import { DiffViewerTab } from "./components/DiffViewerTab";
 import { ContainerTabs } from "./components/ContainerTabs";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FileViewer } from "./components/FileViewer";
@@ -61,7 +63,7 @@ import {
   listPRs,
   listProblems,
 } from "./lib/api";
-import type { ContainerRecord } from "./lib/types";
+import type { ContainerRecord, DiffEvent } from "./lib/types";
 import { HealthTimeline } from "./components/HealthTimeline";
 
 // Storage keys for layout state. Remembering these across reloads is
@@ -102,6 +104,7 @@ const ACTIVITY_VALUES: Activity[] = [
   "settings",
   "keybindings",
   "files",
+  "diff-events",
 ];
 
 function isActivity(v: unknown): v is Activity {
@@ -574,7 +577,9 @@ export default function App() {
                 ? "Keybindings"
                 : activity === "files"
                   ? "Files"
-                  : "Search";
+                  : activity === "diff-events"
+                    ? "Recent Edits"
+                    : "Search";
 
   // M18 — the file currently opened in the inline viewer. Keyed on the
   // active container so switching containers doesn't leak a file from
@@ -584,6 +589,15 @@ export default function App() {
   useEffect(() => {
     // Reset viewer when the active container changes.
     setOpenedFile(null);
+  }, [active?.id]);
+
+  // M27 — the diff event currently open in the inline DiffViewerTab.
+  // Mirrors the openedFile pattern: keyed on active container, resets
+  // on container switch, and takes priority over the session terminal
+  // just like FileViewer does.
+  const [openedDiffEvent, setOpenedDiffEvent] = useState<DiffEvent | null>(null);
+  useEffect(() => {
+    setOpenedDiffEvent(null);
   }, [active?.id]);
 
   // M14: keep imperative Panel handles so keybindings can drive
@@ -742,6 +756,17 @@ export default function App() {
                       onOpenFile={setOpenedFile}
                     />
                   )}
+                  {activity === "diff-events" && active !== undefined && (
+                    <DiffEventsActivity
+                      containerId={active.id}
+                      onOpenEvent={(e) => {
+                        // Close any open file viewer so the diff view takes
+                        // over the editor pane cleanly, then show the diff.
+                        setOpenedFile(null);
+                        setOpenedDiffEvent(e);
+                      }}
+                    />
+                  )}
                 </div>
               </aside>
             </Panel>
@@ -815,7 +840,11 @@ export default function App() {
                         />
                         {/* M18 — FileViewer takes over the editor pane
                             when the user opens a file from the Files
-                            sidebar. Closing falls back to the terminal. */}
+                            sidebar. Closing falls back to the terminal.
+                            M27 — DiffViewerTab similarly takes over when
+                            the user clicks an event in Recent Edits. Both
+                            viewers are mutually exclusive: opening one
+                            closes the other. */}
                         {openedFile !== null ? (
                           <div className="flex min-h-0 min-w-0 flex-1">
                             <ErrorBoundary
@@ -827,6 +856,22 @@ export default function App() {
                                 containerId={active.id}
                                 path={openedFile}
                                 onClose={() => setOpenedFile(null)}
+                              />
+                            </ErrorBoundary>
+                          </div>
+                        ) : openedDiffEvent !== null ? (
+                          <div className="flex min-h-0 min-w-0 flex-1">
+                            <ErrorBoundary
+                              key={`eb-diff-${active.id}-${openedDiffEvent.event_id}`}
+                              label={`the diff viewer for ${openedDiffEvent.path}`}
+                            >
+                              <DiffViewerTab
+                                key={`${active.id}-${openedDiffEvent.event_id}`}
+                                event={openedDiffEvent}
+                                onOpenFile={(path) => {
+                                  setOpenedDiffEvent(null);
+                                  setOpenedFile(path);
+                                }}
                               />
                             </ErrorBoundary>
                           </div>

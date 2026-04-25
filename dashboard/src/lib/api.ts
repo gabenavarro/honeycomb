@@ -21,6 +21,7 @@ import type {
   ContainerCreate,
   ContainerRecord,
   ContainerWorkdir,
+  DiffEvent,
   DirectoryListing,
   DiscoverRegisterRequest,
   DiscoveryResponse,
@@ -311,6 +312,9 @@ export const reorderNamedSession = (sessionId: string, position: number) =>
 
 export const deleteNamedSession = (sessionId: string) =>
   request<void>(`/named-sessions/${sessionId}`, { method: "DELETE" });
+
+export const listDiffEvents = (containerId: number) =>
+  request<DiffEvent[]>(`/containers/${containerId}/diff-events`);
 
 export const commitChanges = (
   workspace_folder: string,

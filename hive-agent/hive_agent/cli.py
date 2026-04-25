@@ -118,6 +118,71 @@ def status() -> None:
         sys.exit(1)
 
 
+@main.command("submit-diff")
+@click.option("--tool", required=True, type=click.Choice(["Edit", "Write", "MultiEdit"]))
+@click.option("--path", required=True)
+@click.option("--tool-use-id", required=True)
+@click.option("--claude-session-id", default=None)
+@click.option("--added-lines", default=0, type=int)
+@click.option("--removed-lines", default=0, type=int)
+@click.option("--timestamp", required=True)
+@click.option(
+    "--diff",
+    required=True,
+    help="Unified diff. Pass `-` to read from stdin or `@<path>` to read from a file.",
+)
+@click.option(
+    "--socket",
+    "socket_path",
+    default="/run/honeycomb/agent.sock",
+    help="Unix socket the hive-agent daemon listens on.",
+)
+def submit_diff_cmd(
+    tool: str,
+    path: str,
+    tool_use_id: str,
+    claude_session_id: str | None,
+    added_lines: int,
+    removed_lines: int,
+    timestamp: str,
+    diff: str,
+    socket_path: str,
+) -> None:
+    """Submit a Claude tool-call diff to the hub via the local agent."""
+    import json
+    import socket as _socket
+
+    if diff == "-":
+        diff_text = sys.stdin.read()
+    elif diff.startswith("@"):
+        with open(diff[1:], encoding="utf-8") as f:
+            diff_text = f.read()
+    else:
+        diff_text = diff
+
+    payload = {
+        "tool": tool,
+        "path": path,
+        "tool_use_id": tool_use_id,
+        "claude_session_id": claude_session_id,
+        "added_lines": added_lines,
+        "removed_lines": removed_lines,
+        "timestamp": timestamp,
+        "diff": diff_text,
+    }
+    line = json.dumps(payload) + "\n"
+
+    s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    try:
+        s.connect(socket_path)
+        s.sendall(line.encode("utf-8"))
+    except OSError as exc:
+        click.echo(f"submit-diff: failed to talk to {socket_path}: {exc}", err=True)
+        sys.exit(1)
+    finally:
+        s.close()
+
+
 def _daemonize() -> None:
     """Fork into the background (Unix only)."""
     if os.name != "posix":
