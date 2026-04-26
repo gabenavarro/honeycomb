@@ -1,4 +1,9 @@
-/** Activity rail (M32 rebuild).
+/** Activity bar — leftmost rail (M32 base, M36 mobile-aware).
+ *
+ *  M36: hidden at phone (<768px); PhoneTabBar replaces it.
+ *  Width is w-12 (48px) at tablet and desktop; the spec aspirated
+ *  56px at desktop but the difference is too small to be worth a
+ *  variant.
  *
  * Four entries — Chats / Library / Files / Settings. Settings is
  * bottom-anchored. Chats shows a "reviews" counter (count of open
@@ -109,7 +114,7 @@ export function ActivityBar({
   return (
     <nav
       aria-label="Activity bar"
-      className="border-edge bg-pane flex w-12 shrink-0 flex-col items-center justify-between border-r py-2"
+      className="border-edge bg-pane tablet:flex hidden w-12 shrink-0 flex-col items-center justify-between border-r py-2"
     >
       <ul className="flex flex-col gap-1">
         {TOP_ENTRIES.map((item) => (
