@@ -100,9 +100,9 @@ export function ConnectivityChip({ activeContainerId }: Props) {
           side="top"
           align="start"
           sideOffset={6}
-          className="z-50 w-72 rounded-md border border-[#2b2b2b] bg-[#1e1e1e] p-3 text-[11px] text-[#cccccc] shadow-xl outline-none"
+          className="border-edge bg-page text-primary z-50 w-72 rounded-md border p-3 text-[11px] shadow-xl outline-none"
         >
-          <h4 className="mb-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+          <h4 className="text-secondary mb-2 text-[10px] font-semibold tracking-wider uppercase">
             Connectivity
           </h4>
           <ul className="space-y-1.5">
@@ -111,14 +111,14 @@ export function ConnectivityChip({ activeContainerId }: Props) {
                 <StatusDot s={wsStatus} />
                 Multiplex WebSocket
               </span>
-              <span className="text-[#858585]">{connected ? "connected" : "reconnecting"}</span>
+              <span className="text-secondary">{connected ? "connected" : "reconnecting"}</span>
             </li>
             <li className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5">
                 <StatusDot s={httpStatus} />
                 Hub REST
               </span>
-              <span className="text-[#858585]">
+              <span className="text-secondary">
                 {health ? `v${health.version}` : "no response"}
               </span>
             </li>
@@ -127,7 +127,7 @@ export function ConnectivityChip({ activeContainerId }: Props) {
                 <StatusDot s={ptyStatus} />
                 Active PTY
               </span>
-              <span className="text-[#858585]">
+              <span className="text-secondary">
                 {activeContainerId === null
                   ? "no container focused"
                   : anyPty
@@ -136,7 +136,7 @@ export function ConnectivityChip({ activeContainerId }: Props) {
               </span>
             </li>
           </ul>
-          <Popover.Arrow className="fill-[#2b2b2b]" />
+          <Popover.Arrow className="fill-edge" />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

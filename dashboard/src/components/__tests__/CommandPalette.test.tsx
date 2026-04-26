@@ -39,6 +39,7 @@ function renderPalette(
   overrides: {
     onOpenFile?: (path: string) => void;
     onRunSuggestion?: (cmd: string) => void;
+    onActivity?: (a: string) => void;
   } = {},
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,7 +75,9 @@ function renderPalette(
           onFocusContainer={noop}
           onCloseContainer={noop}
           onNewClaudeSession={noop}
-          onActivity={noop}
+          onActivity={
+            (overrides.onActivity as Parameters<typeof CommandPalette>[0]["onActivity"]) ?? noop
+          }
           onOpenProvisioner={noop}
           onOpenFile={overrides.onOpenFile ?? noop}
           onRunSuggestion={overrides.onRunSuggestion ?? noop}
@@ -213,5 +216,43 @@ describe("CommandPalette — M31 theme commands", () => {
     renderPalette();
     fireEvent.keyDown(window, { key: "S", metaKey: true, shiftKey: true });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe("CommandPalette — M32 route commands", () => {
+  it("lists Go to Chats / Go to Library / Go to Files / Open Settings", () => {
+    renderPalette();
+    expect(screen.getByText(/Go to Chats/i)).toBeTruthy();
+    expect(screen.getByText(/Go to Library/i)).toBeTruthy();
+    expect(screen.getByText(/Go to Files/i)).toBeTruthy();
+    expect(screen.getByText(/Open Settings/i)).toBeTruthy();
+  });
+
+  it("clicking 'Go to Chats' invokes onActivity('containers')", () => {
+    const onActivity = vi.fn();
+    renderPalette({ onActivity });
+    fireEvent.click(screen.getByText(/Go to Chats/i));
+    expect(onActivity).toHaveBeenCalledWith("containers");
+  });
+
+  it("clicking 'Go to Library' invokes onActivity('diff-events')", () => {
+    const onActivity = vi.fn();
+    renderPalette({ onActivity });
+    fireEvent.click(screen.getByText(/Go to Library/i));
+    expect(onActivity).toHaveBeenCalledWith("diff-events");
+  });
+
+  it("clicking 'Go to Files' invokes onActivity('files')", () => {
+    const onActivity = vi.fn();
+    renderPalette({ onActivity });
+    fireEvent.click(screen.getByText(/Go to Files/i));
+    expect(onActivity).toHaveBeenCalledWith("files");
+  });
+
+  it("clicking 'Open Settings' invokes onActivity('settings')", () => {
+    const onActivity = vi.fn();
+    renderPalette({ onActivity });
+    fireEvent.click(screen.getByText(/Open Settings/i));
+    expect(onActivity).toHaveBeenCalledWith("settings");
   });
 });

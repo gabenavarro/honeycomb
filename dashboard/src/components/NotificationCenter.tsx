@@ -65,17 +65,17 @@ export function NotificationCenter() {
           side="top"
           align="end"
           sideOffset={6}
-          className="z-50 w-80 rounded-md border border-[#2b2b2b] bg-[#1e1e1e] text-[#cccccc] shadow-xl outline-none"
+          className="border-edge bg-page text-primary z-50 w-80 rounded-md border shadow-xl outline-none"
         >
-          <header className="flex items-center justify-between border-b border-[#2b2b2b] px-3 py-1.5">
-            <h4 className="text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
+          <header className="border-edge flex items-center justify-between border-b px-3 py-1.5">
+            <h4 className="text-secondary text-[10px] font-semibold tracking-wider uppercase">
               Recent notifications ({history.length})
             </h4>
             <button
               type="button"
               onClick={clearHistory}
               disabled={history.length === 0}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-[#858585] hover:bg-[#2a2a2a] hover:text-[#c0c0c0] disabled:opacity-40"
+              className="text-secondary hover:bg-chip hover:text-primary flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] disabled:opacity-40"
               aria-label="Clear notification history"
               title="Clear history"
             >
@@ -85,9 +85,9 @@ export function NotificationCenter() {
           </header>
           <div className="max-h-80 overflow-y-auto">
             {history.length === 0 ? (
-              <p className="px-3 py-4 text-center text-[11px] text-[#606060]">Nothing recent.</p>
+              <p className="text-muted px-3 py-4 text-center text-[11px]">Nothing recent.</p>
             ) : (
-              <ul className="divide-y divide-[#2b2b2b]/50">
+              <ul className="divide-edge/50 divide-y">
                 {/* Most recent first — history is appended in order, so
                     reverse the slice for display without mutating. */}
                 {[...history].reverse().map((item) => (
@@ -96,7 +96,7 @@ export function NotificationCenter() {
               </ul>
             )}
           </div>
-          <Popover.Arrow className="fill-[#2b2b2b]" />
+          <Popover.Arrow className="fill-edge" />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -108,11 +108,11 @@ function Row({ item }: { item: ToastRecord }) {
     <li className="flex items-start gap-2 px-3 py-2 text-[11px]">
       <KindIcon kind={item.kind} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[#e7e7e7]">{item.title}</div>
+        <div className="text-primary truncate">{item.title}</div>
         {item.body && (
-          <div className="mt-0.5 line-clamp-2 text-[10px] text-[#858585]">{item.body}</div>
+          <div className="text-secondary mt-0.5 line-clamp-2 text-[10px]">{item.body}</div>
         )}
-        <div className="mt-0.5 text-[10px] text-[#606060]">{relativeTime(item.created_at)}</div>
+        <div className="text-muted mt-0.5 text-[10px]">{relativeTime(item.created_at)}</div>
       </div>
     </li>
   );

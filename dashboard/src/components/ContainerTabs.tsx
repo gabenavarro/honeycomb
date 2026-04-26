@@ -43,7 +43,7 @@ export function ContainerTabs({ openContainers, activeId, onFocus, onClose }: Pr
     >
       <Tabs.List
         aria-label="Open containers"
-        className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-[#2b2b2b] bg-[#252526]"
+        className="border-edge bg-chip flex shrink-0 items-center gap-0 overflow-x-auto border-b"
       >
         {openContainers.map((c) => (
           <ContainerTab key={c.id} container={c} active={c.id === activeId} onClose={onClose} />
@@ -72,10 +72,10 @@ function ContainerTab({
           onClose(container.id);
         }
       }}
-      className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-[#2b2b2b] px-3 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4] focus-visible:ring-inset ${
+      className={`group border-edge focus-visible:ring-accent flex shrink-0 cursor-pointer items-center gap-1.5 border-r px-3 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
         active
-          ? "border-t-2 border-t-[#0078d4] bg-[#1e1e1e] text-[#e7e7e7]"
-          : "bg-[#2d2d2d] text-[#969696] hover:bg-[#353535]"
+          ? "border-t-accent bg-page text-primary border-t-2"
+          : "bg-pane text-secondary hover:bg-chip"
       }`}
     >
       {needsAttention && <NeedsAttentionIcon />}
@@ -89,7 +89,7 @@ function ContainerTab({
           e.stopPropagation();
           onClose(container.id);
         }}
-        className="ml-0.5 rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4]"
+        className="hover:bg-chip focus-visible:ring-accent ml-0.5 rounded p-0.5 opacity-40 hover:opacity-100 focus:outline-none focus-visible:ring-2"
         aria-label={`Close ${container.project_name} tab`}
       >
         <X size={11} aria-hidden="true" />

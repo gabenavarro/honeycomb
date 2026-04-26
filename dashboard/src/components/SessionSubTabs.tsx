@@ -51,7 +51,7 @@ export function SessionSubTabs({
     <div
       role="tablist"
       aria-label="Container sessions"
-      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-[#2b2b2b] bg-[#1a1a1a] px-1"
+      className="border-edge bg-page flex shrink-0 items-center gap-0 overflow-x-auto border-b px-1"
     >
       {sessions.map((s) => (
         <SessionTab
@@ -86,7 +86,7 @@ export function SessionSubTabs({
       <button
         type="button"
         onClick={onNew}
-        className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+        className="text-secondary hover:bg-chip hover:text-primary flex items-center gap-1 px-2 py-1 text-[10px]"
         aria-label="New session"
         title="New session"
       >
@@ -159,10 +159,7 @@ function SessionTab({
 
   // M21 D — drag state classes. ``dragging`` ghosts the source, ``dragOver``
   // shows a left-edge caret indicating where the drop will land.
-  const dragClasses = [
-    dragging ? "opacity-50" : "",
-    dragOver ? "border-l-2 border-l-[#0078d4]" : "",
-  ]
+  const dragClasses = [dragging ? "opacity-50" : "", dragOver ? "border-l-2 border-l-accent" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -212,10 +209,10 @@ function SessionTab({
             onClose(session.id);
           }
         }}
-        className={`flex items-center gap-1.5 border-r border-[#2b2b2b] px-2.5 py-1 text-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4] focus-visible:ring-inset ${
+        className={`border-edge focus-visible:ring-accent flex items-center gap-1.5 border-r px-2.5 py-1 text-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
           active
-            ? "bg-[#1e1e1e] text-[#e7e7e7]"
-            : "bg-[#222] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-[#c0c0c0]"
+            ? "bg-page text-primary"
+            : "bg-pane text-secondary hover:bg-chip hover:text-primary"
         } ${dragClasses}`}
       >
         {editing ? (
@@ -234,7 +231,7 @@ function SessionTab({
                 cancel();
               }
             }}
-            className="w-[110px] rounded border border-[#3c3c3c] bg-[#1e1e1e] px-1 text-[10px] text-[#e7e7e7] focus:border-[#0078d4] focus:outline-none"
+            className="border-edge bg-page text-primary focus:border-accent w-[110px] rounded border px-1 text-[10px] focus:outline-none"
             aria-label={`Rename session ${session.name}`}
           />
         ) : (
@@ -251,7 +248,7 @@ function SessionTab({
               e.stopPropagation();
               onStartEdit();
             }}
-            className="ml-0.5 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100"
+            className="hover:bg-chip ml-0.5 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:opacity-100"
             aria-label={`Rename session ${session.name}`}
             title="Rename session"
           >
@@ -267,7 +264,7 @@ function SessionTab({
               e.stopPropagation();
               onClose(session.id);
             }}
-            className="ml-1 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100"
+            className="hover:bg-chip ml-1 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:opacity-100"
             aria-label={`Close session ${session.name}`}
           >
             <X size={9} aria-hidden="true" />

@@ -34,7 +34,7 @@ function Swatch({ value }: { value: ThemePreference }) {
   if (value === "system") {
     return (
       <div
-        className="h-9 w-14 flex-shrink-0 overflow-hidden rounded border border-[#d0d7de]"
+        className="border-edge h-9 w-14 flex-shrink-0 overflow-hidden rounded border"
         style={{
           background: "linear-gradient(135deg, #ffffff 0%, #ffffff 49%, #161b22 51%, #161b22 100%)",
         }}
@@ -53,7 +53,7 @@ function Swatch({ value }: { value: ThemePreference }) {
   }
   return (
     <div
-      className="h-9 w-14 flex-shrink-0 overflow-hidden rounded border border-[#e0d6bf]"
+      className="border-edge h-9 w-14 flex-shrink-0 overflow-hidden rounded border"
       style={{
         background: "linear-gradient(135deg, #fdfaf3 0%, #f7f1e3 50%, #f0e9d6 100%)",
       }}
@@ -74,14 +74,14 @@ export function AppearancePicker() {
             htmlFor={id}
             className={`flex cursor-pointer items-center gap-3.5 rounded-md border p-3 transition-colors ${
               selected
-                ? "border-[#58a6ff] shadow-[0_0_0_1px_#58a6ff]"
-                : "border-[#30363d] hover:border-[#6e7681]"
+                ? "border-accent shadow-[0_0_0_1px_var(--color-accent)]"
+                : "border-edge hover:border-muted"
             }`}
           >
             <Swatch value={opt.value} />
             <div className="flex-1">
-              <div className="text-[13px] font-medium text-[#c9d1d9]">{opt.label}</div>
-              <div className="mt-0.5 text-[11px] text-[#8b949e]">{opt.description}</div>
+              <div className="text-primary text-[13px] font-medium">{opt.label}</div>
+              <div className="text-secondary mt-0.5 text-[11px]">{opt.description}</div>
             </div>
             <input
               id={id}

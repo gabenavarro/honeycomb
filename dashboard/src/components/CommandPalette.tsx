@@ -29,7 +29,14 @@ interface PaletteCommand {
   title: string;
   subtitle?: string;
   shortcut?: string;
-  group: "Containers" | "Activity" | "Sessions" | "Discover" | "Suggestions" | "Appearance";
+  group:
+    | "Containers"
+    | "Activity"
+    | "Sessions"
+    | "Discover"
+    | "Suggestions"
+    | "Appearance"
+    | "Routes";
   run: () => void;
 }
 
@@ -156,18 +163,36 @@ export function CommandPalette({
     }
     items.push(
       {
-        id: "act:containers",
-        title: "Show Containers sidebar",
-        shortcut: "Ctrl+Shift+C",
-        group: "Activity",
+        id: "route:chats",
+        title: "Go to Chats",
+        subtitle: "Conversations + workspaces",
+        shortcut: "Ctrl+1",
+        group: "Routes",
         run: () => onActivity("containers"),
       },
       {
-        id: "act:gitops",
-        title: "Show Git Ops sidebar",
-        shortcut: "Ctrl+Shift+G",
-        group: "Activity",
-        run: () => onActivity("gitops"),
+        id: "route:library",
+        title: "Go to Library",
+        subtitle: "Plans, Reviews, Edits, Snippets",
+        shortcut: "Ctrl+2",
+        group: "Routes",
+        run: () => onActivity("diff-events"),
+      },
+      {
+        id: "route:files",
+        title: "Go to Files",
+        subtitle: "Source Control · Problems · Keybindings",
+        shortcut: "Ctrl+3",
+        group: "Routes",
+        run: () => onActivity("files"),
+      },
+      {
+        id: "route:settings",
+        title: "Open Settings",
+        subtitle: "Hub configuration + Appearance",
+        shortcut: "Ctrl+,",
+        group: "Routes",
+        run: () => onActivity("settings"),
       },
     );
     items.push({
@@ -221,11 +246,11 @@ export function CommandPalette({
   const groupOrder: PaletteCommand["group"][] = useMemo(
     () =>
       (activeName
-        ? ["Suggestions", "Containers", "Sessions", "Activity", "Discover", "Appearance"]
+        ? ["Suggestions", "Containers", "Sessions", "Routes", "Discover", "Appearance"]
         : [
             "Containers",
             "Sessions",
-            "Activity",
+            "Routes",
             "Discover",
             "Appearance",
           ]) as PaletteCommand["group"][],

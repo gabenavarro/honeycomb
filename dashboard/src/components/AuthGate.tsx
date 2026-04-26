@@ -97,9 +97,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <Dialog.Root open modal>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-[#1e1e1e]/95 backdrop-blur-sm" />
+        <Dialog.Overlay className="bg-page/95 fixed inset-0 z-50 backdrop-blur-sm" />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-[#252526] p-6 shadow-2xl outline-none"
+          className="bg-chip fixed top-1/2 left-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-md border border-white/10 p-6 shadow-2xl outline-none"
           onEscapeKeyDown={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
@@ -142,7 +142,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
                 if (state === "error") setState("idle");
               }}
               placeholder="e.g. t9f…-long-random-string"
-              className="w-full rounded border border-white/10 bg-[#1e1e1e] px-3 py-2 font-mono text-sm text-white outline-none focus:border-sky-500"
+              className="bg-page w-full rounded border border-white/10 px-3 py-2 font-mono text-sm text-white outline-none focus:border-sky-500"
             />
 
             {error ? (

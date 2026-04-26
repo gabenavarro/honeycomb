@@ -44,12 +44,14 @@ test.beforeEach(async ({ context }) => {
   await context.route("**/ws**", (route) => route.fulfill({ status: 404 }));
 });
 
-test("activity bar + empty editor render with a valid token", async ({ page }) => {
+test("activity bar + chats route render with a valid token", async ({ page }) => {
   await page.goto("/");
 
+  // M32: the URL "/" redirects to "/chats" and the ChatsRoute renders
+  // its own aside labelled "Chats sidebar" plus an empty-state copy.
   await expect(page.getByRole("navigation", { name: /activity bar/i })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: /primary sidebar/i })).toBeVisible();
-  await expect(page.getByText(/no containers registered yet/i)).toBeVisible();
+  await expect(page.getByRole("complementary", { name: /chats sidebar/i })).toBeVisible();
+  await expect(page.getByText(/pick a workspace from the sidebar/i)).toBeVisible();
 });
 
 test("Ctrl+K opens the command palette", async ({ page }) => {
@@ -60,14 +62,15 @@ test("Ctrl+K opens the command palette", async ({ page }) => {
   await expect(palette).toBeVisible();
 });
 
-test("activity bar toggle switches to the Problems pane", async ({ page }) => {
+test("Files rail entry surfaces the Problems sub-tab", async ({ page }) => {
+  // M32: Problems collapsed into the Files route as a sub-tab. Click
+  // the Files rail entry first, then activate the Problems sub-tab.
   await page.goto("/");
-  await page.getByRole("button", { name: /^problems$/i }).click();
+  await page.getByRole("button", { name: /^files$/i }).click();
+  await page.getByRole("tab", { name: /^problems$/i }).click();
 
   // ProblemsPanel renders a "No problems" empty-state paragraph whenever
-  // the GET /api/problems mock returns an empty list. That string is
-  // only present in the Problems view, so it's a unique-enough assertion
-  // that the activity actually switched (the sidebar + panel both say
-  // "Problems" — matching on the heading text is ambiguous).
+  // the GET /api/problems mock returns an empty list — that copy is
+  // unique to the Problems view and confirms the sub-tab is mounted.
   await expect(page.getByText(/health transitions and agent disconnects/i)).toBeVisible();
 });
