@@ -5,7 +5,14 @@ description = "Claude Hive Hub — centralized orchestrator for devcontainer-bas
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115,<1",
-    "uvicorn>=0.34,<1",
+    # The [standard] extra pulls in `websockets` (and `httptools`,
+    # `uvloop`, `watchfiles`, etc.). `websockets` is *required* — without
+    # it uvicorn cannot negotiate the WS protocol upgrade and every
+    # /ws/* route silently returns 404 instead of 101 Switching Protocols.
+    # The hub uses /ws (multiplexed dashboard channels), /ws/pty/{id}
+    # (PTY), and /api/agent/connect (agent reverse tunnel) — all fail
+    # silently if the bare `uvicorn` package is installed alone.
+    "uvicorn[standard]>=0.34,<1",
     "docker>=7,<8",
     "aiosqlite>=0.20,<1",
     "sqlalchemy[asyncio]>=2.0,<3",
