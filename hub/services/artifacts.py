@@ -321,7 +321,7 @@ async def rescan_spec_files(
             (
                 await conn.execute(
                     sa.text(
-                        "SELECT metadata_json FROM artifacts "
+                        "SELECT artifact_id, metadata_json FROM artifacts "
                         "WHERE container_id = :cid AND type = 'spec'"
                     ),
                     {"cid": container_id},
@@ -338,6 +338,11 @@ async def rescan_spec_files(
                 if "file_path" in meta:
                     existing_paths.add(meta["file_path"])
             except json.JSONDecodeError:
+                logger.warning(
+                    "spec_artifact_corrupt_metadata artifact_id=%s container_id=%s",
+                    r["artifact_id"],
+                    container_id,
+                )
                 continue
 
     new_count = 0

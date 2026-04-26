@@ -241,15 +241,23 @@ async def lifespan(app: FastAPI):
     # shared across the workspace conceptually).
     from hub.services.artifacts import rescan_spec_files
 
-    specs_dir = Path("docs/superpowers/specs")
+    specs_dir = Path(__file__).resolve().parents[1] / "docs" / "superpowers" / "specs"
     try:
-        containers_list = await registry.list_all()
-        for c in containers_list:
-            await rescan_spec_files(
-                registry.engine,
-                container_id=c.id,
-                specs_dir=specs_dir,
-            )
+        if not specs_dir.exists():
+            logger.info("spec_rescan_skipped", reason="dir_not_found", path=str(specs_dir))
+        else:
+            # TODO(post-M35): specs are workspace-conceptual but the artifacts
+            # table is container-scoped, so each registered container gets its
+            # own copy of the same spec rows. Consider nullable container_id
+            # for "global" artifacts or a separate workspace_artifacts table
+            # when this becomes a hot path.
+            containers_list = await registry.list_all()
+            for c in containers_list:
+                await rescan_spec_files(
+                    registry.engine,
+                    container_id=c.id,
+                    specs_dir=specs_dir,
+                )
     except Exception as exc:
         logger.warning("spec_rescan_failed", error=str(exc))
 
