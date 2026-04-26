@@ -29,6 +29,7 @@ import { readEditAuto } from "../chat/EditAutoToggle";
 import { dispatchModeChange } from "../chat/ModeToggle";
 import { useChatStream } from "../../hooks/useChatStream";
 import { createArtifact, listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
+import { TYPE_LABEL } from "../../lib/artifact-meta";
 import { parseSlashCommand } from "../../lib/slashCommands";
 import { useToasts } from "../../hooks/useToasts";
 import type { ContainerRecord, DiffEvent, NamedSession } from "../../lib/types";
@@ -328,7 +329,7 @@ function ChatThreadWrapper({
           body: action.body,
           source_chat_id: sessionId,
         })
-          .then((art) => toast("success", `Saved as ${art.type}: ${art.title}`))
+          .then((art) => toast("success", `Saved as ${TYPE_LABEL[art.type]}: ${art.title}`))
           .catch((err: unknown) =>
             toast("error", `Failed to save: ${err instanceof Error ? err.message : String(err)}`),
           );
