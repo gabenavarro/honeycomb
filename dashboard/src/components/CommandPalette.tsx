@@ -14,7 +14,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useContainerFileIndex } from "../hooks/useContainerFileIndex";
 import { useContainerSuggestions } from "../hooks/useContainerSuggestions";
@@ -84,11 +84,9 @@ export function CommandPalette({
   const [rawInput, setRawInput] = useState("");
   const { mode, search, showHelp } = parseInput(rawInput);
 
-  const themeApi = useTheme();
-  const themeRef = useRef(themeApi);
-  useEffect(() => {
-    themeRef.current = themeApi;
-  }, [themeApi]);
+  // setPreference is stable across renders (useCallback with [] deps in theme.ts),
+  // so we can depend on it directly without a ref dance.
+  const { setPreference: setThemePreference } = useTheme();
 
   // Global keyboard shortcuts ⌘⇧L / ⌘⇧D / ⌘⇧S (active whether or not the palette is open)
   useEffect(() => {
@@ -97,18 +95,18 @@ export function CommandPalette({
       const k = e.key.toLowerCase();
       if (k === "l") {
         e.preventDefault();
-        themeRef.current.setPreference("light");
+        setThemePreference("light");
       } else if (k === "d") {
         e.preventDefault();
-        themeRef.current.setPreference("dark");
+        setThemePreference("dark");
       } else if (k === "s") {
         e.preventDefault();
-        themeRef.current.setPreference("system");
+        setThemePreference("system");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [setThemePreference]);
 
   const fileIndex = useContainerFileIndex(activeContainerId, {
     enabled: mode === "file" && activeContainerId !== null,
@@ -186,7 +184,7 @@ export function CommandPalette({
         subtitle: "Warm Workshop palette",
         shortcut: "⌘ ⇧ L",
         group: "Appearance",
-        run: () => themeRef.current.setPreference("light"),
+        run: () => setThemePreference("light"),
       },
       {
         id: "theme:dark",
@@ -194,7 +192,7 @@ export function CommandPalette({
         subtitle: "Existing aesthetic",
         shortcut: "⌘ ⇧ D",
         group: "Appearance",
-        run: () => themeRef.current.setPreference("dark"),
+        run: () => setThemePreference("dark"),
       },
       {
         id: "theme:system",
@@ -202,7 +200,7 @@ export function CommandPalette({
         subtitle: "Follow OS preference",
         shortcut: "⌘ ⇧ S",
         group: "Appearance",
-        run: () => themeRef.current.setPreference("system"),
+        run: () => setThemePreference("system"),
       },
     );
     return items;
@@ -215,6 +213,7 @@ export function CommandPalette({
     onActivity,
     onOpenProvisioner,
     onRunSuggestion,
+    setThemePreference,
   ]);
 
   // Top-to-bottom group order. Suggestions first — they're the most
@@ -223,7 +222,13 @@ export function CommandPalette({
     () =>
       (activeName
         ? ["Suggestions", "Containers", "Sessions", "Activity", "Discover", "Appearance"]
-        : ["Containers", "Sessions", "Activity", "Discover", "Appearance"]) as PaletteCommand["group"][],
+        : [
+            "Containers",
+            "Sessions",
+            "Activity",
+            "Discover",
+            "Appearance",
+          ]) as PaletteCommand["group"][],
     [activeName],
   );
 
