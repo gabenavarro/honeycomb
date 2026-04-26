@@ -29,11 +29,13 @@ describe("ScopeToggle", () => {
     render(<ScopeToggle activeContainerName="my-project" onScopeChange={vi.fn()} />);
     const fleetBtn = screen.getByRole("button", { name: /fleet/i });
     fireEvent.click(fleetBtn);
-    expect(window.localStorage.getItem("hive:library:scope")).toBe("fleet");
+    // useLocalStorage stores JSON-serialised values (JSON.stringify("fleet") === '"fleet"')
+    expect(window.localStorage.getItem("hive:library:scope")).toBe('"fleet"');
   });
 
   it("reads persisted scope from localStorage on mount", () => {
-    window.localStorage.setItem("hive:library:scope", "fleet");
+    // useLocalStorage reads via JSON.parse, so the stored value must be JSON-encoded
+    window.localStorage.setItem("hive:library:scope", '"fleet"');
     render(<ScopeToggle activeContainerName="my-project" onScopeChange={vi.fn()} />);
     const fleetBtn = screen.getByRole("button", { name: /fleet/i });
     expect(fleetBtn.getAttribute("aria-pressed")).toBe("true");

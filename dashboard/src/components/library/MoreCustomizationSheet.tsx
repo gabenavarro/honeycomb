@@ -2,28 +2,7 @@
 import { Star } from "lucide-react";
 
 import type { ArtifactType } from "../../lib/types";
-
-const TYPE_LABEL: Record<ArtifactType, string> = {
-  plan: "Plan",
-  review: "Review",
-  edit: "Edit",
-  snippet: "Snippet",
-  note: "Note",
-  skill: "Skill",
-  subagent: "Subagent",
-  spec: "Spec",
-};
-
-const ALL_TYPES: ArtifactType[] = [
-  "plan",
-  "review",
-  "edit",
-  "snippet",
-  "note",
-  "skill",
-  "subagent",
-  "spec",
-];
+import { ALL_TYPES, TYPE_LABEL } from "../../lib/artifact-meta";
 
 const MAX_PRIMARY = 4;
 

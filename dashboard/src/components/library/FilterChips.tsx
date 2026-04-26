@@ -1,57 +1,29 @@
 /** Filter chip row for the Library sidebar (M35). */
 import { useState } from "react";
 
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 import type { Artifact, ArtifactType } from "../../lib/types";
+import { ALL_TYPES, TYPE_LABEL } from "../../lib/artifact-meta";
 import { MoreCustomizationSheet } from "./MoreCustomizationSheet";
 
 // ─── Module-private constants ─────────────────────────────────────────────────
 
 const STORAGE_KEY = "hive:library:primary-types";
 
-const ALL_TYPES: ArtifactType[] = [
-  "plan",
-  "review",
-  "edit",
-  "snippet",
-  "note",
-  "skill",
-  "subagent",
-  "spec",
-];
-
 const DEFAULT_PRIMARY: ArtifactType[] = ["plan", "review", "edit", "snippet"];
 
-const TYPE_LABEL: Record<ArtifactType, string> = {
-  plan: "Plan",
-  review: "Review",
-  edit: "Edit",
-  snippet: "Snippet",
-  note: "Note",
-  skill: "Skill",
-  subagent: "Subagent",
-  spec: "Spec",
-};
-
-function readStored(): ArtifactType[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PRIMARY;
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_PRIMARY;
-    const valid = parsed.filter((v): v is ArtifactType =>
-      (ALL_TYPES as string[]).includes(v as string),
-    );
-    return valid.length === 4 ? (valid as ArtifactType[]) : DEFAULT_PRIMARY;
-  } catch {
-    return DEFAULT_PRIMARY;
-  }
+/** Validator for the persisted primary-types array.
+ * Enforces the spec contract: exactly 4 entries, all valid ArtifactType values. */
+function isValidPrimary(raw: unknown): raw is ArtifactType[] {
+  if (!Array.isArray(raw) || raw.length !== 4) return false;
+  return raw.every((v) => (ALL_TYPES as unknown[]).includes(v));
 }
 
 // ─── Sub-component: ChipButton ────────────────────────────────────────────────
 
 interface ChipButtonProps {
   label: string;
-  count?: number;
+  count: number;
   pressed: boolean;
   onClick: () => void;
 }
@@ -70,17 +42,16 @@ function ChipButton({ label, count, pressed, onClick }: ChipButtonProps) {
       ].join(" ")}
     >
       <span>{label}</span>
-      {count !== undefined && (
-        <span
-          aria-label={`${count} artifacts`}
-          className={[
-            "rounded-full px-1 text-[10px] font-medium",
-            pressed ? "bg-accent/20 text-accent" : "bg-edge text-faint",
-          ].join(" ")}
-        >
-          {count}
-        </span>
-      )}
+      {/* Always render the badge so zero-count types give an explicit empty-state signal. */}
+      <span
+        aria-label={`${count} artifacts`}
+        className={[
+          "rounded-full px-1 text-[10px] font-medium",
+          pressed ? "bg-accent/20 text-accent" : "bg-edge text-faint",
+        ].join(" ")}
+      >
+        {count}
+      </span>
     </button>
   );
 }
@@ -94,17 +65,12 @@ interface Props {
 }
 
 export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
-  const [primaryTypes, setPrimaryTypes] = useState<ArtifactType[]>(readStored);
+  const [primaryTypes, setPrimaryTypes] = useLocalStorage<ArtifactType[]>(
+    STORAGE_KEY,
+    DEFAULT_PRIMARY,
+    { validate: isValidPrimary },
+  );
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  function handlePrimaryTypesChange(next: ArtifactType[]) {
-    setPrimaryTypes(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
-  }
 
   function countForType(type: ArtifactType): number {
     return artifacts.filter((a) => a.type === type).length;
@@ -155,7 +121,7 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
       {sheetOpen && (
         <MoreCustomizationSheet
           primaryTypes={primaryTypes}
-          onPrimaryTypesChange={handlePrimaryTypesChange}
+          onPrimaryTypesChange={setPrimaryTypes}
           onClose={() => setSheetOpen(false)}
         />
       )}
