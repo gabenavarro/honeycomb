@@ -235,6 +235,24 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("hub_autodiscovery_failed", error=str(exc))
 
+    # M35: scan docs/superpowers/specs/*.md and record any new files as
+    # spec artifacts. Iterates over all known containers — each gets the
+    # same set of spec rows (no per-container filtering yet; specs are
+    # shared across the workspace conceptually).
+    from hub.services.artifacts import rescan_spec_files
+
+    specs_dir = Path("docs/superpowers/specs")
+    try:
+        containers_list = await registry.list_all()
+        for c in containers_list:
+            await rescan_spec_files(
+                registry.engine,
+                container_id=c.id,
+                specs_dir=specs_dir,
+            )
+    except Exception as exc:
+        logger.warning("spec_rescan_failed", error=str(exc))
+
     logger.info("hub_started")
     yield
 

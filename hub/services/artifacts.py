@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from collections.abc import Iterable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import sqlalchemy as sa
@@ -274,3 +276,84 @@ async def delete_artifact(engine: AsyncEngine, *, artifact_id: str) -> None:
             sa.text("DELETE FROM artifacts WHERE artifact_id = :aid"),
             {"aid": artifact_id},
         )
+
+
+# ── Spec auto-save helpers (M35) ──────────────────────────────────────
+
+# Match the first markdown heading in the file
+_HEADING_PATTERN = re.compile(r"^#\s+(.+)$", re.MULTILINE)
+
+
+def _extract_headings(body: str) -> list[str]:
+    """Pull all h1/h2 headings (for the spec metadata.headings list)."""
+    return [
+        m.group(0).lstrip("#").strip() for m in re.finditer(r"^#{1,2}\s+.+$", body, re.MULTILINE)
+    ]
+
+
+def _spec_title(body: str, fallback: str) -> str:
+    """First # heading, or the fallback (filename stem) if absent."""
+    m = _HEADING_PATTERN.search(body)
+    return m.group(1).strip() if m is not None else fallback
+
+
+async def rescan_spec_files(
+    engine: AsyncEngine,
+    *,
+    container_id: int,
+    specs_dir: Path,
+) -> int:
+    """Scan `specs_dir` for *.md files; record any not already in the
+    artifacts table (lookup by metadata.file_path). Returns the count
+    of new records.
+
+    Idempotent: existing rows are skipped. Missing/empty directory is
+    a silent no-op.
+    """
+    if not specs_dir.exists():
+        return 0
+    md_files = sorted(specs_dir.glob("*.md"))
+    if not md_files:
+        return 0
+
+    async with engine.connect() as conn:
+        rows = (
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT metadata_json FROM artifacts "
+                        "WHERE container_id = :cid AND type = 'spec'"
+                    ),
+                    {"cid": container_id},
+                )
+            )
+            .mappings()
+            .all()
+        )
+    existing_paths: set[str] = set()
+    for r in rows:
+        if r["metadata_json"]:
+            try:
+                meta = json.loads(r["metadata_json"])
+                if "file_path" in meta:
+                    existing_paths.add(meta["file_path"])
+            except json.JSONDecodeError:
+                continue
+
+    new_count = 0
+    for md_path in md_files:
+        rel_path = str(md_path.relative_to(specs_dir.parent))
+        if rel_path in existing_paths:
+            continue
+        body = md_path.read_text(encoding="utf-8", errors="replace")
+        title = _spec_title(body, fallback=md_path.stem)
+        await record_artifact(
+            engine,
+            container_id=container_id,
+            type="spec",
+            title=title,
+            body=body,
+            metadata={"file_path": rel_path, "headings": _extract_headings(body)},
+        )
+        new_count += 1
+    return new_count
