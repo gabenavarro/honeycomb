@@ -52,8 +52,8 @@ export function SkillRenderer({ artifact }: Props) {
   const { frontmatter, rest } = splitFrontmatter(artifact.body);
 
   const skillName =
-    (frontmatter.name as string | undefined) ??
     (artifact.metadata?.skill_name as string | undefined) ??
+    (frontmatter.name as string | undefined) ??
     artifact.title;
 
   const description = frontmatter.description as string | undefined;

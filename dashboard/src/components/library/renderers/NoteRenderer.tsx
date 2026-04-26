@@ -8,11 +8,11 @@ interface Props {
 
 export function NoteRenderer({ artifact }: Props) {
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
+    <div className="flex flex-col gap-2 px-4 py-3">
       <header className="border-b border-edge-soft pb-2">
-        <h2 className="text-[15px] font-semibold text-primary">{artifact.title}</h2>
-        <p className="mt-1 text-[11px] text-muted">
-          Note · saved {new Date(artifact.created_at).toLocaleString()}
+        <h1 className="text-[15px] font-semibold text-primary">{artifact.title}</h1>
+        <p className="mt-1 text-[10px] text-muted">
+          Note · {new Date(artifact.created_at).toLocaleString()}
         </p>
       </header>
       <MarkdownBody source={artifact.body} />

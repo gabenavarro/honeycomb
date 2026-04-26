@@ -21,14 +21,14 @@ const sample: Artifact = {
 };
 
 describe("NoteRenderer", () => {
-  it("renders the artifact title in an h2 (lighter chrome than Plan)", () => {
+  it("renders the artifact title in an h1 (lighter chrome than Plan)", () => {
     render(<NoteRenderer artifact={sample} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Quick Note" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Quick Note" })).toBeTruthy();
   });
 
   it('renders the "Note ·" meta subtitle', () => {
     render(<NoteRenderer artifact={sample} />);
-    expect(screen.getByText(/Note\s*·\s*saved/i)).toBeTruthy();
+    expect(screen.getByText(/Note\s*·/i)).toBeTruthy();
   });
 
   it("renders markdown body content", () => {

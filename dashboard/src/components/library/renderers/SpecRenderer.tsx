@@ -22,9 +22,9 @@ export function SpecRenderer({ artifact }: Props) {
           aria-label="Table of contents"
           className="hidden w-48 shrink-0 overflow-y-auto border-r border-edge-soft px-3 py-4 md:block"
         >
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+          <h3 className="mb-2 text-[10px] font-semibold tracking-wider text-muted uppercase">
             Contents
-          </p>
+          </h3>
           <nav>
             <ul className="flex flex-col gap-1">
               {headings.map((heading) => (

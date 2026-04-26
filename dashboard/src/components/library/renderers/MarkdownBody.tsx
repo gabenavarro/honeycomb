@@ -111,8 +111,10 @@ interface Props {
 
 export function MarkdownBody({ source }: Props) {
   return (
-    <Markdown remarkPlugins={[remarkGfm]} components={components}>
-      {source}
-    </Markdown>
+    <div className="prose-tight max-w-none text-[13px] text-primary">
+      <Markdown remarkPlugins={[remarkGfm]} components={components}>
+        {source}
+      </Markdown>
+    </div>
   );
 }
