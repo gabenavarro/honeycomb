@@ -21,16 +21,36 @@ import shutil
 import signal
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from hub.models.chat_events import (
     CliEnvelope,
+    ContentBlockDeltaEvent,
+    ContentBlockStartEvent,
+    StreamEvent,
     SystemEvent,
+    TextDelta,
+    ToolUseBlock,
     parse_cli_event,
 )
-from hub.models.schemas import WSFrame
+from hub.models.schemas import Artifact, WSFrame
+from hub.services.artifacts import record_artifact
+from hub.services.chat_stream_artifact_hooks import (
+    PlanModeTracker,
+    RecordArtifactDirective,
+    detect_note_marker,
+    detect_snippet,
+    detect_subagent_completion,
+)
 
 logger = logging.getLogger(__name__)
+
+
+# Module-level singleton: plan-mode transitions span turns (each turn
+# spawns a fresh ClaudeTurnSession), so the per-(named_session_id, mode)
+# state has to outlive any single instance. Per-process scope is fine —
+# the hub process is the unit of state for everything else too.
+_plan_tracker = PlanModeTracker()
 
 
 # Subtypes of system events that survive filtering. Hook lifecycle
@@ -242,11 +262,21 @@ class ClaudeTurnSession:
         cwd: str,
         ws_manager: Any,
         claude_binary: str = "claude",
+        container_id: int | None = None,
+        artifacts_engine: Any = None,
     ) -> None:
         self.named_session_id = named_session_id
         self.cwd = cwd
         self.ws_manager = ws_manager
         self.claude_binary = claude_binary
+        # M35 hook integration: dispatch supplies these so we can persist
+        # auto-saved artifacts (plan / snippet / subagent / note) on the
+        # `library:<container_id>` channel after the subprocess exits.
+        # Both default to None so existing chat_stream tests (which only
+        # exercise the parse/broadcast path) keep working — when either
+        # is missing the hook dispatch becomes a no-op.
+        self.container_id = container_id
+        self.artifacts_engine = artifacts_engine
         self._proc: asyncio.subprocess.Process | None = None
         self._cancelled = False
 
@@ -308,6 +338,16 @@ class ClaudeTurnSession:
         captured_id: str | None = None
         forwarded = 0
 
+        # M35 hook accumulators. We snapshot the plan-mode transition
+        # *before* the subprocess produces any output so the directive
+        # reflects the mode the user chose for this turn (not whatever
+        # mode the next turn might switch to).
+        plan_directive = _plan_tracker.observe_turn_mode(
+            named_session_id=self.named_session_id, mode=mode
+        )
+        accumulated_text_parts: list[str] = []
+        completed_tool_uses: list[ToolUseBlock] = []
+
         if self._proc.stdout is not None:
             async for raw_line in self._proc.stdout:
                 line = raw_line.decode("utf-8", errors="replace").rstrip("\n")
@@ -316,6 +356,19 @@ class ClaudeTurnSession:
                     continue
                 if isinstance(event, SystemEvent) and event.subtype == "init":
                     captured_id = event.session_id
+                # Accumulate hook inputs — text deltas concatenated into
+                # the assistant transcript, tool_use block_starts collected
+                # so the subagent detector can scan them after exit.
+                if isinstance(event, StreamEvent):
+                    inner = event.event
+                    if isinstance(inner, ContentBlockDeltaEvent) and isinstance(
+                        inner.delta, TextDelta
+                    ):
+                        accumulated_text_parts.append(inner.delta.text)
+                    elif isinstance(inner, ContentBlockStartEvent) and isinstance(
+                        inner.content_block, ToolUseBlock
+                    ):
+                        completed_tool_uses.append(inner.content_block)
                 if not should_forward(event):
                     continue
                 await broadcast_event(
@@ -326,10 +379,100 @@ class ClaudeTurnSession:
                 forwarded += 1
 
         exit_code = await self._proc.wait()
+
+        # Apply hooks *after* the subprocess exits — artifacts are
+        # advisory and must never block turn completion. Any failure
+        # inside _apply_artifact_hooks is logged + swallowed.
+        if self.artifacts_engine is not None and self.container_id is not None:
+            await self._apply_artifact_hooks(
+                accumulated_text="".join(accumulated_text_parts),
+                completed_tool_uses=completed_tool_uses,
+                plan_directive=plan_directive,
+                container_id=cast(int, self.container_id),
+            )
+
         return TurnResult(
             exit_code=exit_code,
             captured_claude_session_id=captured_id,
             forwarded_count=forwarded,
+        )
+
+    async def _apply_artifact_hooks(
+        self,
+        *,
+        accumulated_text: str,
+        completed_tool_uses: list[ToolUseBlock],
+        plan_directive: RecordArtifactDirective | None,
+        container_id: int,
+    ) -> None:
+        """Run all four detectors against the turn's accumulated state
+        and persist any directives via :func:`record_artifact`. Mirrors
+        :mod:`hub.routers.agent`'s ``_broadcast_diff_event`` shape — each
+        write broadcasts a ``new`` frame on ``library:<container_id>``."""
+        directives: list[RecordArtifactDirective] = []
+
+        # Plan: emitted only on plan→non-plan transition. We rebuild it
+        # here so we can splice in the actual assistant transcript as the
+        # body and a first-line title.
+        if plan_directive is not None:
+            first_line = accumulated_text.split("\n", 1)[0].strip()
+            title = first_line[:60] or "Plan"
+            directives.append(
+                RecordArtifactDirective(
+                    type="plan",
+                    title=title,
+                    body=accumulated_text or plan_directive.body,
+                    metadata=plan_directive.metadata,
+                )
+            )
+
+        snippet = detect_snippet(text=accumulated_text)
+        if snippet is not None:
+            directives.append(snippet)
+
+        note = detect_note_marker(text=accumulated_text)
+        if note is not None:
+            directives.append(note)
+
+        for block in completed_tool_uses:
+            sub = detect_subagent_completion(block=block)
+            if sub is not None:
+                directives.append(sub)
+
+        # Hook order (plan → snippet → note → subagent) is arbitrary; no dedup
+        # guarantees apply across hook types — directives are independent.
+        for directive in directives:
+            try:
+                created = await record_artifact(
+                    self.artifacts_engine,
+                    container_id=container_id,
+                    type=directive.type,
+                    title=directive.title,
+                    body=directive.body,
+                    body_format=directive.body_format,
+                    source_chat_id=self.named_session_id,
+                    source_message_id=directive.source_message_id,
+                    metadata=directive.metadata,
+                )
+                await self._broadcast_artifact_new(created, container_id=container_id)
+            except Exception as exc:
+                logger.warning(
+                    "artifact hook failed: type=%s ns=%s err=%s",
+                    directive.type,
+                    self.named_session_id,
+                    exc,
+                )
+
+    async def _broadcast_artifact_new(self, art: Artifact, *, container_id: int) -> None:
+        """Mirror the ``diff-events:<container_id>`` broadcast shape on
+        the ``library:<container_id>`` channel."""
+        from hub.services.artifacts import broadcast_library_event
+
+        await broadcast_library_event(
+            self.ws_manager,
+            container_id=container_id,
+            event="new",
+            data=art.model_dump(mode="json"),
         )
 
     async def cancel(self) -> None:

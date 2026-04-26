@@ -79,10 +79,28 @@ describe("parseSlashCommand", () => {
     expect(parseSlashCommand("/clear")).toEqual<SlashAction>({ kind: "clear-chat" });
   });
 
-  it("/save note <title> stubs with a toast", () => {
+  it("/save note <title> creates a note artifact", () => {
     expect(parseSlashCommand("/save note My Idea")).toEqual<SlashAction>({
-      kind: "toast",
-      text: "Notes arrive in M35 (Library).",
+      kind: "create-artifact",
+      artifact_type: "note",
+      title: "My Idea",
+      body: "My Idea",
+    });
+  });
+
+  it("/save note without a title is unknown", () => {
+    expect(parseSlashCommand("/save note")).toEqual<SlashAction>({
+      kind: "unknown",
+      raw: "/save note",
+      reason: "/save note requires a title",
+    });
+  });
+
+  it("/save note with whitespace-only title is unknown", () => {
+    expect(parseSlashCommand("/save note    ")).toEqual<SlashAction>({
+      kind: "unknown",
+      raw: "/save note",
+      reason: "/save note requires a title",
     });
   });
 

@@ -69,6 +69,8 @@ async def post_turn(session_id: str, body: TurnRequest, request: Request) -> dic
         named_session_id=session_id,
         cwd=cwd,
         ws_manager=ws_manager,
+        container_id=sess.container_id,
+        artifacts_engine=registry.engine,
     )
     _active[session_id] = chat
 

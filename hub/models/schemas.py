@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # --- Container ---
 
@@ -319,6 +319,47 @@ class DiffEvent(BaseModel):
     size_bytes: int
     timestamp: str
     created_at: str
+
+
+# --- M35: Library artifacts ---
+
+ArtifactType = Literal[
+    "plan",
+    "review",
+    "edit",
+    "snippet",
+    "note",
+    "skill",
+    "subagent",
+    "spec",
+]
+
+
+class Artifact(BaseModel):
+    """Library artifact (M35).
+
+    Stored in the ``artifacts`` table for 7 of 8 types; the ``edit`` type
+    is synthesized at read-time from the existing ``diff_events`` table.
+    Synthesized edit artifacts have ``artifact_id = "edit-" + diff_event.event_id``
+    and are immutable (no pin/archive/delete).
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    artifact_id: str
+    container_id: int
+    type: ArtifactType
+    title: str
+    body: str
+    body_format: str = "markdown"
+    source_chat_id: str | None = None
+    source_message_id: str | None = None
+    # Hub stores as `metadata_json` text; API exposes as `metadata` dict.
+    metadata: dict[str, Any] | None = Field(default=None, alias="metadata_json")
+    pinned: bool = False
+    archived: bool = False
+    created_at: str
+    updated_at: str
 
 
 # --- Resources ---

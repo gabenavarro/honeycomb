@@ -16,6 +16,7 @@
  */
 
 import type { ChatMode } from "../components/chat/ModeToggle";
+import type { ArtifactType } from "./types";
 
 export type SlashAction =
   | { kind: "none" }
@@ -23,6 +24,7 @@ export type SlashAction =
   | { kind: "set-mode"; mode: ChatMode; toast?: string }
   | { kind: "clear-chat" }
   | { kind: "toast"; text: string }
+  | { kind: "create-artifact"; artifact_type: ArtifactType; title: string; body: string }
   | { kind: "unknown"; raw: string; reason: string };
 
 export interface SlashCommandSpec {
@@ -87,7 +89,9 @@ export function parseSlashCommand(input: string): SlashAction {
     case "/clear":
       return { kind: "clear-chat" };
     case "/save": {
-      // M34 supports only "note <title>"; other artifact types arrive in M35
+      // M35: "note <title>" creates a real Note artifact via the
+      // /api/containers/{id}/artifacts endpoint; other artifact types
+      // arrive in later milestones.
       if (!rest.startsWith("note ") && rest !== "note") {
         return {
           kind: "unknown",
@@ -95,7 +99,16 @@ export function parseSlashCommand(input: string): SlashAction {
           reason: "/save expects 'note <title>' (other artifact types arrive in M35)",
         };
       }
-      return { kind: "toast", text: "Notes arrive in M35 (Library)." };
+      const title = rest.slice("note".length).trim();
+      if (!title) {
+        return { kind: "unknown", raw: trimmed, reason: "/save note requires a title" };
+      }
+      return {
+        kind: "create-artifact",
+        artifact_type: "note",
+        title,
+        body: title,
+      };
     }
     case "/skill":
       return { kind: "toast", text: "Skills arrive in a future milestone." };

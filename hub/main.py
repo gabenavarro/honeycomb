@@ -26,6 +26,7 @@ from hub.logging_setup import (
 from hub.models.schemas import EventPayload, HeartbeatPayload, WSFrame
 from hub.routers import (
     agent,
+    artifacts,
     chat_stream,
     commands,
     containers,
@@ -234,6 +235,32 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("hub_autodiscovery_failed", error=str(exc))
 
+    # M35: scan docs/superpowers/specs/*.md and record any new files as
+    # spec artifacts. Iterates over all known containers — each gets the
+    # same set of spec rows (no per-container filtering yet; specs are
+    # shared across the workspace conceptually).
+    from hub.services.artifacts import rescan_spec_files
+
+    specs_dir = Path(__file__).resolve().parents[1] / "docs" / "superpowers" / "specs"
+    try:
+        if not specs_dir.exists():
+            logger.info("spec_rescan_skipped", reason="dir_not_found", path=str(specs_dir))
+        else:
+            # TODO(post-M35): specs are workspace-conceptual but the artifacts
+            # table is container-scoped, so each registered container gets its
+            # own copy of the same spec rows. Consider nullable container_id
+            # for "global" artifacts or a separate workspace_artifacts table
+            # when this becomes a hot path.
+            containers_list = await registry.list_all()
+            for c in containers_list:
+                await rescan_spec_files(
+                    registry.engine,
+                    container_id=c.id,
+                    specs_dir=specs_dir,
+                )
+    except Exception as exc:
+        logger.warning("spec_rescan_failed", error=str(exc))
+
     logger.info("hub_started")
     yield
 
@@ -353,6 +380,7 @@ app.add_middleware(
 
 
 # Mount routers
+app.include_router(artifacts.router)
 app.include_router(chat_stream.router)
 app.include_router(containers.router)
 app.include_router(commands.router)

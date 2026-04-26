@@ -28,7 +28,8 @@ import type { ChatTurn } from "../chat/types";
 import { readEditAuto } from "../chat/EditAutoToggle";
 import { dispatchModeChange } from "../chat/ModeToggle";
 import { useChatStream } from "../../hooks/useChatStream";
-import { listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
+import { createArtifact, listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
+import { TYPE_LABEL } from "../../lib/artifact-meta";
 import { parseSlashCommand } from "../../lib/slashCommands";
 import { useToasts } from "../../hooks/useToasts";
 import type { ContainerRecord, DiffEvent, NamedSession } from "../../lib/types";
@@ -317,6 +318,23 @@ function ChatThreadWrapper({
       case "toast":
         toast("info", action.text);
         return;
+      case "create-artifact": {
+        if (activeContainerId === null) {
+          toast("error", "No active container — can't save artifact.");
+          return;
+        }
+        void createArtifact(activeContainerId, {
+          type: action.artifact_type,
+          title: action.title,
+          body: action.body,
+          source_chat_id: sessionId,
+        })
+          .then((art) => toast("success", `Saved as ${TYPE_LABEL[art.type]}: ${art.title}`))
+          .catch((err: unknown) =>
+            toast("error", `Failed to save: ${err instanceof Error ? err.message : String(err)}`),
+          );
+        return;
+      }
       case "unknown":
         toast("error", action.reason);
         return;
