@@ -449,9 +449,6 @@ export default function App() {
   useKeyboardShortcuts({
     onCommandPalette: () => setPaletteOpen((v) => !v),
     onToggleSidebar: () => setSidebarOpen((v) => !v),
-    // Secondary panel was removed in M20 — Ctrl+` is a no-op now but
-    // the handler stays in the shortcut registry so the hotkey is
-    // reserved for a future repurposing.
     onToggleSecondary: () => undefined,
     onCloseActiveTab: () => {
       if (activeTabId !== null) closeTab(activeTabId);
@@ -460,15 +457,8 @@ export default function App() {
       const tab = openTabs[idx];
       if (tab !== undefined) setActiveTabId(tab);
     },
-    onActivityContainers: () => {
-      setActivity("containers");
-      setSidebarOpen(true);
-      goToRoute("chats");
-    },
-    onActivityGitOps: () => {
-      setActivity("gitops");
-      setSidebarOpen(true);
-      goToRoute("chats");
+    onActivateRoute: (route) => {
+      goToRoute(route);
     },
     onShowHelp: () => setHelpOpen(true),
   });

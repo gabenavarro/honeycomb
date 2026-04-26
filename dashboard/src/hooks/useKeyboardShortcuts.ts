@@ -1,11 +1,21 @@
-/** Global keyboard shortcuts — VSCode/Cursor-inspired.
+/** Global keyboard shortcuts — VSCode/Cursor-inspired (M32 update).
  *
- * We bind at the document level so focus inside an input still works:
- * Cmd+K from a terminal prompt still opens the palette. Shortcuts that
- * would compete with browser text editing (Ctrl+A, Ctrl+F) are NOT bound.
+ * Bound at the document level so focus inside an input still works:
+ * Cmd+K from a terminal prompt still opens the palette. Shortcuts
+ * that would compete with browser text editing (Ctrl+A, Ctrl+F) are
+ * NOT bound.
+ *
+ * M32 changes:
+ *   - ⌘1 / ⌘2 / ⌘3 → route switch (Chats / Library / Files)
+ *   - ⌘,           → route switch (Settings)
+ *   - Alt+1..Alt+9 → focus Nth open container tab (was ⌘1-⌘9)
+ *   - ⌘⇧C / ⌘⇧G    → REMOVED (Activity-group entries deleted in M32
+ *                    Task 7; route shortcuts replace them)
  */
 
 import { useEffect } from "react";
+
+import type { RouteId } from "../lib/routes";
 
 export interface ShortcutBindings {
   onCommandPalette: () => void;
@@ -13,8 +23,8 @@ export interface ShortcutBindings {
   onToggleSecondary: () => void;
   onCloseActiveTab: () => void;
   onFocusTabByIndex: (idx: number) => void;
-  onActivityContainers: () => void;
-  onActivityGitOps: () => void;
+  /** M32 — switch to one of the four top-level routes. */
+  onActivateRoute: (route: RouteId) => void;
   /** M21 M — open the shortcut cheat-sheet overlay. Triggered by the
    * unmodified ``?`` key anywhere outside an input element. */
   onShowHelp?: () => void;
@@ -38,6 +48,15 @@ export function useKeyboardShortcuts(bindings: ShortcutBindings): void {
           return;
         }
       }
+
+      // Alt+1..Alt+9 — focus Nth open container tab. Take this branch
+      // BEFORE the modifier check so it's not gated on Cmd/Ctrl.
+      if (e.altKey && !e.shiftKey && !mod && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        bindings.onFocusTabByIndex(parseInt(e.key, 10) - 1);
+        return;
+      }
+
       if (!mod) return;
 
       // Cmd/Ctrl+K — command palette
@@ -58,29 +77,35 @@ export function useKeyboardShortcuts(bindings: ShortcutBindings): void {
         bindings.onToggleSecondary();
         return;
       }
-      // Cmd/Ctrl+W — close active tab (preventDefault stops the browser
-      // from closing the whole window)
+      // Cmd/Ctrl+W — close active tab
       if (e.key.toLowerCase() === "w" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         bindings.onCloseActiveTab();
         return;
       }
-      // Cmd/Ctrl+Shift+C — Containers activity
-      if (e.key.toLowerCase() === "c" && e.shiftKey && !e.altKey) {
+
+      // Cmd/Ctrl+1 — Chats route
+      if (e.key === "1" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        bindings.onActivityContainers();
+        bindings.onActivateRoute("chats");
         return;
       }
-      // Cmd/Ctrl+Shift+G — Git Ops activity
-      if (e.key.toLowerCase() === "g" && e.shiftKey && !e.altKey) {
+      // Cmd/Ctrl+2 — Library route
+      if (e.key === "2" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        bindings.onActivityGitOps();
+        bindings.onActivateRoute("library");
         return;
       }
-      // Cmd/Ctrl+1..9 — focus Nth open container tab
-      if (/^[1-9]$/.test(e.key) && !e.shiftKey && !e.altKey) {
+      // Cmd/Ctrl+3 — Files route
+      if (e.key === "3" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        bindings.onFocusTabByIndex(parseInt(e.key, 10) - 1);
+        bindings.onActivateRoute("files");
+        return;
+      }
+      // Cmd/Ctrl+, — Settings route
+      if (e.key === "," && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        bindings.onActivateRoute("settings");
         return;
       }
     };
