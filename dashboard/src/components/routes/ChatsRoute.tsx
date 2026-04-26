@@ -1,14 +1,14 @@
-/** Chats route (M32 bridge).
+/** Chats route (M32 bridge → M33 chat surface).
  *
- * Sidebar: ContainerList. Main pane: WorkspacePill + Breadcrumbs +
- * SessionSubTabs + SessionSplitArea (or FileViewer / DiffViewerTab
- * when one is opened from the palette / a click).
- *
- * The full chat surface (structured tool blocks, Thinking, streaming)
- * arrives in M33. M32 wires the existing PTY-based session UI behind
- * this route as a bridge so users can keep working while M33 ships.
+ * Sidebar: ContainerList. Main pane: branches on the active named
+ * session's kind. For "claude" the new ChatThread surface (Task 12)
+ * renders via ChatThreadWrapper (owns useChatStream + send handler).
+ * For "shell" the existing M32 PTY-based path stays intact:
+ * WorkspacePill + Breadcrumbs + SessionSubTabs + SessionSplitArea
+ * (or FileViewer / DiffViewerTab when one is opened).
  */
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { Breadcrumbs } from "../Breadcrumbs";
 import { ContainerList } from "../ContainerList";
@@ -19,8 +19,13 @@ import { HealthTimeline } from "../HealthTimeline";
 import { SessionSplitArea } from "../SessionSplitArea";
 import { SessionSubTabs, type SessionInfo } from "../SessionSubTabs";
 import { WorkspacePill } from "../WorkspacePill";
-import { listContainerSessions, getSettings } from "../../lib/api";
-import type { ContainerRecord, DiffEvent } from "../../lib/types";
+import { ChatThread } from "../chat/ChatThread";
+import type { ChatMode } from "../chat/ModeToggle";
+import type { ChatTabInfo } from "../chat/ChatTabStrip";
+import type { ChatTurn } from "../chat/types";
+import { useChatStream } from "../../hooks/useChatStream";
+import { listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
+import type { ContainerRecord, DiffEvent, NamedSession } from "../../lib/types";
 
 interface Props {
   containers: ContainerRecord[];
@@ -29,6 +34,7 @@ interface Props {
   onSelectContainer: (id: number) => void;
 
   activeSessions: SessionInfo[];
+  namedSessions: NamedSession[];
   activeSessionId: string;
   activeSplitSessionId: string | null;
   onFocusSession: (sessionId: string) => void;
@@ -53,6 +59,7 @@ export function ChatsRoute({
   activeContainerId,
   onSelectContainer,
   activeSessions,
+  namedSessions,
   activeSessionId,
   activeSplitSessionId,
   onFocusSession,
@@ -78,6 +85,12 @@ export function ChatsRoute({
   const timelineVisible = Boolean(
     (settingsData?.values as { timeline_visible?: boolean } | undefined)?.timeline_visible ?? true,
   );
+
+  // M33 — branch on the active named session's kind. "claude" sessions
+  // render the new chat surface; "shell" sessions keep the existing
+  // PTY-based render path below.
+  const activeNamedSession = namedSessions.find((s) => s.session_id === activeSessionId) ?? null;
+  const isClaudeKind = activeNamedSession?.kind === "claude";
 
   // Reference the live-sessions query so the existing M22.3 toast
   // logic in App.tsx still fires (it watches `containers.agent_status`
@@ -107,76 +120,184 @@ export function ChatsRoute({
       </aside>
 
       <main className="bg-page flex h-full min-w-0 flex-1 flex-col">
-        <WorkspacePill
-          containers={containers}
-          activeContainerId={activeContainerId}
-          onSelectContainer={onSelectContainer}
-        />
-        {activeContainer !== undefined ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <Breadcrumbs
-              containerId={activeContainer.id}
-              path={activeFsPath}
-              onPathChange={onFsPathChange}
+        {isClaudeKind && activeNamedSession && activeContainer !== undefined ? (
+          <ChatThreadWrapper
+            activeNamedSession={activeNamedSession}
+            namedSessions={namedSessions}
+            containers={containers}
+            activeContainerId={activeContainerId}
+            onSelectContainer={onSelectContainer}
+            onFocusSession={onFocusSession}
+            onCloseSession={(id) => void onCloseSession(id)}
+            onNewSession={onNewSession}
+          />
+        ) : (
+          <>
+            <WorkspacePill
+              containers={containers}
+              activeContainerId={activeContainerId}
+              onSelectContainer={onSelectContainer}
             />
-            {timelineVisible && <HealthTimeline containerId={activeContainer.id} />}
-            <SessionSubTabs
-              sessions={activeSessions}
-              activeId={activeSessionId}
-              onFocus={onFocusSession}
-              onClose={onCloseSession}
-              onNew={onNewSession}
-              onRename={onRenameSession}
-              onReorder={onReorderSession}
-            />
-            {openedFile !== null ? (
-              <div className="flex min-h-0 min-w-0 flex-1">
-                <ErrorBoundary
-                  key={`eb-file-${activeContainer.id}-${openedFile}`}
-                  label={`the ${openedFile} viewer`}
-                >
-                  <FileViewer
-                    key={`${activeContainer.id}-${openedFile}`}
+            {activeContainer !== undefined ? (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <Breadcrumbs
+                  containerId={activeContainer.id}
+                  path={activeFsPath}
+                  onPathChange={onFsPathChange}
+                />
+                {timelineVisible && <HealthTimeline containerId={activeContainer.id} />}
+                <SessionSubTabs
+                  sessions={activeSessions}
+                  activeId={activeSessionId}
+                  onFocus={onFocusSession}
+                  onClose={onCloseSession}
+                  onNew={onNewSession}
+                  onRename={onRenameSession}
+                  onReorder={onReorderSession}
+                />
+                {openedFile !== null ? (
+                  <div className="flex min-h-0 min-w-0 flex-1">
+                    <ErrorBoundary
+                      key={`eb-file-${activeContainer.id}-${openedFile}`}
+                      label={`the ${openedFile} viewer`}
+                    >
+                      <FileViewer
+                        key={`${activeContainer.id}-${openedFile}`}
+                        containerId={activeContainer.id}
+                        path={openedFile}
+                        onClose={() => onOpenFile(null)}
+                      />
+                    </ErrorBoundary>
+                  </div>
+                ) : openedDiffEvent !== null ? (
+                  <div className="flex min-h-0 min-w-0 flex-1">
+                    <ErrorBoundary
+                      key={`eb-diff-${activeContainer.id}-${openedDiffEvent.event_id}`}
+                      label={`the diff viewer for ${openedDiffEvent.path}`}
+                    >
+                      <DiffViewerTab
+                        key={`${activeContainer.id}-${openedDiffEvent.event_id}`}
+                        event={openedDiffEvent}
+                        onOpenFile={(path) => {
+                          onOpenDiffEvent(null);
+                          onOpenFile(path);
+                        }}
+                      />
+                    </ErrorBoundary>
+                  </div>
+                ) : (
+                  <SessionSplitArea
                     containerId={activeContainer.id}
-                    path={openedFile}
-                    onClose={() => onOpenFile(null)}
+                    containerName={activeContainer.project_name}
+                    hasClaudeCli={activeContainer.has_claude_cli}
+                    sessions={activeSessions}
+                    primarySessionId={activeSessionId}
+                    splitSessionId={activeSplitSessionId}
+                    onSetSplit={onSetSplitSession}
+                    onClearSplit={onClearSplitSession}
                   />
-                </ErrorBoundary>
-              </div>
-            ) : openedDiffEvent !== null ? (
-              <div className="flex min-h-0 min-w-0 flex-1">
-                <ErrorBoundary
-                  key={`eb-diff-${activeContainer.id}-${openedDiffEvent.event_id}`}
-                  label={`the diff viewer for ${openedDiffEvent.path}`}
-                >
-                  <DiffViewerTab
-                    key={`${activeContainer.id}-${openedDiffEvent.event_id}`}
-                    event={openedDiffEvent}
-                    onOpenFile={(path) => {
-                      onOpenDiffEvent(null);
-                      onOpenFile(path);
-                    }}
-                  />
-                </ErrorBoundary>
+                )}
               </div>
             ) : (
-              <SessionSplitArea
-                containerId={activeContainer.id}
-                containerName={activeContainer.project_name}
-                hasClaudeCli={activeContainer.has_claude_cli}
-                sessions={activeSessions}
-                primarySessionId={activeSessionId}
-                splitSessionId={activeSplitSessionId}
-                onSetSplit={onSetSplitSession}
-                onClearSplit={onClearSplitSession}
-              />
+              <ChatsEmptyState />
             )}
-          </div>
-        ) : (
-          <ChatsEmptyState />
+          </>
         )}
       </main>
     </div>
+  );
+}
+
+interface WrapperProps {
+  activeNamedSession: NamedSession;
+  namedSessions: NamedSession[];
+  containers: ContainerRecord[];
+  activeContainerId: number | null;
+  onSelectContainer: (id: number) => void;
+  onFocusSession: (id: string) => void;
+  onCloseSession: (id: string) => void;
+  onNewSession: () => void;
+}
+
+function ChatThreadWrapper({
+  activeNamedSession,
+  namedSessions,
+  containers,
+  activeContainerId,
+  onSelectContainer,
+  onFocusSession,
+  onCloseSession,
+  onNewSession,
+}: WrapperProps) {
+  const sessionId = activeNamedSession.session_id;
+  const { turns, clearTurns } = useChatStream(sessionId);
+  const [pending, setPending] = useState(false);
+  const mode: ChatMode =
+    typeof window !== "undefined"
+      ? ((window.localStorage.getItem(`hive:chat:${sessionId}:mode`) as ChatMode | null) ?? "code")
+      : "code";
+
+  const tabs: ChatTabInfo[] = namedSessions
+    .filter((s) => s.kind === "claude")
+    .map((s) => ({
+      id: s.session_id,
+      name: s.name,
+      mode: (typeof window !== "undefined"
+        ? ((window.localStorage.getItem(`hive:chat:${s.session_id}:mode`) as ChatMode | null) ??
+          "code")
+        : "code") as ChatMode,
+    }));
+
+  const send = async (text: string) => {
+    setPending(true);
+    try {
+      await postChatTurn(sessionId, text);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const retry = (turn: ChatTurn) => {
+    clearTurns();
+    void send(turn.text ?? "");
+  };
+
+  const fork = (turn: ChatTurn) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        `hive:chat:${sessionId}:pending-fork`,
+        JSON.stringify({ at_message: turn.id }),
+      );
+    }
+    onNewSession();
+  };
+
+  const edit = (turn: ChatTurn) => {
+    const next = window.prompt("Edit your message:", turn.text ?? "");
+    if (next === null) return;
+    clearTurns();
+    void send(next);
+  };
+
+  return (
+    <ChatThread
+      sessionId={sessionId}
+      containers={containers}
+      activeContainerId={activeContainerId}
+      onSelectContainer={onSelectContainer}
+      tabs={tabs}
+      activeTabId={sessionId}
+      onFocusTab={onFocusSession}
+      onCloseTab={onCloseSession}
+      onNewTab={onNewSession}
+      turns={turns}
+      mode={mode}
+      pending={pending}
+      onSend={send}
+      onRetry={retry}
+      onFork={fork}
+      onEdit={edit}
+    />
   );
 }
 

@@ -564,6 +564,7 @@ export default function App() {
                   activeContainerId={activeTabId}
                   onSelectContainer={openContainer}
                   activeSessions={activeSessions}
+                  namedSessions={namedSessions}
                   activeSessionId={activeSessionId}
                   activeSplitSessionId={activeSplitSessionId}
                   onFocusSession={focusSession}
