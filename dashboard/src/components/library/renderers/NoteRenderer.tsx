@@ -9,9 +9,9 @@ interface Props {
 export function NoteRenderer({ artifact }: Props) {
   return (
     <div className="flex flex-col gap-2 px-4 py-3">
-      <header className="border-b border-edge-soft pb-2">
-        <h1 className="text-[15px] font-semibold text-primary">{artifact.title}</h1>
-        <p className="mt-1 text-[10px] text-muted">
+      <header className="border-edge-soft border-b pb-2">
+        <h1 className="text-primary text-[15px] font-semibold">{artifact.title}</h1>
+        <p className="text-muted mt-1 text-[10px]">
           Note · {new Date(artifact.created_at).toLocaleString()}
         </p>
       </header>

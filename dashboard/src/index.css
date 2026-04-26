@@ -239,3 +239,13 @@ kbd {
   font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 0.85em;
 }
+
+/* ─── prose-tight: compact markdown body density ────────────── */
+@layer utilities {
+  .prose-tight {
+    line-height: 1.55;
+  }
+  .prose-tight :where(p, ul, ol, blockquote, table, pre):not(:last-child) {
+    margin-bottom: 0.5rem;
+  }
+}

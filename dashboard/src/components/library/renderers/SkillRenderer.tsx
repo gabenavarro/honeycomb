@@ -7,6 +7,7 @@
  * Auto-source (linking to live skill files) ships in a future milestone.
  */
 import type { Artifact } from "../../../lib/types";
+import { TYPE_ICON } from "../../../lib/artifact-meta";
 import { MarkdownBody } from "./MarkdownBody";
 
 interface Frontmatter {
@@ -37,7 +38,10 @@ function splitFrontmatter(body: string): SplitResult {
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, "");
+    const value = line
+      .slice(colonIdx + 1)
+      .trim()
+      .replace(/^["']|["']$/g, "");
     if (key) frontmatter[key] = value;
   }
 
@@ -60,17 +64,15 @@ export function SkillRenderer({ artifact }: Props) {
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
-      <header className="border-b border-edge-soft pb-2">
+      <header className="border-edge-soft border-b pb-2">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[14px] text-claude" aria-hidden="true">
-            🛠
+          <span className="text-claude font-mono text-[14px]" aria-hidden="true">
+            {TYPE_ICON.skill}
           </span>
-          <h1 className="text-[18px] font-semibold text-primary">{skillName}</h1>
+          <h1 className="text-primary text-[18px] font-semibold">{skillName}</h1>
         </div>
-        {description && (
-          <p className="mt-1 text-[12px] text-secondary">{description}</p>
-        )}
-        <p className="mt-1 text-[11px] text-muted">
+        {description && <p className="text-secondary mt-1 text-[12px]">{description}</p>}
+        <p className="text-muted mt-1 text-[11px]">
           Skill · saved {new Date(artifact.created_at).toLocaleString()}
         </p>
       </header>

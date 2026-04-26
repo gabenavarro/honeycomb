@@ -131,10 +131,10 @@ describe("useArtifacts", () => {
 
   it("unsubscribes from previous channel and subscribes to new one when containerId changes", async () => {
     mockListArtifacts.mockResolvedValue([]);
-    const { rerender } = renderHook(
-      ({ id }: { id: number | null }) => useArtifacts(id, {}),
-      { wrapper, initialProps: { id: 1 as number | null } },
-    );
+    const { rerender } = renderHook(({ id }: { id: number | null }) => useArtifacts(id, {}), {
+      wrapper,
+      initialProps: { id: 1 as number | null },
+    });
     await waitFor(() => expect(subscribed.has("library:1")).toBe(true));
     rerender({ id: 2 });
     await waitFor(() => expect(subscribed.has("library:1")).toBe(false));
@@ -145,8 +145,7 @@ describe("useArtifacts", () => {
     // Mount with no filter — first query resolves to empty
     mockListArtifacts.mockResolvedValueOnce([]);
     const { result, rerender } = renderHook(
-      ({ params }: { params: { type?: ("note" | "plan")[] } }) =>
-        useArtifacts(1, params),
+      ({ params }: { params: { type?: ("note" | "plan")[] } }) => useArtifacts(1, params),
       { wrapper, initialProps: { params: {} as { type?: ("note" | "plan")[] } } },
     );
     await waitFor(() => expect(subscribed.has("library:1")).toBe(true));

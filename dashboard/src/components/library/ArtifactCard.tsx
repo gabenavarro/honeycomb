@@ -43,8 +43,8 @@ export function ArtifactCard({ artifact, active, onSelect }: Props) {
         {icon}
       </span>
       <span className="flex flex-1 flex-col overflow-hidden">
-        <span className="truncate text-[12px] font-medium text-primary">{artifact.title}</span>
-        <span className="mt-0.5 truncate text-[10px] text-muted">
+        <span className="text-primary truncate text-[12px] font-medium">{artifact.title}</span>
+        <span className="text-muted mt-0.5 truncate text-[10px]">
           {fromLabel} · {relativeTime(artifact.created_at)}
         </span>
       </span>

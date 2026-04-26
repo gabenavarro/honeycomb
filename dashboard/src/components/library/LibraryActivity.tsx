@@ -67,9 +67,7 @@ export function LibraryActivity({ containers, activeContainerId, onSelectContain
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8 text-center">
-            <p className="text-secondary text-sm">
-              Pick an artifact from the sidebar to view it.
-            </p>
+            <p className="text-secondary text-sm">Pick an artifact from the sidebar to view it.</p>
           </div>
         )}
       </main>

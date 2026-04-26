@@ -20,16 +20,16 @@ export function SpecRenderer({ artifact }: Props) {
       {headings.length > 0 && (
         <aside
           aria-label="Table of contents"
-          className="hidden w-48 shrink-0 overflow-y-auto border-r border-edge-soft px-3 py-4 md:block"
+          className="border-edge-soft hidden w-48 shrink-0 overflow-y-auto border-r px-3 py-4 md:block"
         >
-          <h3 className="mb-2 text-[10px] font-semibold tracking-wider text-muted uppercase">
+          <h3 className="text-muted mb-2 text-[10px] font-semibold tracking-wider uppercase">
             Contents
           </h3>
           <nav>
             <ul className="flex flex-col gap-1">
               {headings.map((heading) => (
                 <li key={heading}>
-                  <span className="block truncate text-[12px] text-secondary hover:text-primary">
+                  <span className="text-secondary hover:text-primary block truncate text-[12px]">
                     {heading}
                   </span>
                 </li>
@@ -40,9 +40,9 @@ export function SpecRenderer({ artifact }: Props) {
       )}
 
       <main className="min-w-0 flex-1 overflow-y-auto px-4 py-3">
-        <header className="mb-4 border-b border-edge-soft pb-2">
-          <h1 className="text-[18px] font-semibold text-primary">{artifact.title}</h1>
-          <p className="mt-1 text-[11px] text-muted">
+        <header className="border-edge-soft mb-4 border-b pb-2">
+          <h1 className="text-primary text-[18px] font-semibold">{artifact.title}</h1>
+          <p className="text-muted mt-1 text-[11px]">
             Spec
             {filePath && (
               <>
