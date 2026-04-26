@@ -33,7 +33,7 @@ const sample: Artifact = {
 };
 
 describe("EditRenderer", () => {
-  it("delegates to DiffViewerTab and renders the file path", () => {
+  it("delegates to DiffViewerTab via the synthesized event", () => {
     render(<EditRenderer artifact={sample} />);
     expect(screen.getByTestId("diff-viewer-tab")).toBeTruthy();
     expect(screen.getByText("src/foo.ts")).toBeTruthy();

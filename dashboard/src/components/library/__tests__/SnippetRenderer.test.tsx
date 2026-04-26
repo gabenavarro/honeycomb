@@ -24,13 +24,13 @@ const sample: Artifact = {
 };
 
 describe("SnippetRenderer", () => {
-  it("renders the artifact body in a pre element", () => {
+  it("renders the body in a <pre>", () => {
     render(<SnippetRenderer artifact={sample} />);
     const pre = screen.getByText(/print\('hello'\)/);
     expect(pre.tagName.toLowerCase()).toBe("pre");
   });
 
-  it("renders a copy button that calls clipboard.writeText", async () => {
+  it("clicking Copy invokes clipboard.writeText", async () => {
     const writeMock = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, {
       clipboard: { writeText: writeMock },
@@ -45,7 +45,7 @@ describe("SnippetRenderer", () => {
     expect(writeMock).toHaveBeenCalledWith(sample.body);
   });
 
-  it("renders the header with language and line count", () => {
+  it("renders the language + line count in the header", () => {
     render(<SnippetRenderer artifact={sample} />);
     expect(screen.getByRole("heading", { level: 1, name: "My Script" })).toBeTruthy();
     expect(screen.getByText(/python\s*·\s*2\s*lines/i)).toBeTruthy();
