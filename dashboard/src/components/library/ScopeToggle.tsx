@@ -60,7 +60,7 @@ export function ScopeToggle({ activeContainerName, onScopeChange }: Props) {
         className={[
           "rounded px-2 py-0.5 transition-colors",
           scope === "fleet"
-            ? "bg-accent/10 text-accent font-medium"
+            ? "bg-accent/10 text-primary font-medium"
             : "text-secondary hover:text-primary",
         ].join(" ")}
       >

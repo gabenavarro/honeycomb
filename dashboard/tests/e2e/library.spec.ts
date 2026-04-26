@@ -128,21 +128,18 @@ test("Clicking a card opens the renderer in main pane", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Open in chat/i })).toBeVisible();
 });
 
-test("Filter chip click filters the artifact list (calls API with type=)", async ({
-  page,
-  context,
-}) => {
-  let lastRequestUrl: string | null = null;
-  await context.route("**/api/containers/*/artifacts**", (r) => {
-    lastRequestUrl = r.request().url();
-    return r.fulfill(mockJson(artifacts));
-  });
+test("Filter chip click filters the artifact list (calls API with type=)", async ({ page }) => {
   await page.goto("/library");
   // Scope the Plan chip to the filter chip row to avoid matching "Refactor plan" card title.
   const chipRow = page.locator('aside[aria-label="Library sidebar"] > div').first();
+  // Wait for the request the chip click triggers — predicate-based wait avoids
+  // the timing-dependent waitForTimeout that would flake on slow CI runners.
+  const requestPromise = page.waitForRequest(
+    (req) => req.url().includes("/artifacts") && req.url().includes("type=plan"),
+  );
   await chipRow.getByRole("button", { name: /^Plan/i }).click();
-  await page.waitForTimeout(200);
-  expect(lastRequestUrl).toContain("type=plan");
+  const req = await requestPromise;
+  expect(req.url()).toContain("type=plan");
 });
 
 test("Library passes axe-core in dark theme", async ({ page }) => {
