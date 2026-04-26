@@ -300,3 +300,72 @@ async def test_archive_synthesized_edit_id_is_silent_204(
     """Mutators on 'edit-*' synthesized IDs no-op silently (no DB write)."""
     resp = await client.post("/api/artifacts/edit-abc123/archive", headers=AUTH)
     assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_create_artifact_broadcasts_new(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from hub.routers.ws import manager as ws_mgr
+
+    with patch.object(ws_mgr, "broadcast", new=AsyncMock()) as mock_broadcast:
+        resp = await client.post(
+            f"/api/containers/{registered_container.id}/artifacts",
+            json={"type": "note", "title": "N", "body": "x"},
+            headers=AUTH,
+        )
+        assert resp.status_code == 201
+        calls = mock_broadcast.await_args_list
+        channels = [c.args[0].channel for c in calls]
+        assert f"library:{registered_container.id}" in channels
+
+
+@pytest.mark.asyncio
+async def test_delete_broadcasts_deleted(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from hub.routers.ws import manager as ws_mgr
+
+    art = await record_artifact(
+        registry_engine,
+        container_id=registered_container.id,
+        type="note",
+        title="A",
+        body="...",
+    )
+    with patch.object(ws_mgr, "broadcast", new=AsyncMock()) as mock_broadcast:
+        resp = await client.delete(f"/api/artifacts/{art.artifact_id}", headers=AUTH)
+        assert resp.status_code == 204
+        deleted_frames = [
+            c.args[0] for c in mock_broadcast.await_args_list if c.args[0].event == "deleted"
+        ]
+        assert len(deleted_frames) == 1
+        assert deleted_frames[0].channel == f"library:{registered_container.id}"
+
+
+@pytest.mark.asyncio
+async def test_pin_broadcasts_updated(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from hub.routers.ws import manager as ws_mgr
+
+    art = await record_artifact(
+        registry_engine,
+        container_id=registered_container.id,
+        type="note",
+        title="A",
+        body="...",
+    )
+    with patch.object(ws_mgr, "broadcast", new=AsyncMock()) as mock_broadcast:
+        resp = await client.post(f"/api/artifacts/{art.artifact_id}/pin", headers=AUTH)
+        assert resp.status_code == 204
+        updated_frames = [
+            c.args[0] for c in mock_broadcast.await_args_list if c.args[0].event == "updated"
+        ]
+        assert len(updated_frames) == 1

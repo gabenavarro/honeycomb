@@ -278,6 +278,53 @@ async def delete_artifact(engine: AsyncEngine, *, artifact_id: str) -> None:
         )
 
 
+# ── Broadcast helpers (M35 T6) ────────────────────────────────────────
+
+
+async def _fetch_container_id_for_artifact(engine: AsyncEngine, artifact_id: str) -> int | None:
+    """Return container_id for an artifact, or None if missing/synthesized."""
+    if artifact_id.startswith("edit-"):
+        return None  # edit artifacts can't be mutated
+    async with engine.connect() as conn:
+        row = (
+            (
+                await conn.execute(
+                    sa.text("SELECT container_id FROM artifacts WHERE artifact_id = :aid"),
+                    {"aid": artifact_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
+    return row["container_id"] if row else None
+
+
+async def _broadcast_library_event(
+    ws_manager: Any,
+    *,
+    container_id: int,
+    event: str,
+    data: dict[str, Any],
+) -> None:
+    """Publish `event` on library:<container_id>. Best-effort."""
+    from hub.models.schemas import WSFrame
+
+    frame = WSFrame(
+        channel=f"library:{container_id}",
+        event=event,
+        data=data,
+    )
+    try:
+        await ws_manager.broadcast(frame)
+    except Exception as exc:
+        logger.warning(
+            "library broadcast failed (channel=%s, event=%s): %s",
+            frame.channel,
+            event,
+            exc,
+        )
+
+
 # ── Spec auto-save helpers (M35) ──────────────────────────────────────
 
 # Match the first markdown heading in the file
