@@ -51,7 +51,7 @@ export function SessionSubTabs({
     <div
       role="tablist"
       aria-label="Container sessions"
-      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-[#2b2b2b] bg-[#1a1a1a] px-1"
+      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-edge bg-[#1a1a1a] px-1"
     >
       {sessions.map((s) => (
         <SessionTab
@@ -86,7 +86,7 @@ export function SessionSubTabs({
       <button
         type="button"
         onClick={onNew}
-        className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+        className="flex items-center gap-1 px-2 py-1 text-[10px] text-secondary hover:bg-chip hover:text-primary"
         aria-label="New session"
         title="New session"
       >
@@ -161,7 +161,7 @@ function SessionTab({
   // shows a left-edge caret indicating where the drop will land.
   const dragClasses = [
     dragging ? "opacity-50" : "",
-    dragOver ? "border-l-2 border-l-[#0078d4]" : "",
+    dragOver ? "border-l-2 border-l-accent" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -212,10 +212,10 @@ function SessionTab({
             onClose(session.id);
           }
         }}
-        className={`flex items-center gap-1.5 border-r border-[#2b2b2b] px-2.5 py-1 text-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0078d4] focus-visible:ring-inset ${
+        className={`flex items-center gap-1.5 border-r border-edge px-2.5 py-1 text-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
           active
-            ? "bg-[#1e1e1e] text-[#e7e7e7]"
-            : "bg-[#222] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-[#c0c0c0]"
+            ? "bg-page text-primary"
+            : "bg-[#222] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-primary"
         } ${dragClasses}`}
       >
         {editing ? (
@@ -234,7 +234,7 @@ function SessionTab({
                 cancel();
               }
             }}
-            className="w-[110px] rounded border border-[#3c3c3c] bg-[#1e1e1e] px-1 text-[10px] text-[#e7e7e7] focus:border-[#0078d4] focus:outline-none"
+            className="w-[110px] rounded border border-[#3c3c3c] bg-page px-1 text-[10px] text-primary focus:border-accent focus:outline-none"
             aria-label={`Rename session ${session.name}`}
           />
         ) : (
