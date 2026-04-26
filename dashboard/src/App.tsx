@@ -11,41 +11,24 @@
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Columns } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Group,
-  type Layout,
-  Panel,
-  type PanelImperativeHandle,
-  Separator,
-} from "react-resizable-panels";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { type Layout } from "react-resizable-panels";
 
 import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { AuthGate } from "./components/AuthGate";
-import { Breadcrumbs } from "./components/Breadcrumbs";
 import { CommandPalette } from "./components/CommandPalette";
-import { ContainerFilesView } from "./components/ContainerFilesView";
-import { ContainerList } from "./components/ContainerList";
-import { DiffEventsActivity } from "./components/DiffEventsActivity";
-import { DiffViewerTab } from "./components/DiffViewerTab";
-import { ContainerTabs } from "./components/ContainerTabs";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { FileViewer } from "./components/FileViewer";
-import { GitOpsPanel } from "./components/GitOpsPanel";
-import { HelpOverlay } from "./components/HelpOverlay";
-import { KeybindingsEditor } from "./components/KeybindingsEditor";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
-import { ProblemsPanel } from "./components/ProblemsPanel";
 import { Provisioner } from "./components/Provisioner";
-import { SessionSplitArea } from "./components/SessionSplitArea";
-import { SessionSubTabs, type SessionInfo } from "./components/SessionSubTabs";
-import { SettingsView } from "./components/SettingsView";
-import { SourceControlView } from "./components/SourceControlView";
-import { SplitEditor } from "./components/SplitEditor";
+import { HelpOverlay } from "./components/HelpOverlay";
+import { type SessionInfo } from "./components/SessionSubTabs";
 import { StaleHubWatcher } from "./components/StaleHubWatcher";
 import { StatusBar } from "./components/StatusBar";
 import { WebSocketListenerErrorWatcher } from "./components/WebSocketListenerErrorWatcher";
+import { ChatsRoute } from "./components/routes/ChatsRoute";
+import { LibraryRoute } from "./components/routes/LibraryRoute";
+import { FilesRoute } from "./components/routes/FilesRoute";
+import { SettingsRoute } from "./components/routes/SettingsRoute";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
@@ -57,14 +40,12 @@ import { runSessionMigration } from "./lib/migrateSessions";
 import {
   createNamedSession,
   getContainerWorkdir,
-  getSettings,
-  listContainerSessions,
   listContainers,
   listPRs,
   listProblems,
 } from "./lib/api";
+import { pathnameForRoute, routeForActivity, routeForPathname, type RouteId } from "./lib/routes";
 import type { ContainerRecord, DiffEvent } from "./lib/types";
-import { HealthTimeline } from "./components/HealthTimeline";
 
 // Storage keys for layout state. Remembering these across reloads is
 // expected behavior for an IDE-style app.
@@ -72,7 +53,6 @@ const LS_OPEN_TABS = "hive:layout:openTabs";
 const LS_ACTIVE_TAB = "hive:layout:activeTab";
 const LS_ACTIVITY = "hive:layout:activity";
 const LS_SIDEBAR_OPEN = "hive:layout:sidebar";
-const LS_SPLIT_ID = "hive:layout:splitId";
 const LS_ROOT_LAYOUT = "hive:layout:rootPanels";
 const LS_ROOT_LAYOUT_BY_CONTAINER = "hive:layout:rootPanelsByContainer"; // M21 L
 // M26 — active-session id per container (client-only; the authoritative
@@ -155,21 +135,52 @@ export default function App() {
   const [activity, setActivity] = useLocalStorage<Activity>(LS_ACTIVITY, "containers", {
     validate: isActivity,
   });
+  // M32 — `sidebarOpen` is retained as a persisted intent; the new
+  // route-owned sidebars don't react to it yet but M33+ collapse
+  // gestures will. Keep the setter wired so the value still flips.
   const [sidebarOpen, setSidebarOpen] = useLocalStorage<boolean>(LS_SIDEBAR_OPEN, true, {
     validate: isBoolean,
   });
+  void sidebarOpen;
   const [openTabs, setOpenTabs] = useLocalStorage<number[]>(LS_OPEN_TABS, [], {
     validate: isNumberArray,
   });
   const [activeTabId, setActiveTabId] = useLocalStorage<number | null>(LS_ACTIVE_TAB, null, {
     validate: isNullableNumber,
   });
-  const [splitId, setSplitId] = useLocalStorage<number | null>(LS_SPLIT_ID, null, {
-    validate: isNullableNumber,
-  });
   const [showProvisioner, setShowProvisioner] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  // M32 — URL ↔ activity sync. The URL is the source of truth for
+  // which top-level route is showing; ``activity`` remains the inner
+  // state that drives sidebar sub-tabs (Files / SCM / Problems /
+  // Keybindings inside the Files route, etc.).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentRoute: RouteId = routeForPathname(location.pathname);
+
+  useEffect(() => {
+    const r = routeForActivity(activity);
+    if (r !== currentRoute) {
+      const fallbackActivity: Activity =
+        currentRoute === "chats"
+          ? "containers"
+          : currentRoute === "library"
+            ? "diff-events"
+            : currentRoute === "files"
+              ? "files"
+              : "settings";
+      setActivity(fallbackActivity);
+    }
+  }, [currentRoute, activity, setActivity]);
+
+  const goToRoute = useCallback(
+    (route: RouteId) => {
+      navigate(pathnameForRoute(route));
+    },
+    [navigate],
+  );
 
   const [activeSessionByContainer, setActiveSessionByContainer] = useLocalStorage<
     Record<string, string>
@@ -194,17 +205,6 @@ export default function App() {
     queryFn: listContainers,
     refetchInterval: backoffRefetch(),
   });
-  // M25 — read settings so the health timeline can be toggled off
-  // globally. 30s staleTime since settings rarely change.
-  const { data: settingsData } = useQuery({
-    queryKey: ["settings"],
-    queryFn: getSettings,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
-  const timelineVisible = Boolean(
-    (settingsData?.values as { timeline_visible?: boolean } | undefined)?.timeline_visible ?? true,
-  );
   const { data: prs = [] } = useQuery({
     queryKey: ["prs"],
     queryFn: () => listPRs("open"),
@@ -237,28 +237,9 @@ export default function App() {
       if (activeTabId !== null && !known.has(activeTabId)) {
         setActiveTabId(stillOpen[0] ?? null);
       }
-      if (splitId !== null && !known.has(splitId)) {
-        setSplitId(null);
-      }
     }
-  }, [
-    containersLoaded,
-    containers,
-    openTabs,
-    activeTabId,
-    splitId,
-    setOpenTabs,
-    setActiveTabId,
-    setSplitId,
-  ]);
+  }, [containersLoaded, containers, openTabs, activeTabId, setOpenTabs, setActiveTabId]);
 
-  const openContainers: ContainerRecord[] = useMemo(
-    () =>
-      openTabs
-        .map((id) => containers.find((c) => c.id === id))
-        .filter((c): c is ContainerRecord => Boolean(c)),
-    [openTabs, containers],
-  );
   const active: ContainerRecord | undefined = containers.find((c) => c.id === activeTabId);
 
   // M23 — WORKDIR for the active container, fed to the palette for
@@ -423,11 +404,6 @@ export default function App() {
     },
     [namedSessions, reorderSessionApi],
   );
-  const splitContainer: ContainerRecord | null =
-    splitId !== null && splitId !== activeTabId
-      ? (containers.find((c) => c.id === splitId) ?? null)
-      : null;
-
   const openContainer = useCallback(
     (id: number) => {
       setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -449,10 +425,8 @@ export default function App() {
         });
         return next;
       });
-      // Closing the split pane's container also collapses the split.
-      setSplitId((current) => (current === id ? null : current));
     },
-    [setOpenTabs, setActiveTabId, setSplitId],
+    [setOpenTabs, setActiveTabId],
   );
 
   const newClaudeSession = useCallback(
@@ -472,18 +446,6 @@ export default function App() {
     [containers, setOpenTabs, setActiveTabId, setActiveSessionByContainer],
   );
 
-  const toggleSplit = useCallback(() => {
-    // Split = "open the next container in the open-tab list next to the
-    // active one". If only one container is open there is nothing to
-    // split with — the button is disabled in that case.
-    if (splitId !== null) {
-      setSplitId(null);
-      return;
-    }
-    const partner = openTabs.find((id) => id !== activeTabId);
-    if (partner !== undefined) setSplitId(partner);
-  }, [splitId, openTabs, activeTabId, setSplitId]);
-
   useKeyboardShortcuts({
     onCommandPalette: () => setPaletteOpen((v) => !v),
     onToggleSidebar: () => setSidebarOpen((v) => !v),
@@ -501,33 +463,15 @@ export default function App() {
     onActivityContainers: () => {
       setActivity("containers");
       setSidebarOpen(true);
+      goToRoute("chats");
     },
     onActivityGitOps: () => {
       setActivity("gitops");
       setSidebarOpen(true);
+      goToRoute("chats");
     },
     onShowHelp: () => setHelpOpen(true),
   });
-
-  // M13 + M20. The "unreachable" half of this check fires only when
-  // (a) the hub was expecting a hive-agent for this record AND
-  // (b) there is no live PTY session attached (i.e. the user isn't
-  //     already successfully talking to the container over docker_exec).
-  //
-  // Legacy rows registered before M13 carry ``agent_expected=true``
-  // even though they have no agent installed. Gating on live-PTY
-  // presence hides the false positive without requiring a retro
-  // database backfill.
-  const { data: liveSessions } = useQuery({
-    queryKey: ["sessions", active?.id ?? 0],
-    queryFn: () => listContainerSessions(active!.id),
-    enabled: active !== undefined,
-    refetchInterval: 10_000,
-    staleTime: 5_000,
-  });
-  const hasLiveAttachedPty =
-    liveSessions?.sessions.some((s) => s.attached || s.detached_for_seconds !== null) ?? false;
-  void hasLiveAttachedPty; // retained for reference; banner removed in M22.3
 
   // M22.3 — emit one-shot toasts when a container's agent_status
   // transitions into / out of ``unreachable``. The persistent dot on
@@ -562,25 +506,6 @@ export default function App() {
     }
   }, [containers, toast]);
 
-  const sidebarTitle =
-    activity === "containers"
-      ? "Containers"
-      : activity === "gitops"
-        ? "Git Ops"
-        : activity === "scm"
-          ? "Source Control"
-          : activity === "problems"
-            ? "Problems"
-            : activity === "settings"
-              ? "Settings"
-              : activity === "keybindings"
-                ? "Keybindings"
-                : activity === "files"
-                  ? "Files"
-                  : activity === "diff-events"
-                    ? "Recent Edits"
-                    : "Search";
-
   // M18 — the file currently opened in the inline viewer. Keyed on the
   // active container so switching containers doesn't leak a file from
   // another workspace into view. Closing the viewer sets it back to
@@ -600,62 +525,36 @@ export default function App() {
     setOpenedDiffEvent(null);
   }, [active?.id]);
 
-  // M14: keep imperative Panel handles so keybindings can drive
-  // collapse/expand without losing the user's dragged widths. The
-  // sidebarOpen/secondaryOpen booleans remain the *intent* the user
-  // expressed; the Panel's pixel widths are persisted through a
-  // ``useLocalStorage`` layout record keyed by panel id.
-  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
+  // M14 / M21 L — root-pane layout state retained for M33+. The
+  // resizable shell is gone in M32 (each route owns its own sidebar
+  // width), but these persisted records are kept so future split-pane
+  // work can pick them back up without a storage migration.
   const [rootLayout, setRootLayout] = useLocalStorage<Layout>(LS_ROOT_LAYOUT, DEFAULT_ROOT_LAYOUT, {
     validate: isLayout,
   });
-  // M21 L — per-container layouts. When the user switches tabs we
-  // re-key the Group with this container's saved sizes; on drag we
-  // write back to both the per-container map AND the global default
-  // so a brand-new container starts with the user's latest widths.
   const [layoutByContainer, setLayoutByContainer] = useLocalStorage<Record<string, Layout>>(
     LS_ROOT_LAYOUT_BY_CONTAINER,
     {},
     { validate: isLayoutByContainer },
   );
-  const activeLayoutKey = activeTabId === null ? null : String(activeTabId);
-  const activeRootLayout: Layout =
-    (activeLayoutKey !== null && layoutByContainer[activeLayoutKey]) || rootLayout;
-  const setActiveRootLayout = useCallback(
-    (next: Layout) => {
-      setRootLayout(next);
-      if (activeLayoutKey !== null) {
-        setLayoutByContainer((prev) => ({ ...prev, [activeLayoutKey]: next }));
-      }
-    },
-    [setRootLayout, setLayoutByContainer, activeLayoutKey],
-  );
-  useEffect(() => {
-    const handle = sidebarPanelRef.current;
-    if (!handle) return;
-    if (sidebarOpen && handle.isCollapsed()) handle.expand();
-    if (!sidebarOpen && !handle.isCollapsed()) handle.collapse();
-  }, [sidebarOpen]);
+  void rootLayout;
+  void setRootLayout;
+  void layoutByContainer;
+  void setLayoutByContainer;
 
   return (
     <AuthGate>
       <LocalStorageQuotaWatcher />
       <WebSocketListenerErrorWatcher />
       <StaleHubWatcher />
-      <div className="flex h-screen flex-col bg-[#1e1e1e] text-[#cccccc]">
+      <div className="bg-page text-primary flex h-screen flex-col">
         <div className="flex min-h-0 flex-1">
           <ActivityBar
             active={activity}
             onChange={(a) => {
-              // M22.2 — only auto-open the sidebar when switching to a
-              // different activity. Clicking the already-active icon
-              // leaves ``sidebarOpen`` alone so the accompanying
-              // double-click gesture can toggle cleanly without the
-              // intermediate single-clicks fighting it.
-              if (a !== activity) {
-                setActivity(a);
-                setSidebarOpen(true);
-              }
+              setActivity(a);
+              setSidebarOpen(true);
+              goToRoute(routeForActivity(a));
             }}
             containerCount={containers.length}
             prCount={prs.length}
@@ -664,241 +563,73 @@ export default function App() {
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
           />
 
-          <Group
-            // Remount the group on container switch so the stored
-            // per-container layout is applied on mount rather than
-            // fighting a live drag. ``activeLayoutKey`` is the stable
-            // identity — if no container is focused we fall back to a
-            // static key so the group still mounts once.
-            key={`root-${activeLayoutKey ?? "none"}`}
-            orientation="horizontal"
-            id="hive-root-layout"
-            defaultLayout={activeRootLayout}
-            onLayoutChanged={setActiveRootLayout}
-            style={{ flex: 1, minWidth: 0, minHeight: 0 }}
-          >
-            <Panel
-              id="hive-sidebar"
-              panelRef={sidebarPanelRef}
-              defaultSize={20}
-              minSize={12}
-              collapsible
-              collapsedSize={0}
-              onResize={(size) => {
-                // react-resizable-panels v4 doesn't surface onCollapse/
-                // onExpand — detect them by the panel's size going to/from
-                // zero. The guard prevents the effect-driven collapse loop
-                // from fighting itself when sidebarOpen was already false.
-                const collapsedNow = size.asPercentage === 0;
-                if (collapsedNow && sidebarOpen) setSidebarOpen(false);
-                else if (!collapsedNow && !sidebarOpen) setSidebarOpen(true);
-              }}
-            >
-              <aside
-                aria-label="Primary sidebar"
-                // The Panel collapses to 0% width but the child aside has
-                // no ``w-full`` class, so its intrinsic width stays > 0
-                // and assistive tech would still see its content. ``hidden``
-                // flips ``display:none`` when collapsed — the Panel's
-                // onResize keeps ``sidebarOpen`` in sync when the user
-                // drags the separator, so drag-to-reopen keeps working.
-                hidden={!sidebarOpen}
-                className="flex h-full flex-col border-r border-[#2b2b2b] bg-[#1e1e1e]"
-              >
-                <header className="flex items-center justify-between gap-2 border-b border-[#2b2b2b] px-3 py-1.5">
-                  <h2 className="flex min-w-0 items-baseline gap-2 text-[10px] font-semibold tracking-wider text-[#858585] uppercase">
-                    <span className="shrink-0">{sidebarTitle}</span>
-                    {activity === "files" && activeFsPath && (
-                      <span
-                        className="min-w-0 truncate font-mono text-[10px] tracking-normal text-[#c0c0c0] normal-case"
-                        title={activeFsPath}
-                      >
-                        {activeFsPath}
-                      </span>
-                    )}
-                  </h2>
-                  {activity === "containers" && (
-                    // M21 A — more prominent primary-colour CTA so the
-                    // main "register a new container" action is obvious
-                    // on a cold load.
-                    <button
-                      type="button"
-                      onClick={() => setShowProvisioner(true)}
-                      className="flex items-center gap-1 rounded bg-[#0078d4] px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1188e0] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                      title="Register or discover a new devcontainer"
-                    >
-                      <span aria-hidden="true">+</span>
-                      <span>New</span>
-                    </button>
-                  )}
-                </header>
-                <div className="flex-1 overflow-y-auto">
-                  {activity === "containers" && (
-                    <ContainerList selectedId={activeTabId} onSelect={openContainer} />
-                  )}
-                  {activity === "gitops" && <GitOpsPanel />}
-                  {activity === "scm" && <SourceControlView />}
-                  {activity === "problems" && (
-                    <ProblemsPanel
-                      onOpenContainer={(id) => {
-                        openContainer(id);
-                        setActivity("containers");
-                      }}
-                    />
-                  )}
-                  {activity === "settings" && <SettingsView />}
-                  {activity === "keybindings" && <KeybindingsEditor />}
-                  {activity === "files" && (
-                    <ContainerFilesView
-                      containerId={active?.id ?? null}
-                      path={activeFsPath}
-                      onNavigate={setActiveFsPath}
-                      onOpenFile={setOpenedFile}
-                    />
-                  )}
-                  {activity === "diff-events" && active !== undefined && (
-                    <DiffEventsActivity
-                      containerId={active.id}
-                      onOpenEvent={(e) => {
-                        // Close any open file viewer so the diff view takes
-                        // over the editor pane cleanly, then show the diff.
-                        setOpenedFile(null);
-                        setOpenedDiffEvent(e);
-                      }}
-                    />
-                  )}
-                </div>
-              </aside>
-            </Panel>
-
-            <Separator
-              className="w-0.5 cursor-col-resize bg-[#2b2b2b] transition-colors hover:bg-[#0078d4]"
-              aria-label="Resize primary sidebar"
+          <Routes>
+            <Route path="/" element={<Navigate to="/chats" replace />} />
+            <Route
+              path="/chats"
+              element={
+                <ChatsRoute
+                  containers={containers}
+                  activeContainer={active}
+                  activeContainerId={activeTabId}
+                  onSelectContainer={openContainer}
+                  activeSessions={activeSessions}
+                  activeSessionId={activeSessionId}
+                  activeSplitSessionId={activeSplitSessionId}
+                  onFocusSession={focusSession}
+                  onCloseSession={closeSession}
+                  onNewSession={newSession}
+                  onRenameSession={renameSession}
+                  onReorderSession={reorderSession}
+                  onSetSplitSession={setActiveSplitSession}
+                  onClearSplitSession={clearActiveSplitSession}
+                  activeFsPath={activeFsPath}
+                  onFsPathChange={setActiveFsPath}
+                  openedFile={openedFile}
+                  onOpenFile={setOpenedFile}
+                  openedDiffEvent={openedDiffEvent}
+                  onOpenDiffEvent={setOpenedDiffEvent}
+                />
+              }
             />
-
-            <Panel id="hive-editor" minSize={30} defaultSize={60}>
-              {/* Editor area: tabs + active pane (or split) */}
-              <main className="flex h-full min-w-0 flex-col bg-[#1e1e1e]">
-                <div className="flex items-stretch">
-                  <div className="min-w-0 flex-1">
-                    <ContainerTabs
-                      openContainers={openContainers}
-                      activeId={activeTabId}
-                      onFocus={setActiveTabId}
-                      onClose={closeTab}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleSplit}
-                    disabled={openTabs.length < 2 && splitId === null}
-                    className={`flex items-center gap-1 border-b border-[#2b2b2b] px-3 text-[11px] transition-colors ${
-                      splitId !== null
-                        ? "bg-[#2a2d2e] text-[#e7e7e7]"
-                        : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
-                    } disabled:opacity-40`}
-                    title={splitId !== null ? "Close split" : "Split editor"}
-                    aria-label={splitId !== null ? "Close split" : "Split editor"}
-                  >
-                    <Columns size={12} />
-                  </button>
-                </div>
-                {active ? (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    {/* M22.3 removed the always-visible yellow banner —
-                        the ``AgentStatusDot`` on the container tab is
-                        the steady-state indicator, and a transition
-                        toast is emitted above when agent_status flips. */}
-                    {splitContainer !== null ? (
-                      <SplitEditor
-                        primary={active}
-                        secondary={splitContainer}
-                        onCloseSecondary={() => setSplitId(null)}
-                      />
-                    ) : (
-                      <>
-                        {/* M17 — container path breadcrumbs. */}
-                        <Breadcrumbs
-                          containerId={active.id}
-                          path={activeFsPath}
-                          onPathChange={setActiveFsPath}
-                        />
-                        {/* M25 — three-sparkline health strip. Gated by
-                            the ``timeline_visible`` hub setting so users
-                            can hide it globally across every device that
-                            syncs via this hub. */}
-                        {timelineVisible && <HealthTimeline containerId={active.id} />}
-                        {/* M16 — nested session tabs under the container. */}
-                        <SessionSubTabs
-                          sessions={activeSessions}
-                          activeId={activeSessionId}
-                          onFocus={focusSession}
-                          onClose={closeSession}
-                          onNew={newSession}
-                          onRename={renameSession}
-                          onReorder={reorderSession}
-                        />
-                        {/* M18 — FileViewer takes over the editor pane
-                            when the user opens a file from the Files
-                            sidebar. Closing falls back to the terminal.
-                            M27 — DiffViewerTab similarly takes over when
-                            the user clicks an event in Recent Edits. Both
-                            viewers are mutually exclusive: opening one
-                            closes the other. */}
-                        {openedFile !== null ? (
-                          <div className="flex min-h-0 min-w-0 flex-1">
-                            <ErrorBoundary
-                              key={`eb-file-${active.id}-${openedFile}`}
-                              label={`the ${openedFile} viewer`}
-                            >
-                              <FileViewer
-                                key={`${active.id}-${openedFile}`}
-                                containerId={active.id}
-                                path={openedFile}
-                                onClose={() => setOpenedFile(null)}
-                              />
-                            </ErrorBoundary>
-                          </div>
-                        ) : openedDiffEvent !== null ? (
-                          <div className="flex min-h-0 min-w-0 flex-1">
-                            <ErrorBoundary
-                              key={`eb-diff-${active.id}-${openedDiffEvent.event_id}`}
-                              label={`the diff viewer for ${openedDiffEvent.path}`}
-                            >
-                              <DiffViewerTab
-                                key={`${active.id}-${openedDiffEvent.event_id}`}
-                                event={openedDiffEvent}
-                                onOpenFile={(path) => {
-                                  setOpenedDiffEvent(null);
-                                  setOpenedFile(path);
-                                }}
-                              />
-                            </ErrorBoundary>
-                          </div>
-                        ) : (
-                          <SessionSplitArea
-                            containerId={active.id}
-                            containerName={active.project_name}
-                            hasClaudeCli={active.has_claude_cli}
-                            sessions={activeSessions}
-                            primarySessionId={activeSessionId}
-                            splitSessionId={activeSplitSessionId}
-                            onSetSplit={setActiveSplitSession}
-                            onClearSplit={clearActiveSplitSession}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <EmptyEditor
-                    onOpenProvisioner={() => setShowProvisioner(true)}
-                    hasRegistered={containers.length > 0}
-                  />
-                )}
-              </main>
-            </Panel>
-          </Group>
+            <Route
+              path="/library"
+              element={
+                <LibraryRoute
+                  containers={containers}
+                  activeContainerId={activeTabId}
+                  onSelectContainer={openContainer}
+                  openedDiffEvent={openedDiffEvent}
+                  onOpenEvent={setOpenedDiffEvent}
+                />
+              }
+            />
+            <Route
+              path="/files"
+              element={
+                <FilesRoute
+                  containers={containers}
+                  activeContainerId={activeTabId}
+                  onSelectContainer={openContainer}
+                  subActivity={
+                    activity === "files" ||
+                    activity === "scm" ||
+                    activity === "problems" ||
+                    activity === "keybindings"
+                      ? activity
+                      : "files"
+                  }
+                  onSubActivityChange={setActivity}
+                  activeFsPath={activeFsPath}
+                  onFsPathChange={setActiveFsPath}
+                  openedFile={openedFile}
+                  onOpenFile={setOpenedFile}
+                />
+              }
+            />
+            <Route path="/settings" element={<SettingsRoute />} />
+            <Route path="*" element={<Navigate to="/chats" replace />} />
+          </Routes>
         </div>
 
         <StatusBar
@@ -922,6 +653,7 @@ export default function App() {
           onActivity={(a) => {
             setActivity(a);
             setSidebarOpen(true);
+            goToRoute(routeForActivity(a));
           }}
           onOpenProvisioner={() => setShowProvisioner(true)}
           onOpenFile={(path) => {
@@ -949,34 +681,4 @@ export default function App() {
   // Reference queryClient so the import isn't pruned and so children can
   // invalidate through it.
   void queryClient;
-}
-
-function EmptyEditor({
-  onOpenProvisioner,
-  hasRegistered,
-}: {
-  onOpenProvisioner: () => void;
-  hasRegistered: boolean;
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="text-sm text-[#858585]">
-        {hasRegistered
-          ? "Open a container from the sidebar to start a session."
-          : "No containers registered yet."}
-      </p>
-      <p className="text-[11px] text-[#606060]">
-        Press <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+K</kbd> for the
-        command palette · <kbd className="rounded border border-[#444] px-1.5 py-0.5">Ctrl+B</kbd>{" "}
-        to toggle the sidebar.
-      </p>
-      <button
-        type="button"
-        onClick={onOpenProvisioner}
-        className="mt-2 rounded bg-[#0078d4] px-3 py-1.5 text-xs text-white hover:bg-[#1188e0]"
-      >
-        Discover &amp; register a container
-      </button>
-    </div>
-  );
 }
