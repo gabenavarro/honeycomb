@@ -21,7 +21,7 @@ import shutil
 import signal
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from hub.models.chat_events import (
     CliEnvelope,
@@ -388,6 +388,7 @@ class ClaudeTurnSession:
                 accumulated_text="".join(accumulated_text_parts),
                 completed_tool_uses=completed_tool_uses,
                 plan_directive=plan_directive,
+                container_id=cast(int, self.container_id),
             )
 
         return TurnResult(
@@ -402,6 +403,7 @@ class ClaudeTurnSession:
         accumulated_text: str,
         completed_tool_uses: list[ToolUseBlock],
         plan_directive: RecordArtifactDirective | None,
+        container_id: int,
     ) -> None:
         """Run all four detectors against the turn's accumulated state
         and persist any directives via :func:`record_artifact`. Mirrors
@@ -437,21 +439,22 @@ class ClaudeTurnSession:
             if sub is not None:
                 directives.append(sub)
 
+        # Hook order (plan → snippet → note → subagent) is arbitrary; no dedup
+        # guarantees apply across hook types — directives are independent.
         for directive in directives:
             try:
-                # mypy: container_id is int by the caller's guard above.
-                assert self.container_id is not None
                 created = await record_artifact(
                     self.artifacts_engine,
-                    container_id=self.container_id,
+                    container_id=container_id,
                     type=directive.type,
                     title=directive.title,
                     body=directive.body,
                     body_format=directive.body_format,
                     source_chat_id=self.named_session_id,
+                    source_message_id=directive.source_message_id,
                     metadata=directive.metadata,
                 )
-                await self._broadcast_artifact_new(created)
+                await self._broadcast_artifact_new(created, container_id=container_id)
             except Exception as exc:
                 logger.warning(
                     "artifact hook failed: type=%s ns=%s err=%s",
@@ -460,11 +463,11 @@ class ClaudeTurnSession:
                     exc,
                 )
 
-    async def _broadcast_artifact_new(self, art: Artifact) -> None:
+    async def _broadcast_artifact_new(self, art: Artifact, *, container_id: int) -> None:
         """Mirror the ``diff-events:<container_id>`` broadcast shape on
         the ``library:<container_id>`` channel."""
         frame = WSFrame(
-            channel=f"library:{self.container_id}",
+            channel=f"library:{container_id}",
             event="new",
             data=art.model_dump(mode="json"),
         )

@@ -6,7 +6,6 @@ from hub.models.chat_events import ToolUseBlock
 from hub.services.chat_stream_artifact_hooks import (
     PlanModeTracker,
     detect_note_marker,
-    detect_plan_mode_exit,  # noqa: F401  (symbol-level import; behavior lives on PlanModeTracker)
     detect_snippet,
     detect_subagent_completion,
 )
@@ -81,7 +80,8 @@ class TestSubagentDetector:
         assert directive is not None
         assert directive.type == "subagent"
         assert directive.metadata is not None
-        assert directive.metadata["agent_type"] == "general-purpose"
+        assert directive.metadata["subagent_type"] == "general-purpose"
+        assert directive.source_message_id == "tu-1"
 
     def test_skips_non_task_tool(self) -> None:
         block = ToolUseBlock(id="tu-1", name="Bash", input={"command": "ls"})

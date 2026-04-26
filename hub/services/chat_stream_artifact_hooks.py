@@ -15,9 +15,7 @@ turn completes.
 The plan-mode tracker is meant to be instantiated once at module import
 time so that mode transitions across separate ``ClaudeTurnSession``
 instances (one per turn) within the same hub process are tracked
-correctly. ``detect_plan_mode_exit`` is exported as a symbol alias so
-the tests can ``from … import detect_plan_mode_exit`` cleanly without
-needing the function form (the behavior lives on the class).
+correctly.
 """
 
 from __future__ import annotations
@@ -44,6 +42,7 @@ class RecordArtifactDirective:
     body: str
     body_format: str = "markdown"
     metadata: dict[str, Any] | None = None
+    source_message_id: str | None = None
 
 
 # ── Note hook ────────────────────────────────────────────────
@@ -110,7 +109,8 @@ def detect_subagent_completion(*, block: ToolUseBlock) -> RecordArtifactDirectiv
         type="subagent",
         title=title[:200],
         body=prompt,
-        metadata={"agent_type": agent_type},
+        metadata={"subagent_type": agent_type},
+        source_message_id=block.id,
     )
 
 
@@ -133,6 +133,8 @@ class PlanModeTracker:
     def observe_turn_mode(
         self, *, named_session_id: str, mode: str
     ) -> RecordArtifactDirective | None:
+        # Synchronous on purpose — get-then-set is atomic under asyncio because
+        # there is no `await` between them. Do not introduce one here.
         prev = self._last_seen.get(named_session_id)
         self._last_seen[named_session_id] = mode
         if prev == "plan" and mode != "plan":
@@ -145,11 +147,3 @@ class PlanModeTracker:
                 metadata={"mode_at_save": "plan"},
             )
         return None
-
-
-# Symbol-level export so ``from chat_stream_artifact_hooks import
-# detect_plan_mode_exit`` resolves. The actual behavior lives on
-# :class:`PlanModeTracker` (the per-session state has to outlive a
-# single function call). The alias keeps the four-detector mental model
-# tidy in import statements without inventing a no-op stub.
-detect_plan_mode_exit = PlanModeTracker

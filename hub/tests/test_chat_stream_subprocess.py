@@ -7,7 +7,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import create_async_engine
 
+from hub.db.migrations_runner import apply_migrations_sync
+from hub.services.artifacts import list_artifacts
 from hub.services.chat_stream import (
     ClaudeTurnSession,
     build_command,
@@ -316,3 +321,206 @@ class TestApplyEffortPrefix:
         from hub.services.chat_stream import apply_effort_prefix
 
         assert apply_effort_prefix("hello", "wat") == "hello"
+
+
+# ─── M35 hook pipeline integration tests ─────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def registry_engine(tmp_path: Path):
+    """Fresh registry DB seeded with one container row (id=1).
+
+    Mirrors the fixture pattern in test_artifacts_service.py /
+    test_artifacts_endpoint.py so the chat_stream hook persistence path
+    has a real container_id to FK against.
+    """
+    db_path = tmp_path / "registry.db"
+    apply_migrations_sync(db_path)
+    sync_engine = sa.create_engine(f"sqlite:///{db_path}")
+    with sync_engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO containers "
+                "(workspace_folder, project_type, project_name, "
+                "project_description, container_status, agent_status, "
+                "agent_port, has_gpu, has_claude_cli, agent_expected, "
+                "created_at, updated_at) "
+                "VALUES ('/w','base','demo','','running','idle',0,0,0,1,"
+                "'2026-04-20T00:00:00','2026-04-20T00:00:00')",
+            ),
+        )
+    eng = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    yield eng
+    await eng.dispose()
+
+
+def _write_fake_claude(script_path: Path, stdout_lines: list[str]) -> None:
+    """Write a fake claude binary that emits the given NDJSON lines.
+
+    Mirrors the inline ``cat <<'EOF'`` pattern used by the existing
+    subprocess tests above.
+    """
+    body = "\n".join(stdout_lines)
+    script_path.write_text(
+        "#!/usr/bin/env bash\n"
+        "cat - > /dev/null\n"  # consume stdin so we don't block
+        "cat <<'EOF'\n"
+        f"{body}\n"
+        "EOF\n"
+    )
+    script_path.chmod(0o755)
+
+
+class TestArtifactHookPipeline:
+    @pytest.mark.asyncio
+    async def test_snippet_hook_records_artifact_after_run(
+        self, tmp_path: Path, registry_engine
+    ) -> None:
+        # Three text_deltas that, concatenated, form a 3-line python fence.
+        fake_script = tmp_path / "claude"
+        _write_fake_claude(
+            fake_script,
+            [
+                '{"type":"system","subtype":"init","session_id":"sess-snip","uuid":"u-1"}',
+                '{"type":"stream_event","event":{"type":"content_block_start","index":0,'
+                '"content_block":{"type":"text","text":""}},"session_id":"sess-snip","uuid":"u-2"}',
+                '{"type":"stream_event","event":{"type":"content_block_delta","index":0,'
+                '"delta":{"type":"text_delta","text":"Here:\\n```python\\nimport os\\n"}},'
+                '"session_id":"sess-snip","uuid":"u-3"}',
+                '{"type":"stream_event","event":{"type":"content_block_delta","index":0,'
+                '"delta":{"type":"text_delta","text":"print(os.getcwd())\\nos.exit(0)\\n```\\n"}},'
+                '"session_id":"sess-snip","uuid":"u-4"}',
+                '{"type":"result","subtype":"success","is_error":false,'
+                '"session_id":"sess-snip","uuid":"u-5","duration_ms":1}',
+            ],
+        )
+
+        manager = AsyncMock()
+        session = ClaudeTurnSession(
+            named_session_id="ns-snip",
+            cwd="/tmp",
+            ws_manager=manager,
+            claude_binary=str(fake_script),
+            container_id=1,
+            artifacts_engine=registry_engine,
+        )
+        result = await session.run(user_text="hi", claude_session_id=None)
+        assert result.exit_code == 0
+
+        artifacts = await list_artifacts(registry_engine, container_id=1)
+        snippets = [a for a in artifacts if a.type == "snippet"]
+        assert len(snippets) == 1
+        assert snippets[0].metadata is not None
+        assert snippets[0].metadata["language"] == "python"
+        assert snippets[0].metadata["line_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_subagent_hook_records_artifact_with_source_message_id(
+        self, tmp_path: Path, registry_engine
+    ) -> None:
+        # content_block_start carrying a Task tool_use.
+        fake_script = tmp_path / "claude"
+        _write_fake_claude(
+            fake_script,
+            [
+                '{"type":"system","subtype":"init","session_id":"sess-sub","uuid":"u-1"}',
+                '{"type":"stream_event","event":{"type":"content_block_start","index":0,'
+                '"content_block":{"type":"tool_use","id":"tu-task-42","name":"Task",'
+                '"input":{"subagent_type":"general-purpose","description":"Find bug",'
+                '"prompt":"Find the bug in main.py"}}},'
+                '"session_id":"sess-sub","uuid":"u-2"}',
+                '{"type":"result","subtype":"success","is_error":false,'
+                '"session_id":"sess-sub","uuid":"u-3","duration_ms":1}',
+            ],
+        )
+
+        manager = AsyncMock()
+        session = ClaudeTurnSession(
+            named_session_id="ns-sub",
+            cwd="/tmp",
+            ws_manager=manager,
+            claude_binary=str(fake_script),
+            container_id=1,
+            artifacts_engine=registry_engine,
+        )
+        result = await session.run(user_text="hi", claude_session_id=None)
+        assert result.exit_code == 0
+
+        artifacts = await list_artifacts(registry_engine, container_id=1)
+        subagents = [a for a in artifacts if a.type == "subagent"]
+        assert len(subagents) == 1
+        assert subagents[0].source_message_id == "tu-task-42"
+        assert subagents[0].metadata is not None
+        assert subagents[0].metadata["subagent_type"] == "general-purpose"
+
+    @pytest.mark.asyncio
+    async def test_record_artifact_failure_does_not_break_run(
+        self,
+        tmp_path: Path,
+        registry_engine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Same snippet-emitting fixture as test 1, but record_artifact blows up.
+        fake_script = tmp_path / "claude"
+        _write_fake_claude(
+            fake_script,
+            [
+                '{"type":"system","subtype":"init","session_id":"sess-fail","uuid":"u-1"}',
+                '{"type":"stream_event","event":{"type":"content_block_delta","index":0,'
+                '"delta":{"type":"text_delta","text":"```python\\na=1\\nb=2\\nc=3\\n```"}},'
+                '"session_id":"sess-fail","uuid":"u-2"}',
+                '{"type":"result","subtype":"success","is_error":false,'
+                '"session_id":"sess-fail","uuid":"u-3","duration_ms":1}',
+            ],
+        )
+
+        async def _boom(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("boom")
+
+        # Patch the symbol the chat_stream module already imported, not
+        # the original definition site — the module-local binding is what
+        # _apply_artifact_hooks actually calls.
+        monkeypatch.setattr("hub.services.chat_stream.record_artifact", _boom)
+
+        # We can't use pytest's `caplog` here: the registry_engine fixture
+        # runs Alembic migrations which load alembic.ini via logging.config
+        # .fileConfig — that not only swaps the root handlers (dropping
+        # pytest's LogCaptureHandler) but also flips disabled=True on every
+        # pre-existing logger (including hub.services.chat_stream). We
+        # re-enable the chat_stream logger and attach our own buffer
+        # handler to verify the warning still fires.
+        import logging as _logging
+
+        records: list[_logging.LogRecord] = []
+
+        class _Capture(_logging.Handler):
+            def emit(self, record: _logging.LogRecord) -> None:
+                records.append(record)
+
+        captured = _Capture(level=_logging.WARNING)
+        chat_logger = _logging.getLogger("hub.services.chat_stream")
+        prior_disabled = chat_logger.disabled
+        chat_logger.disabled = False
+        chat_logger.addHandler(captured)
+        try:
+            manager = AsyncMock()
+            session = ClaudeTurnSession(
+                named_session_id="ns-fail",
+                cwd="/tmp",
+                ws_manager=manager,
+                claude_binary=str(fake_script),
+                container_id=1,
+                artifacts_engine=registry_engine,
+            )
+            result = await session.run(user_text="hi", claude_session_id=None)
+        finally:
+            chat_logger.removeHandler(captured)
+            chat_logger.disabled = prior_disabled
+
+        # Run completes cleanly even though record_artifact raised.
+        assert result.exit_code == 0
+        # Nothing landed because every record_artifact attempt blew up.
+        artifacts = await list_artifacts(registry_engine, container_id=1)
+        assert artifacts == []
+        # Failure was logged at WARNING level via the artifact-hook handler.
+        assert any("artifact hook failed" in r.getMessage() for r in records)
