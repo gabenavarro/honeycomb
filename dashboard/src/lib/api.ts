@@ -326,3 +326,16 @@ export const commitChanges = (
     method: "POST",
     body: JSON.stringify({ workspace_folder, message, files, push_after }),
   });
+
+// ─── M33 chat-stream ─────────────────────────────────────────────────────────
+
+export const postChatTurn = (sessionId: string, text: string) =>
+  request<{ accepted: boolean; session_id: string }>(`/named-sessions/${sessionId}/turns`, {
+    method: "POST",
+    body: JSON.stringify({ text, attachments: [] }),
+  });
+
+export const cancelActiveTurn = (sessionId: string) =>
+  request<void>(`/named-sessions/${sessionId}/turns/active`, {
+    method: "DELETE",
+  });
