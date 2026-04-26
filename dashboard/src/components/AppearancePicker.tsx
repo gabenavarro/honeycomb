@@ -36,8 +36,7 @@ function Swatch({ value }: { value: ThemePreference }) {
       <div
         className="h-9 w-14 flex-shrink-0 overflow-hidden rounded border border-[#d0d7de]"
         style={{
-          background:
-            "linear-gradient(135deg, #ffffff 0%, #ffffff 49%, #161b22 51%, #161b22 100%)",
+          background: "linear-gradient(135deg, #ffffff 0%, #ffffff 49%, #161b22 51%, #161b22 100%)",
         }}
       />
     );
@@ -73,7 +72,7 @@ export function AppearancePicker() {
           <label
             key={opt.value}
             htmlFor={id}
-            className={`flex items-center gap-3.5 rounded-md border p-3 cursor-pointer transition-colors ${
+            className={`flex cursor-pointer items-center gap-3.5 rounded-md border p-3 transition-colors ${
               selected
                 ? "border-[#58a6ff] shadow-[0_0_0_1px_#58a6ff]"
                 : "border-[#30363d] hover:border-[#6e7681]"
@@ -82,7 +81,7 @@ export function AppearancePicker() {
             <Swatch value={opt.value} />
             <div className="flex-1">
               <div className="text-[13px] font-medium text-[#c9d1d9]">{opt.label}</div>
-              <div className="text-[11px] text-[#6e7681] mt-0.5">{opt.description}</div>
+              <div className="mt-0.5 text-[11px] text-[#8b949e]">{opt.description}</div>
             </div>
             <input
               id={id}
