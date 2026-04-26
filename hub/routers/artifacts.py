@@ -27,10 +27,10 @@ from pydantic import BaseModel, Field
 from hub.models.schemas import Artifact, ArtifactType
 from hub.routers.ws import manager as ws_manager
 from hub.services.artifacts import (
-    _broadcast_library_event,
-    _fetch_container_id_for_artifact,
     archive_artifact,
+    broadcast_library_event,
     delete_artifact,
+    fetch_container_id_for_artifact,
     get_artifact,
     list_artifacts,
     pin_artifact,
@@ -103,7 +103,7 @@ async def create_container_artifact(
         source_message_id=body.source_message_id,
         metadata=body.metadata,
     )
-    await _broadcast_library_event(
+    await broadcast_library_event(
         ws_manager,
         container_id=record_id,
         event="new",
@@ -127,10 +127,10 @@ async def get_artifact_endpoint(artifact_id: str, request: Request) -> Artifact:
 @router.post("/api/artifacts/{artifact_id}/pin", status_code=204)
 async def pin_endpoint(artifact_id: str, request: Request) -> None:
     registry = request.app.state.registry
-    container_id = await _fetch_container_id_for_artifact(registry.engine, artifact_id)
+    container_id = await fetch_container_id_for_artifact(registry.engine, artifact_id)
     await pin_artifact(registry.engine, artifact_id=artifact_id)
     if container_id is not None:
-        await _broadcast_library_event(
+        await broadcast_library_event(
             ws_manager,
             container_id=container_id,
             event="updated",
@@ -141,10 +141,10 @@ async def pin_endpoint(artifact_id: str, request: Request) -> None:
 @router.post("/api/artifacts/{artifact_id}/unpin", status_code=204)
 async def unpin_endpoint(artifact_id: str, request: Request) -> None:
     registry = request.app.state.registry
-    container_id = await _fetch_container_id_for_artifact(registry.engine, artifact_id)
+    container_id = await fetch_container_id_for_artifact(registry.engine, artifact_id)
     await unpin_artifact(registry.engine, artifact_id=artifact_id)
     if container_id is not None:
-        await _broadcast_library_event(
+        await broadcast_library_event(
             ws_manager,
             container_id=container_id,
             event="updated",
@@ -155,10 +155,10 @@ async def unpin_endpoint(artifact_id: str, request: Request) -> None:
 @router.post("/api/artifacts/{artifact_id}/archive", status_code=204)
 async def archive_endpoint(artifact_id: str, request: Request) -> None:
     registry = request.app.state.registry
-    container_id = await _fetch_container_id_for_artifact(registry.engine, artifact_id)
+    container_id = await fetch_container_id_for_artifact(registry.engine, artifact_id)
     await archive_artifact(registry.engine, artifact_id=artifact_id)
     if container_id is not None:
-        await _broadcast_library_event(
+        await broadcast_library_event(
             ws_manager,
             container_id=container_id,
             event="updated",
@@ -170,10 +170,10 @@ async def archive_endpoint(artifact_id: str, request: Request) -> None:
 async def delete_endpoint(artifact_id: str, request: Request) -> None:
     registry = request.app.state.registry
     # Fetch container_id BEFORE deletion — the row won't exist afterward.
-    container_id = await _fetch_container_id_for_artifact(registry.engine, artifact_id)
+    container_id = await fetch_container_id_for_artifact(registry.engine, artifact_id)
     await delete_artifact(registry.engine, artifact_id=artifact_id)
     if container_id is not None:
-        await _broadcast_library_event(
+        await broadcast_library_event(
             ws_manager,
             container_id=container_id,
             event="deleted",

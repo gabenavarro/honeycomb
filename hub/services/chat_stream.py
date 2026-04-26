@@ -466,19 +466,14 @@ class ClaudeTurnSession:
     async def _broadcast_artifact_new(self, art: Artifact, *, container_id: int) -> None:
         """Mirror the ``diff-events:<container_id>`` broadcast shape on
         the ``library:<container_id>`` channel."""
-        frame = WSFrame(
-            channel=f"library:{container_id}",
+        from hub.services.artifacts import broadcast_library_event
+
+        await broadcast_library_event(
+            self.ws_manager,
+            container_id=container_id,
             event="new",
             data=art.model_dump(mode="json"),
         )
-        try:
-            await self.ws_manager.broadcast(frame)
-        except Exception as exc:
-            logger.warning(
-                "library broadcast failed (channel=%s): %s",
-                frame.channel,
-                exc,
-            )
 
     async def cancel(self) -> None:
         """Terminate the subprocess (and its children) if running. Idempotent.

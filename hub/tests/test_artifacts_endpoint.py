@@ -369,3 +369,25 @@ async def test_pin_broadcasts_updated(
             c.args[0] for c in mock_broadcast.await_args_list if c.args[0].event == "updated"
         ]
         assert len(updated_frames) == 1
+
+
+@pytest.mark.asyncio
+async def test_broadcast_failure_does_not_break_create(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    """If the WS broadcast raises, the endpoint must still return 201."""
+    from unittest.mock import AsyncMock, patch
+
+    from hub.routers.ws import manager as ws_mgr
+
+    failing_broadcast = AsyncMock(side_effect=RuntimeError("WS down"))
+    with patch.object(ws_mgr, "broadcast", new=failing_broadcast):
+        resp = await client.post(
+            f"/api/containers/{registered_container.id}/artifacts",
+            json={"type": "note", "title": "Will-survive", "body": "x"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 201
+    # Verify it actually landed in the DB despite the broadcast failing
+    fetched = await get_artifact(registry_engine, artifact_id=resp.json()["artifact_id"])
+    assert fetched is not None

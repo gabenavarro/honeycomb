@@ -21,7 +21,8 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from hub.models.schemas import Artifact, ArtifactType, DiffEvent
+from hub.models.schemas import Artifact, ArtifactType, DiffEvent, WSFrame
+from hub.routers.ws import ConnectionManager
 from hub.services.diff_events import list_events as list_diff_events
 
 logger = logging.getLogger(__name__)
@@ -281,7 +282,7 @@ async def delete_artifact(engine: AsyncEngine, *, artifact_id: str) -> None:
 # ── Broadcast helpers (M35 T6) ────────────────────────────────────────
 
 
-async def _fetch_container_id_for_artifact(engine: AsyncEngine, artifact_id: str) -> int | None:
+async def fetch_container_id_for_artifact(engine: AsyncEngine, artifact_id: str) -> int | None:
     """Return container_id for an artifact, or None if missing/synthesized."""
     if artifact_id.startswith("edit-"):
         return None  # edit artifacts can't be mutated
@@ -299,16 +300,14 @@ async def _fetch_container_id_for_artifact(engine: AsyncEngine, artifact_id: str
     return row["container_id"] if row else None
 
 
-async def _broadcast_library_event(
-    ws_manager: Any,
+async def broadcast_library_event(
+    ws_manager: ConnectionManager,
     *,
     container_id: int,
     event: str,
     data: dict[str, Any],
 ) -> None:
     """Publish `event` on library:<container_id>. Best-effort."""
-    from hub.models.schemas import WSFrame
-
     frame = WSFrame(
         channel=f"library:{container_id}",
         event=event,
