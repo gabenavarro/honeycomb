@@ -77,12 +77,12 @@ export function ResourcePill({ containerId, containerName }: Props) {
           side="top"
           align="end"
           sideOffset={6}
-          className="z-50 w-72 rounded-md border border-[#2b2b2b] bg-[#1e1e1e] p-0 text-[#cccccc] shadow-xl outline-none"
+          className="z-50 w-72 rounded-md border border-edge bg-page p-0 text-primary shadow-xl outline-none"
         >
           <div className="p-2">
             <ResourceMonitor containerId={containerId} />
           </div>
-          <Popover.Arrow className="fill-[#2b2b2b]" />
+          <Popover.Arrow className="fill-edge" />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
