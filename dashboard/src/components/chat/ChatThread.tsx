@@ -36,6 +36,8 @@ interface Props {
   onRetry: (turn: ChatTurn) => void;
   onFork: (turn: ChatTurn) => void;
   onEdit: (turn: ChatTurn) => void;
+  attachments?: string[];
+  onAttachmentsChange?: (next: string[]) => void;
 }
 
 export function ChatThread({
@@ -55,6 +57,8 @@ export function ChatThread({
   onRetry,
   onFork,
   onEdit,
+  attachments,
+  onAttachmentsChange,
 }: Props) {
   const renderTurn = (turn: ChatTurn) => {
     const copy = () => {
@@ -113,7 +117,14 @@ export function ChatThread({
         onNew={onNewTab}
       />
       <ChatStream turns={turns} renderTurn={renderTurn} />
-      <ChatComposer sessionId={sessionId} mode={mode} disabled={pending} onSend={onSend} />
+      <ChatComposer
+        sessionId={sessionId}
+        mode={mode}
+        disabled={pending}
+        onSend={onSend}
+        attachments={attachments ?? []}
+        onAttachmentsChange={onAttachmentsChange ?? (() => undefined)}
+      />
     </div>
   );
 }
