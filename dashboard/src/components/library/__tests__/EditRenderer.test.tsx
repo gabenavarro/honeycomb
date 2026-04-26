@@ -6,8 +6,10 @@ import type { Artifact } from "../../../lib/types";
 
 // Stub DiffViewerTab so we don't pull in react-diff-view / refractor in jsdom
 vi.mock("../../DiffViewerTab", () => ({
-  DiffViewerTab: ({ event }: { event: { path: string } }) => (
-    <div data-testid="diff-viewer-tab">{event.path}</div>
+  DiffViewerTab: ({ event }: { event: { path: string; event_id: string } }) => (
+    <div data-testid="diff-viewer-tab" data-event-id={event.event_id}>
+      {event.path}
+    </div>
   ),
 }));
 
@@ -37,5 +39,7 @@ describe("EditRenderer", () => {
     render(<EditRenderer artifact={sample} />);
     expect(screen.getByTestId("diff-viewer-tab")).toBeTruthy();
     expect(screen.getByText("src/foo.ts")).toBeTruthy();
+    const dvt = screen.getByTestId("diff-viewer-tab");
+    expect(dvt.dataset.eventId).toBe("abc123");
   });
 });
