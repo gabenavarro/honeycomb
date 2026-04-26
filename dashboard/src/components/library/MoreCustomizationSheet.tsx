@@ -1,4 +1,6 @@
 /** Modal sheet for customising which artifact types appear as primary chips. M35. */
+import { Star } from "lucide-react";
+
 import type { ArtifactType } from "../../lib/types";
 
 const TYPE_LABEL: Record<ArtifactType, string> = {
@@ -53,7 +55,7 @@ export function MoreCustomizationSheet({ primaryTypes, onPrimaryTypesChange, onC
       {/* Sheet */}
       <div
         role="dialog"
-        aria-label="Customise filter chips"
+        aria-label="Customize artifact chips"
         aria-modal="true"
         className="border-edge bg-pane shadow-pop fixed top-1/2 left-1/2 z-50 w-64 -translate-x-1/2 -translate-y-1/2 rounded-lg border p-4"
       >
@@ -79,12 +81,13 @@ export function MoreCustomizationSheet({ primaryTypes, onPrimaryTypesChange, onC
                   onClick={() => handleToggle(type)}
                   aria-label={isPrimary ? `Remove ${type} from primary` : `Add ${type} to primary`}
                   aria-pressed={isPrimary}
-                  className={[
-                    "text-[14px] transition-colors",
-                    isPrimary ? "fill-think text-think" : "text-muted hover:text-secondary",
-                  ].join(" ")}
+                  className="transition-colors"
                 >
-                  ★
+                  <Star
+                    size={12}
+                    aria-hidden="true"
+                    className={isPrimary ? "fill-think text-think" : "text-muted"}
+                  />
                 </button>
               </li>
             );

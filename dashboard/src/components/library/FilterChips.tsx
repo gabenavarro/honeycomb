@@ -41,7 +41,7 @@ function readStored(): ArtifactType[] {
     const valid = parsed.filter((v): v is ArtifactType =>
       (ALL_TYPES as string[]).includes(v as string),
     );
-    return valid.length > 0 ? valid : DEFAULT_PRIMARY;
+    return valid.length === 4 ? (valid as ArtifactType[]) : DEFAULT_PRIMARY;
   } catch {
     return DEFAULT_PRIMARY;
   }
@@ -131,7 +131,7 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
         <ChipButton label="All" pressed={allSelected} onClick={clearAll} count={artifacts.length} />
 
         {/* Primary type chips */}
-        {primaryTypes.map((type) => (
+        {[...primaryTypes].sort().map((type) => (
           <ChipButton
             key={type}
             label={TYPE_LABEL[type]}

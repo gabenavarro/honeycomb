@@ -72,6 +72,6 @@ describe("FilterChips", () => {
     const moreBtn = screen.getByRole("button", { name: /more filter options/i });
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(moreBtn);
-    expect(screen.getByRole("dialog", { name: /customise filter chips/i })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /customize artifact chips/i })).toBeTruthy();
   });
 });

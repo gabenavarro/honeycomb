@@ -24,7 +24,7 @@ describe("MoreCustomizationSheet", () => {
         onClose={vi.fn()}
       />,
     );
-    const dialog = screen.getByRole("dialog", { name: /customise filter chips/i });
+    const dialog = screen.getByRole("dialog", { name: /customize artifact chips/i });
     // All 8 type labels should appear
     for (const type of ALL_TYPES) {
       expect(dialog.textContent).toContain(type[0].toUpperCase() + type.slice(1));

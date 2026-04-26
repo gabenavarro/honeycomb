@@ -6,7 +6,7 @@ export type LibraryScope = "active" | "fleet";
 const STORAGE_KEY = "hive:library:scope";
 
 interface Props {
-  activeContainerName: string;
+  activeContainerName: string | null;
   onScopeChange: (scope: LibraryScope) => void;
 }
 
@@ -47,7 +47,7 @@ export function ScopeToggle({ activeContainerName, onScopeChange }: Props) {
             : "text-secondary hover:text-primary",
         ].join(" ")}
       >
-        {activeContainerName}
+        {activeContainerName ?? "(no workspace)"}
       </button>
       <button
         type="button"
