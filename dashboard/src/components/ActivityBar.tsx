@@ -113,7 +113,7 @@ export function ActivityBar({
   return (
     <nav
       aria-label="Activity bar"
-      className="flex w-12 shrink-0 flex-col items-center justify-between border-r border-[#2b2b2b] bg-[#181818] py-2"
+      className="flex w-12 shrink-0 flex-col items-center justify-between border-r border-edge bg-pane py-2"
     >
       <ul className="flex flex-col gap-1">
         {ITEMS.map((item) => {
@@ -136,13 +136,13 @@ export function ActivityBar({
                 aria-pressed={isActive}
                 className={`relative flex h-10 w-10 items-center justify-center rounded transition-colors ${
                   isActive
-                    ? "bg-[#2a2d2e] text-[#e7e7e7] before:absolute before:top-2 before:left-0 before:h-6 before:w-0.5 before:bg-[#0078d4]"
-                    : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                    ? "bg-chip text-primary before:absolute before:top-2 before:left-0 before:h-6 before:w-0.5 before:bg-accent"
+                    : "text-secondary hover:bg-chip hover:text-primary"
                 }`}
               >
                 {item.icon}
                 {badge !== null && (
-                  <span className="absolute top-1 right-1 rounded-full bg-[#0078d4] px-1 text-[8px] leading-none font-bold text-white">
+                  <span className="absolute top-1 right-1 rounded-full bg-accent px-1 text-[8px] leading-none font-bold text-white">
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
@@ -162,8 +162,8 @@ export function ActivityBar({
             aria-pressed={active === "keybindings"}
             className={`flex h-10 w-10 items-center justify-center rounded transition-colors ${
               active === "keybindings"
-                ? "bg-[#2a2d2e] text-[#e7e7e7]"
-                : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                ? "bg-chip text-primary"
+                : "text-secondary hover:bg-chip hover:text-primary"
             }`}
           >
             <Keyboard size={18} />
@@ -179,8 +179,8 @@ export function ActivityBar({
             aria-pressed={active === "settings"}
             className={`flex h-10 w-10 items-center justify-center rounded transition-colors ${
               active === "settings"
-                ? "bg-[#2a2d2e] text-[#e7e7e7]"
-                : "text-[#858585] hover:bg-[#232323] hover:text-[#c0c0c0]"
+                ? "bg-chip text-primary"
+                : "text-secondary hover:bg-chip hover:text-primary"
             }`}
           >
             <Settings size={18} />
