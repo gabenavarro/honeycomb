@@ -26,6 +26,7 @@ import type { ChatModel } from "../chat/ModelChip";
 import type { ChatTabInfo } from "../chat/ChatTabStrip";
 import type { ChatTurn } from "../chat/types";
 import { readEditAuto } from "../chat/EditAutoToggle";
+import { dispatchModeChange } from "../chat/ModeToggle";
 import { useChatStream } from "../../hooks/useChatStream";
 import { listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
 import { parseSlashCommand } from "../../lib/slashCommands";
@@ -258,6 +259,7 @@ function ChatThreadWrapper({
   function writeMode(next: ChatMode): void {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(`hive:chat:${sessionId}:mode`, next);
+    dispatchModeChange(sessionId, next);
   }
 
   const mode = readMode();

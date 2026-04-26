@@ -96,6 +96,7 @@ export function ChatComposer({
 
   return (
     <div
+      data-testid="chat-composer"
       className="border-t border-edge bg-pane"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
