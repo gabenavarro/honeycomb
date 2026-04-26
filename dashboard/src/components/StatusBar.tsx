@@ -34,7 +34,7 @@ export function StatusBar({ activeContainerId, activeContainerName }: StatusBarP
 
   return (
     <footer
-      className="flex h-6 items-center justify-between gap-4 bg-[#0078d4] px-3 text-[10px] font-medium text-white"
+      className="flex h-6 items-center justify-between gap-4 bg-accent px-3 text-[10px] font-medium text-white"
       role="contentinfo"
     >
       <div className="flex items-center gap-3">
