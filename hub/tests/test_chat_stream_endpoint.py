@@ -253,3 +253,161 @@ async def test_delete_active_turn_cancels(
     post_task.cancel()
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await post_task
+
+
+@pytest.mark.asyncio
+async def test_post_turn_accepts_effort_field(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+
+    fake_session = AsyncMock()
+    fake_session.run.return_value = type(
+        "R", (), {"exit_code": 0, "captured_claude_session_id": "claude-x", "forwarded_count": 1}
+    )()
+
+    with patch("hub.routers.chat_stream.ClaudeTurnSession", return_value=fake_session):
+        resp = await client.post(
+            f"/api/named-sessions/{sess.session_id}/turns",
+            json={"text": "hi", "effort": "max"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 202
+    await asyncio.sleep(0.05)
+
+    fake_session.run.assert_awaited_once()
+    kwargs = fake_session.run.await_args.kwargs
+    assert kwargs["effort"] == "max"
+
+
+@pytest.mark.asyncio
+async def test_post_turn_accepts_model_field(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+
+    fake_session = AsyncMock()
+    fake_session.run.return_value = type(
+        "R", (), {"exit_code": 0, "captured_claude_session_id": None, "forwarded_count": 0}
+    )()
+
+    with patch("hub.routers.chat_stream.ClaudeTurnSession", return_value=fake_session):
+        resp = await client.post(
+            f"/api/named-sessions/{sess.session_id}/turns",
+            json={"text": "hi", "model": "claude-opus-4-7[1m]"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 202
+    await asyncio.sleep(0.05)
+    assert fake_session.run.await_args.kwargs["model"] == "claude-opus-4-7[1m]"
+
+
+@pytest.mark.asyncio
+async def test_post_turn_accepts_mode_field(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+
+    fake_session = AsyncMock()
+    fake_session.run.return_value = type(
+        "R", (), {"exit_code": 0, "captured_claude_session_id": None, "forwarded_count": 0}
+    )()
+
+    with patch("hub.routers.chat_stream.ClaudeTurnSession", return_value=fake_session):
+        resp = await client.post(
+            f"/api/named-sessions/{sess.session_id}/turns",
+            json={"text": "hi", "mode": "plan"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 202
+    await asyncio.sleep(0.05)
+    assert fake_session.run.await_args.kwargs["mode"] == "plan"
+
+
+@pytest.mark.asyncio
+async def test_post_turn_accepts_edit_auto_field(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+
+    fake_session = AsyncMock()
+    fake_session.run.return_value = type(
+        "R", (), {"exit_code": 0, "captured_claude_session_id": None, "forwarded_count": 0}
+    )()
+
+    with patch("hub.routers.chat_stream.ClaudeTurnSession", return_value=fake_session):
+        resp = await client.post(
+            f"/api/named-sessions/{sess.session_id}/turns",
+            json={"text": "hi", "edit_auto": True},
+            headers=AUTH,
+        )
+    assert resp.status_code == 202
+    await asyncio.sleep(0.05)
+    assert fake_session.run.await_args.kwargs["edit_auto"] is True
+
+
+@pytest.mark.asyncio
+async def test_post_turn_rejects_invalid_effort(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+    resp = await client.post(
+        f"/api/named-sessions/{sess.session_id}/turns",
+        json={"text": "hi", "effort": "bogus"},
+        headers=AUTH,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_post_turn_rejects_invalid_mode(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+    resp = await client.post(
+        f"/api/named-sessions/{sess.session_id}/turns",
+        json={"text": "hi", "mode": "destruct"},
+        headers=AUTH,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_post_turn_defaults_when_fields_omitted(
+    client: AsyncClient, registered_container, registry_engine
+) -> None:
+    """Backwards-compat: M33-style payload without the new fields still works."""
+    sess = await create_session(
+        registry_engine, container_id=registered_container.id, name="c", kind="claude"
+    )
+
+    fake_session = AsyncMock()
+    fake_session.run.return_value = type(
+        "R", (), {"exit_code": 0, "captured_claude_session_id": None, "forwarded_count": 0}
+    )()
+
+    with patch("hub.routers.chat_stream.ClaudeTurnSession", return_value=fake_session):
+        resp = await client.post(
+            f"/api/named-sessions/{sess.session_id}/turns",
+            json={"text": "hi"},
+            headers=AUTH,
+        )
+    assert resp.status_code == 202
+    await asyncio.sleep(0.05)
+    kwargs = fake_session.run.await_args.kwargs
+    assert kwargs["effort"] == "standard"
+    assert kwargs["model"] is None
+    assert kwargs["mode"] == "code"
+    assert kwargs["edit_auto"] is False

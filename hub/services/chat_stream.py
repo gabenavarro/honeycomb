@@ -133,11 +133,29 @@ class TurnResult:
     forwarded_count: int
 
 
-def build_command(claude_session_id: str | None, claude_binary: str = "claude") -> list[str]:
-    """Build the argv for a single chat turn.
+def build_command(
+    claude_session_id: str | None,
+    *,
+    effort: str = "standard",
+    model: str | None = None,
+    mode: str = "code",
+    edit_auto: bool = False,
+    claude_binary: str = "claude",
+) -> list[str]:
+    """Build the argv for a single chat turn (M34 extended).
 
-    The first turn (no resume) creates a new Claude session; subsequent
-    turns resume that session so context is preserved.
+    Honors:
+      - claude_session_id  → --resume <id>  (only on turn ≥2)
+      - effort             → --max-budget-usd 0.05 when "quick"
+                             (deep / max are handled by apply_effort_prefix
+                              on the user text, not as a CLI flag — the
+                              CLI doesn't expose a thinking-budget knob)
+      - model              → --model <alias>
+      - mode + edit_auto:
+          - mode == "plan"          → --permission-mode plan  (precedence)
+          - elif edit_auto          → --permission-mode acceptEdits
+          - else                    → no --permission-mode flag (default)
+        Plus mode == "review" appends a system-prompt nudge.
     """
     cmd = [
         claude_binary,
@@ -150,9 +168,49 @@ def build_command(claude_session_id: str | None, claude_binary: str = "claude") 
         "--include-partial-messages",
         "--replay-user-messages",
     ]
+
+    # Permission mode (Plan wins over edit_auto)
+    if mode == "plan":
+        cmd += ["--permission-mode", "plan"]
+    elif edit_auto:
+        cmd += ["--permission-mode", "acceptEdits"]
+
+    # Model
+    if model:
+        cmd += ["--model", model]
+
+    # Quick effort = dollar cap. Deep/Max use apply_effort_prefix instead.
+    if effort == "quick":
+        cmd += ["--max-budget-usd", "0.05"]
+
+    # Review mode: append system-prompt nudge
+    if mode == "review":
+        cmd += [
+            "--append-system-prompt",
+            "You are reviewing code; suggest improvements without writing them.",
+        ]
+
+    # Resume (last so it groups visually with the rest of the session args)
     if claude_session_id:
         cmd += ["--resume", claude_session_id]
+
     return cmd
+
+
+def apply_effort_prefix(user_text: str, effort: str) -> str:
+    """Map Effort to a user-text prefix when it changes Claude's
+    thinking depth (M34). The CLI doesn't expose a thinking-budget
+    flag, so Deep/Max nudge the model via Anthropic's documented
+    chat-protocol keywords.
+
+    Quick uses the dollar cap (--max-budget-usd) at the CLI layer
+    (see build_command) and doesn't need a text prefix.
+    """
+    if effort == "deep":
+        return f"think hard about this.\n\n{user_text}"
+    if effort == "max":
+        return f"ultrathink.\n\n{user_text}"
+    return user_text
 
 
 class ClaudeTurnSession:
@@ -197,18 +255,33 @@ class ClaudeTurnSession:
         *,
         user_text: str,
         claude_session_id: str | None,
+        effort: str = "standard",
+        model: str | None = None,
+        mode: str = "code",
+        edit_auto: bool = False,
     ) -> TurnResult:
         if shutil.which(self.claude_binary) is None and not self.claude_binary.startswith("/"):
             # Defensive: explicit path or PATH lookup must succeed.
             raise FileNotFoundError(f"claude binary not found: {self.claude_binary}")
 
-        cmd = build_command(claude_session_id, claude_binary=self.claude_binary)
+        cmd = build_command(
+            claude_session_id,
+            effort=effort,
+            model=model,
+            mode=mode,
+            edit_auto=edit_auto,
+            claude_binary=self.claude_binary,
+        )
         logger.info(
-            "chat_stream spawn: ns=%s cmd=%s cwd=%s resume=%s",
+            "chat_stream spawn: ns=%s cmd=%s cwd=%s resume=%s effort=%s model=%s mode=%s edit_auto=%s",
             self.named_session_id,
             " ".join(cmd),
             self.cwd,
             claude_session_id,
+            effort,
+            model,
+            mode,
+            edit_auto,
         )
         self._proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -219,9 +292,12 @@ class ClaudeTurnSession:
             start_new_session=True,  # own process group so cancel() can kill all children
         )
 
+        # Apply effort prefix to user text before building the JSON payload.
+        prefixed_text = apply_effort_prefix(user_text, effort)
+
         # Write the user message JSON, then close stdin to trigger EOF.
         user_payload = json.dumps(
-            {"type": "user", "message": {"role": "user", "content": user_text}},
+            {"type": "user", "message": {"role": "user", "content": prefixed_text}},
             separators=(",", ":"),
         )
         if self._proc.stdin is not None:

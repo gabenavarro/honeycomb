@@ -21,10 +21,16 @@ import { SessionSubTabs, type SessionInfo } from "../SessionSubTabs";
 import { WorkspacePill } from "../WorkspacePill";
 import { ChatThread } from "../chat/ChatThread";
 import type { ChatMode } from "../chat/ModeToggle";
+import type { ChatEffort } from "../chat/EffortControl";
+import type { ChatModel } from "../chat/ModelChip";
 import type { ChatTabInfo } from "../chat/ChatTabStrip";
 import type { ChatTurn } from "../chat/types";
+import { readEditAuto } from "../chat/EditAutoToggle";
+import { dispatchModeChange } from "../chat/ModeToggle";
 import { useChatStream } from "../../hooks/useChatStream";
 import { listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
+import { parseSlashCommand } from "../../lib/slashCommands";
+import { useToasts } from "../../hooks/useToasts";
 import type { ContainerRecord, DiffEvent, NamedSession } from "../../lib/types";
 
 interface Props {
@@ -232,34 +238,94 @@ function ChatThreadWrapper({
   const sessionId = activeNamedSession.session_id;
   const { turns, clearTurns } = useChatStream(sessionId);
   const [pending, setPending] = useState(false);
-  const mode: ChatMode =
-    typeof window !== "undefined"
-      ? ((window.localStorage.getItem(`hive:chat:${sessionId}:mode`) as ChatMode | null) ?? "code")
-      : "code";
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const { toast } = useToasts();
+
+  function readMode(): ChatMode {
+    if (typeof window === "undefined") return "code";
+    const v = window.localStorage.getItem(`hive:chat:${sessionId}:mode`);
+    return v === "review" || v === "plan" ? v : "code";
+  }
+  function readEffort(): ChatEffort {
+    if (typeof window === "undefined") return "standard";
+    const v = window.localStorage.getItem(`hive:chat:${sessionId}:effort`);
+    return v === "quick" || v === "deep" || v === "max" ? v : "standard";
+  }
+  function readModel(): ChatModel {
+    if (typeof window === "undefined") return "sonnet-4-6";
+    const v = window.localStorage.getItem(`hive:chat:${sessionId}:model`);
+    return v === "opus-4-7" || v === "haiku-4-5" ? v : "sonnet-4-6";
+  }
+  function writeMode(next: ChatMode): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(`hive:chat:${sessionId}:mode`, next);
+    dispatchModeChange(sessionId, next);
+  }
+
+  const mode = readMode();
 
   const tabs: ChatTabInfo[] = namedSessions
     .filter((s) => s.kind === "claude")
-    .map((s) => ({
-      id: s.session_id,
-      name: s.name,
-      mode: (typeof window !== "undefined"
-        ? ((window.localStorage.getItem(`hive:chat:${s.session_id}:mode`) as ChatMode | null) ??
-          "code")
-        : "code") as ChatMode,
-    }));
+    .map((s) => {
+      const m =
+        (typeof window !== "undefined"
+          ? (window.localStorage.getItem(`hive:chat:${s.session_id}:mode`) as ChatMode | null)
+          : null) ?? "code";
+      return { id: s.session_id, name: s.name, mode: m };
+    });
 
-  const send = async (text: string) => {
+  const sendToHub = async (rawUserText: string): Promise<void> => {
+    // Append @<path> references for any attachments
+    const attachClause =
+      attachments.length > 0 ? `\n\nAttachments: ${attachments.map((a) => `@${a}`).join(" ")}` : "";
+    const finalText = `${rawUserText}${attachClause}`;
     setPending(true);
     try {
-      await postChatTurn(sessionId, text);
+      await postChatTurn(sessionId, {
+        text: finalText,
+        effort: readEffort(),
+        model: readModel(),
+        mode: readMode(),
+        edit_auto: readEditAuto(sessionId),
+        attachments,
+      });
+      // Clear the chips after a successful send
+      setAttachments([]);
     } finally {
       setPending(false);
     }
   };
 
+  const send = (rawText: string): void => {
+    const action = parseSlashCommand(rawText);
+    switch (action.kind) {
+      case "none":
+        void sendToHub(rawText);
+        return;
+      case "transform-and-send":
+        void sendToHub(action.userText);
+        return;
+      case "set-mode":
+        writeMode(action.mode);
+        if (action.toast) toast("info", action.toast);
+        // Force a re-render so the new mode value re-reads from localStorage
+        setAttachments((prev) => [...prev]);
+        return;
+      case "clear-chat":
+        clearTurns();
+        return;
+      case "toast":
+        toast("info", action.text);
+        return;
+      case "unknown":
+        toast("error", action.reason);
+        return;
+    }
+  };
+
   const retry = (turn: ChatTurn) => {
     clearTurns();
-    void send(turn.text ?? "");
+    void sendToHub(turn.text ?? "");
   };
 
   const fork = (turn: ChatTurn) => {
@@ -276,7 +342,7 @@ function ChatThreadWrapper({
     const next = window.prompt("Edit your message:", turn.text ?? "");
     if (next === null) return;
     clearTurns();
-    void send(next);
+    void sendToHub(next);
   };
 
   return (
@@ -297,6 +363,8 @@ function ChatThreadWrapper({
       onRetry={retry}
       onFork={fork}
       onEdit={edit}
+      attachments={attachments}
+      onAttachmentsChange={setAttachments}
     />
   );
 }

@@ -30,11 +30,32 @@ function readStored(sessionId: string): ChatMode {
   return v === "review" || v === "plan" ? v : "code";
 }
 
+/** Dispatch a custom event so the ModeToggle can react when the mode
+ *  is changed programmatically (e.g. via the /plan slash command). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function dispatchModeChange(sessionId: string, mode: ChatMode): void {
+  window.dispatchEvent(new CustomEvent("hive:mode-change", { detail: { sessionId, mode } }));
+}
+
 export function ModeToggle({ sessionId, onChange }: Props) {
   const [mode, setMode] = useState<ChatMode>(() => readStored(sessionId));
   useEffect(() => {
     setMode(readStored(sessionId));
   }, [sessionId]);
+
+  // React to programmatic mode changes (e.g. /plan slash command) from
+  // the same browser window, which do not fire the standard storage event.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ sessionId: string; mode: ChatMode }>;
+      if (ev.detail?.sessionId === sessionId) {
+        setMode(ev.detail.mode);
+      }
+    };
+    window.addEventListener("hive:mode-change", handler as EventListener);
+    return () => window.removeEventListener("hive:mode-change", handler as EventListener);
+  }, [sessionId]);
+
   const update = (next: ChatMode) => {
     setMode(next);
     window.localStorage.setItem(storageKey(sessionId), next);
