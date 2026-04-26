@@ -114,8 +114,8 @@ export function SettingsView() {
       </header>
       <div className="flex-1 overflow-y-auto p-3 text-xs">
         <section className="mb-6">
-          <h2 className="mb-1 text-[15px] font-semibold text-[#c9d1d9]">Appearance</h2>
-          <p className="mb-3 text-[12px] text-[#6e7681]">
+          <h2 className="mb-1 text-[15px] font-semibold text-primary">Appearance</h2>
+          <p className="mb-3 text-[12px] text-muted">
             Choose how the dashboard looks. System follows your OS preference.
           </p>
           <AppearancePicker />
