@@ -20,6 +20,35 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   };
 }
 
+// M36 — jsdom does not implement matchMedia. The M36 useMediaQuery hook
+// (src/hooks/useMediaQuery.ts) defaults useIsPhone() to true when
+// matchMedia is missing, which would flip every existing test rendering
+// a useIsPhone-aware component to the phone branch. Stub matchMedia to
+// default to DESKTOP behavior (matches=true for any min-width query)
+// so existing M0–M35 tests continue to render their desktop layout.
+//
+// Tests that need to override (e.g. test the phone branch explicitly)
+// can still install their own per-test matchMedia mock — vi.stubGlobal
+// or Object.defineProperty (the useMediaQuery hook test in T2 uses the
+// latter pattern and that pattern is unaffected by this default).
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (query: string) => ({
+      media: query,
+      // Default to desktop: any min-width query matches.
+      matches: query.includes("min-width"),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => true,
+      onchange: null,
+    }),
+  });
+}
+
 // cmdk calls scrollIntoView on list items. jsdom stubs it as undefined.
 if (typeof Element.prototype.scrollIntoView === "undefined") {
   Element.prototype.scrollIntoView = () => {};
