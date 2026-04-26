@@ -14,10 +14,11 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useContainerFileIndex } from "../hooks/useContainerFileIndex";
 import { useContainerSuggestions } from "../hooks/useContainerSuggestions";
+import { useTheme } from "../lib/theme";
 import type { ContainerRecord } from "../lib/types";
 import type { Activity } from "./ActivityBar";
 
@@ -28,7 +29,7 @@ interface PaletteCommand {
   title: string;
   subtitle?: string;
   shortcut?: string;
-  group: "Containers" | "Activity" | "Sessions" | "Discover" | "Suggestions";
+  group: "Containers" | "Activity" | "Sessions" | "Discover" | "Suggestions" | "Appearance";
   run: () => void;
 }
 
@@ -82,6 +83,30 @@ export function CommandPalette({
 }: Props) {
   const [rawInput, setRawInput] = useState("");
   const { mode, search, showHelp } = parseInput(rawInput);
+
+  // setPreference is stable across renders (useCallback with [] deps in theme.ts),
+  // so we can depend on it directly without a ref dance.
+  const { setPreference: setThemePreference } = useTheme();
+
+  // Global keyboard shortcuts ⌘⇧L / ⌘⇧D / ⌘⇧S (active whether or not the palette is open)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "l") {
+        e.preventDefault();
+        setThemePreference("light");
+      } else if (k === "d") {
+        e.preventDefault();
+        setThemePreference("dark");
+      } else if (k === "s") {
+        e.preventDefault();
+        setThemePreference("system");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [setThemePreference]);
 
   const fileIndex = useContainerFileIndex(activeContainerId, {
     enabled: mode === "file" && activeContainerId !== null,
@@ -152,6 +177,32 @@ export function CommandPalette({
       group: "Discover",
       run: onOpenProvisioner,
     });
+    items.push(
+      {
+        id: "theme:light",
+        title: "Switch to Light theme",
+        subtitle: "Warm Workshop palette",
+        shortcut: "⌘ ⇧ L",
+        group: "Appearance",
+        run: () => setThemePreference("light"),
+      },
+      {
+        id: "theme:dark",
+        title: "Switch to Dark theme",
+        subtitle: "Existing aesthetic",
+        shortcut: "⌘ ⇧ D",
+        group: "Appearance",
+        run: () => setThemePreference("dark"),
+      },
+      {
+        id: "theme:system",
+        title: "Use System theme",
+        subtitle: "Follow OS preference",
+        shortcut: "⌘ ⇧ S",
+        group: "Appearance",
+        run: () => setThemePreference("system"),
+      },
+    );
     return items;
   }, [
     containers,
@@ -162,6 +213,7 @@ export function CommandPalette({
     onActivity,
     onOpenProvisioner,
     onRunSuggestion,
+    setThemePreference,
   ]);
 
   // Top-to-bottom group order. Suggestions first — they're the most
@@ -169,8 +221,14 @@ export function CommandPalette({
   const groupOrder: PaletteCommand["group"][] = useMemo(
     () =>
       (activeName
-        ? ["Suggestions", "Containers", "Sessions", "Activity", "Discover"]
-        : ["Containers", "Sessions", "Activity", "Discover"]) as PaletteCommand["group"][],
+        ? ["Suggestions", "Containers", "Sessions", "Activity", "Discover", "Appearance"]
+        : [
+            "Containers",
+            "Sessions",
+            "Activity",
+            "Discover",
+            "Appearance",
+          ]) as PaletteCommand["group"][],
     [activeName],
   );
 

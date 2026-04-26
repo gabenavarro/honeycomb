@@ -4,6 +4,7 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@ta
 import "./index.css";
 import App from "./App";
 import { ToastProvider } from "./hooks/useToasts";
+import { ThemeProvider } from "./lib/theme";
 
 // Deferred until after the provider tree mounts so caches can access the
 // toast context. We stash a setter that the provider populates on mount.
@@ -64,9 +65,11 @@ function ToastRelayBinder() {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ToastRelayInstaller>
-        <App />
-      </ToastRelayInstaller>
+      <ThemeProvider>
+        <ToastRelayInstaller>
+          <App />
+        </ToastRelayInstaller>
+      </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

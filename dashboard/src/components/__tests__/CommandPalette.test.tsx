@@ -1,13 +1,15 @@
-/** CommandPalette tests — M23 mode transitions.
+/** CommandPalette tests — M23 mode transitions + M31 theme commands.
  *
  * We stub both the file-index hook and the suggestion hook so the
  * cmdk rendering logic is exercised independent of the network.
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ThemeProvider, THEME_STORAGE_KEY } from "../../lib/theme";
 
 import type { UseContainerFileIndexResult } from "../../hooks/useContainerFileIndex";
 import type { ContainerSuggestion } from "../../hooks/useContainerSuggestions";
@@ -42,45 +44,63 @@ function renderPalette(
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const noop = () => {};
   return render(
-    <QueryClientProvider client={qc}>
-      <CommandPalette
-        open
-        onClose={noop}
-        containers={[
-          {
-            id: 1,
-            workspace_folder: "/w",
-            project_type: "base",
-            project_name: "demo",
-            project_description: "",
-            git_repo_url: null,
-            container_id: "dead",
-            container_status: "running",
-            agent_status: "idle",
-            agent_port: 0,
-            has_gpu: false,
-            has_claude_cli: true,
-            claude_cli_checked_at: null,
-            created_at: "",
-            updated_at: "",
-            agent_expected: false,
-          },
-        ]}
-        activeContainerId={1}
-        activeWorkdir="/w"
-        onFocusContainer={noop}
-        onCloseContainer={noop}
-        onNewClaudeSession={noop}
-        onActivity={noop}
-        onOpenProvisioner={noop}
-        onOpenFile={overrides.onOpenFile ?? noop}
-        onRunSuggestion={overrides.onRunSuggestion ?? noop}
-      />
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={qc}>
+        <CommandPalette
+          open
+          onClose={noop}
+          containers={[
+            {
+              id: 1,
+              workspace_folder: "/w",
+              project_type: "base",
+              project_name: "demo",
+              project_description: "",
+              git_repo_url: null,
+              container_id: "dead",
+              container_status: "running",
+              agent_status: "idle",
+              agent_port: 0,
+              has_gpu: false,
+              has_claude_cli: true,
+              claude_cli_checked_at: null,
+              created_at: "",
+              updated_at: "",
+              agent_expected: false,
+            },
+          ]}
+          activeContainerId={1}
+          activeWorkdir="/w"
+          onFocusContainer={noop}
+          onCloseContainer={noop}
+          onNewClaudeSession={noop}
+          onActivity={noop}
+          onOpenProvisioner={noop}
+          onOpenFile={overrides.onOpenFile ?? noop}
+          onRunSuggestion={overrides.onRunSuggestion ?? noop}
+        />
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 }
 
 beforeEach(() => {
+  // Reset localStorage and data-theme for theme tests
+  window.localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+  // Stub matchMedia so ThemeProvider doesn't throw in jsdom
+  window.matchMedia = (q: string) =>
+    ({
+      matches: false,
+      media: q,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => true,
+      onchange: null,
+    }) as unknown as MediaQueryList;
+
   mockUseFileIndex.mockReturnValue({
     entries: [],
     truncated: false,
@@ -158,5 +178,40 @@ describe("CommandPalette — M23", () => {
     expect(screen.queryByText("Containers")).not.toBeInTheDocument();
     await userEvent.clear(input);
     expect(screen.getByText("Containers")).toBeInTheDocument();
+  });
+});
+
+describe("CommandPalette — M31 theme commands", () => {
+  it("lists the three appearance commands", () => {
+    renderPalette();
+    expect(screen.getByText(/Switch to Light theme/i)).toBeTruthy();
+    expect(screen.getByText(/Switch to Dark theme/i)).toBeTruthy();
+    expect(screen.getByText(/Use System theme/i)).toBeTruthy();
+  });
+
+  it("clicking 'Switch to Light theme' sets preference to light", () => {
+    renderPalette();
+    fireEvent.click(screen.getByText(/Switch to Light theme/i));
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  });
+
+  it("⌘⇧L keyboard shortcut sets preference to light", () => {
+    renderPalette();
+    fireEvent.keyDown(window, { key: "L", metaKey: true, shiftKey: true });
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
+  });
+
+  it("⌘⇧D keyboard shortcut sets preference to dark", () => {
+    renderPalette();
+    fireEvent.keyDown(window, { key: "D", metaKey: true, shiftKey: true });
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+  });
+
+  it("⌘⇧S keyboard shortcut clears preference to system", () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    renderPalette();
+    fireEvent.keyDown(window, { key: "S", metaKey: true, shiftKey: true });
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
   });
 });
