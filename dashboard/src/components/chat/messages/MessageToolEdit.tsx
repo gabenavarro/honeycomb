@@ -26,10 +26,7 @@ function buildUnifiedDiff(oldText: string, newText: string, filePath: string): s
   const newLines = newText.split("\n");
   const header = `--- a/${filePath}\n+++ b/${filePath}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
   const body =
-    oldLines.map((l) => `-${l}`).join("\n") +
-    "\n" +
-    newLines.map((l) => `+${l}`).join("\n") +
-    "\n";
+    oldLines.map((l) => `-${l}`).join("\n") + "\n" + newLines.map((l) => `+${l}`).join("\n") + "\n";
   return header + body;
 }
 
@@ -47,7 +44,7 @@ export function MessageToolEdit({ block }: Props) {
     body = <pre className="text-secondary">Streaming…</pre>;
   } else if (totalLines > COLLAPSE_THRESHOLD_LINES) {
     body = (
-      <div className="text-[11px] text-secondary">
+      <div className="text-secondary text-[11px]">
         <span className="font-mono">{filePath}</span> — {oldText.split("\n").length} →{" "}
         {newText.split("\n").length} lines
       </div>

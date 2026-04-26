@@ -24,7 +24,7 @@ export function MessageToolGeneric({ block }: Props) {
       borderAccent="border-tool/30"
       complete={block.complete}
     >
-      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-secondary">
+      <pre className="text-secondary font-mono text-[11px] break-words whitespace-pre-wrap">
         {JSON.stringify(parsed, null, 2)}
       </pre>
     </ToolBlockChrome>

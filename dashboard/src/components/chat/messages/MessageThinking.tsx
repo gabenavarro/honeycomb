@@ -11,22 +11,22 @@ export function MessageThinking({ thinking, streaming }: Props) {
   const [open, setOpen] = useState(false);
   const oneLine = thinking.split("\n")[0]?.slice(0, 120) ?? "";
   return (
-    <div className="rounded border border-edge-soft bg-card">
+    <div className="border-edge-soft bg-card rounded border">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Toggle thinking block"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-think hover:bg-chip"
+        className="text-think hover:bg-chip flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px]"
       >
         {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
         <Sparkles size={11} />
-        <span className="font-semibold uppercase tracking-wider">Thinking</span>
-        {!open && <span className="truncate text-muted normal-case">{oneLine}</span>}
-        {streaming && <span className="ml-auto text-think">streaming…</span>}
+        <span className="font-semibold tracking-wider uppercase">Thinking</span>
+        {!open && <span className="text-muted truncate normal-case">{oneLine}</span>}
+        {streaming && <span className="text-think ml-auto">streaming…</span>}
       </button>
       {open && (
-        <pre className="border-t border-edge-soft px-3 py-2 font-mono text-[11px] italic text-secondary whitespace-pre-wrap">
+        <pre className="border-edge-soft text-secondary border-t px-3 py-2 font-mono text-[11px] whitespace-pre-wrap italic">
           {thinking}
         </pre>
       )}

@@ -13,14 +13,9 @@ interface Props {
   onSelectContainer: (id: number) => void;
 }
 
-export function ChatHeader({
-  sessionId,
-  containers,
-  activeContainerId,
-  onSelectContainer,
-}: Props) {
+export function ChatHeader({ sessionId, containers, activeContainerId, onSelectContainer }: Props) {
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-edge bg-pane px-3 py-1.5">
+    <header className="border-edge bg-pane flex items-center justify-between gap-3 border-b px-3 py-1.5">
       <WorkspacePill
         containers={containers}
         activeContainerId={activeContainerId}
@@ -33,7 +28,7 @@ export function ChatHeader({
           type="button"
           title="History (M35)"
           aria-label="Chat history"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <History size={14} aria-hidden="true" />
         </button>
@@ -41,14 +36,14 @@ export function ChatHeader({
           type="button"
           title="Compact context"
           aria-label="Compact context"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <Compass size={14} aria-hidden="true" />
         </button>
         <button
           type="button"
           aria-label="More actions"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <MoreHorizontal size={14} aria-hidden="true" />
         </button>

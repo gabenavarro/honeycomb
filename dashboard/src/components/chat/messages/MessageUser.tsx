@@ -16,10 +16,10 @@ export function MessageUser({ turn }: Props) {
     <div
       role="article"
       aria-label="User message"
-      className="ml-auto max-w-[78%] rounded-lg border border-edge bg-card px-3 py-2 text-[13px] text-primary"
+      className="border-edge bg-card text-primary ml-auto max-w-[78%] rounded-lg border px-3 py-2 text-[13px]"
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">You</div>
-      <div className="mt-1 whitespace-pre-wrap break-words">{text}</div>
+      <div className="text-muted text-[10px] font-semibold tracking-wider uppercase">You</div>
+      <div className="mt-1 break-words whitespace-pre-wrap">{text}</div>
     </div>
   );
 }

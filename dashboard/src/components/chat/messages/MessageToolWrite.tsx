@@ -34,14 +34,14 @@ export function MessageToolWrite({ block }: Props) {
       complete={block.complete}
     >
       <div className="space-y-1 font-mono text-[11.5px]">
-        <pre className="whitespace-pre-wrap break-words rounded bg-input px-2 py-1 text-primary">
+        <pre className="bg-input text-primary rounded px-2 py-1 break-words whitespace-pre-wrap">
           {visible}
         </pre>
         {!expanded && hidden > 0 && (
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="text-[10px] text-secondary hover:text-primary"
+            className="text-secondary hover:text-primary text-[10px]"
           >
             Show {hidden} more lines
           </button>

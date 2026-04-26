@@ -21,9 +21,7 @@ describe("MessageAssistantText", () => {
   });
 
   it("renders a streaming cursor when turn.streaming is true", () => {
-    const { container } = render(
-      <MessageAssistantText turn={{ ...baseTurn, streaming: true }} />,
-    );
+    const { container } = render(<MessageAssistantText turn={{ ...baseTurn, streaming: true }} />);
     // The cursor is an aria-hidden span with animate-pulse — find by class
     const cursor = container.querySelector("span.animate-pulse");
     expect(cursor).toBeTruthy();

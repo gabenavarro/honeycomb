@@ -34,7 +34,7 @@ export function MessageActions({ turn, onRetry, onFork, onCopy, onEdit }: Props)
           onClick={onRetry}
           aria-label="Retry"
           title="Retry"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <RotateCcw size={11} aria-hidden="true" />
         </button>
@@ -45,7 +45,7 @@ export function MessageActions({ turn, onRetry, onFork, onCopy, onEdit }: Props)
           onClick={onFork}
           aria-label="Fork"
           title="Fork from this message"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <GitBranch size={11} aria-hidden="true" />
         </button>
@@ -56,7 +56,7 @@ export function MessageActions({ turn, onRetry, onFork, onCopy, onEdit }: Props)
           onClick={onCopy}
           aria-label="Copy"
           title="Copy"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <Copy size={11} aria-hidden="true" />
         </button>
@@ -67,7 +67,7 @@ export function MessageActions({ turn, onRetry, onFork, onCopy, onEdit }: Props)
           onClick={onEdit}
           aria-label="Edit"
           title="Edit"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <Pencil size={11} aria-hidden="true" />
         </button>

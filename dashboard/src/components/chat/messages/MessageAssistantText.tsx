@@ -14,14 +14,14 @@ export function MessageAssistantText({ turn }: Props) {
     .map((b) => (b as { kind: "text"; text: string }).text)
     .join("");
   return (
-    <div role="article" aria-label="Assistant message" className="text-[13px] text-primary">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-claude">Claude</div>
-      <div className="mt-1 whitespace-pre-wrap break-words">
+    <div role="article" aria-label="Assistant message" className="text-primary text-[13px]">
+      <div className="text-claude text-[10px] font-semibold tracking-wider uppercase">Claude</div>
+      <div className="mt-1 break-words whitespace-pre-wrap">
         {text}
         {turn.streaming && (
           <span
             aria-hidden="true"
-            className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-claude align-middle"
+            className="bg-claude ml-0.5 inline-block h-3 w-1 animate-pulse align-middle"
           />
         )}
       </div>

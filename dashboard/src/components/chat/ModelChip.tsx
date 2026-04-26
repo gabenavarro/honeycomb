@@ -47,7 +47,7 @@ export function ModelChip({ sessionId }: Props) {
       type="button"
       onClick={cycle}
       title="Model selection (full picker arrives in M34)"
-      className="inline-flex items-center gap-1 rounded-md border border-edge bg-pane px-2 py-1 text-[11px] text-primary hover:bg-chip"
+      className="border-edge bg-pane text-primary hover:bg-chip inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px]"
     >
       <Sparkles size={11} aria-hidden="true" className="text-claude" />
       <span>★ {MODEL_LABELS[model]}</span>

@@ -27,11 +27,11 @@ export function MessageToolTask({ block }: Props) {
       borderAccent="border-task/30"
       complete={block.complete}
     >
-      <details className="text-[11.5px] text-secondary">
-        <summary className="cursor-pointer text-[10px] uppercase tracking-wider text-muted">
+      <details className="text-secondary text-[11.5px]">
+        <summary className="text-muted cursor-pointer text-[10px] tracking-wider uppercase">
           Prompt
         </summary>
-        <pre className="mt-1 whitespace-pre-wrap break-words rounded bg-input px-2 py-1 text-primary">
+        <pre className="bg-input text-primary mt-1 rounded px-2 py-1 break-words whitespace-pre-wrap">
           {prompt}
         </pre>
       </details>

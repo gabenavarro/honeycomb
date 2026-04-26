@@ -29,7 +29,7 @@ export function MessageToolRead({ block }: Props) {
       borderAccent="border-read/30"
       complete={block.complete}
     >
-      <div className="text-[11px] text-secondary">
+      <div className="text-secondary text-[11px]">
         <span className="font-mono">{filePath}</span>
         {range && <span className="ml-2">{range}</span>}
       </div>

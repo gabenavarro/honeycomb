@@ -65,7 +65,12 @@ describe("useChatStream", () => {
     act(() => {
       emit("chat:ns-1", {
         type: "user",
-        message: { id: "msg-u1", type: "message", role: "user", content: [{ type: "text", text: "hi" }] },
+        message: {
+          id: "msg-u1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
         session_id: "claude-s",
         uuid: "u-1",
       });
@@ -115,13 +120,21 @@ describe("useChatStream", () => {
       });
       emit("chat:ns-1", {
         type: "stream_event",
-        event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hello" } },
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "Hello" },
+        },
         session_id: "s",
         uuid: "u-3",
       });
       emit("chat:ns-1", {
         type: "stream_event",
-        event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: " world." } },
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: " world." },
+        },
         session_id: "s",
         uuid: "u-4",
       });
@@ -246,7 +259,12 @@ describe("useChatStream", () => {
     act(() => {
       emit("chat:ns-1", {
         type: "user",
-        message: { id: "m", type: "message", role: "user", content: [{ type: "text", text: "hi" }] },
+        message: {
+          id: "m",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
         session_id: "s",
         uuid: "u",
       });

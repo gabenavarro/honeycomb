@@ -44,7 +44,7 @@ export function ModeToggle({ sessionId, onChange }: Props) {
     <div
       role="radiogroup"
       aria-label="Chat mode"
-      className="inline-flex items-center rounded-md border border-edge bg-pane p-0.5"
+      className="border-edge bg-pane inline-flex items-center rounded-md border p-0.5"
     >
       {MODES.map((m) => {
         const active = m === mode;

@@ -36,10 +36,7 @@ describe("ChatStream", () => {
 
   it("delegates to renderTurn when provided", () => {
     render(
-      <ChatStream
-        turns={[userTurn]}
-        renderTurn={(t) => <div data-testid="custom">{t.id}</div>}
-      />,
+      <ChatStream turns={[userTurn]} renderTurn={(t) => <div data-testid="custom">{t.id}</div>} />,
     );
     expect(screen.getByTestId("custom").textContent).toBe("user-1");
   });

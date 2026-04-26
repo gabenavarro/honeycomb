@@ -27,8 +27,8 @@ export function MessageToolBash({ block }: Props) {
       complete={block.complete}
     >
       <div className="space-y-1 font-mono text-[11.5px]">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Input</div>
-        <pre className="whitespace-pre-wrap break-words rounded bg-input px-2 py-1 text-primary">
+        <div className="text-muted text-[10px] font-semibold tracking-wider uppercase">Input</div>
+        <pre className="bg-input text-primary rounded px-2 py-1 break-words whitespace-pre-wrap">
           {command}
         </pre>
       </div>

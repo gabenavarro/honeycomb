@@ -31,13 +31,11 @@ export function ToolBlockChrome({
   return (
     <div className={`overflow-hidden rounded border ${borderAccent} bg-card`}>
       <header
-        className={`flex items-center gap-2 border-b border-edge-soft bg-pane px-3 py-1 text-[11px] ${accent}`}
+        className={`border-edge-soft bg-pane flex items-center gap-2 border-b px-3 py-1 text-[11px] ${accent}`}
       >
         <span aria-hidden="true">{icon}</span>
-        <span className="font-semibold uppercase tracking-wider">{name}</span>
-        {target && (
-          <span className="truncate font-mono text-secondary normal-case">{target}</span>
-        )}
+        <span className="font-semibold tracking-wider uppercase">{name}</span>
+        {target && <span className="text-secondary truncate font-mono normal-case">{target}</span>}
         <span className="ml-auto">
           {complete ? (
             <CheckCircle size={11} aria-label="Complete" />
@@ -46,7 +44,7 @@ export function ToolBlockChrome({
           )}
         </span>
       </header>
-      {children && <div className="px-3 py-2 text-[12px] text-primary">{children}</div>}
+      {children && <div className="text-primary px-3 py-2 text-[12px]">{children}</div>}
     </div>
   );
 }

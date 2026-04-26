@@ -29,7 +29,7 @@ export function ChatStream({ turns, renderTurn }: Props) {
   if (turns.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-secondary">No turns yet — say something to start the chat.</p>
+        <p className="text-secondary text-sm">No turns yet — say something to start the chat.</p>
       </div>
     );
   }
@@ -51,15 +51,15 @@ export function ChatStream({ turns, renderTurn }: Props) {
 function PlaceholderTurn({ turn }: { turn: ChatTurn }) {
   return (
     <div
-      className={`rounded border border-edge bg-card px-3 py-2 text-[12px] ${
-        turn.role === "user" ? "ml-auto max-w-[78%] text-primary" : "text-primary"
+      className={`border-edge bg-card rounded border px-3 py-2 text-[12px] ${
+        turn.role === "user" ? "text-primary ml-auto max-w-[78%]" : "text-primary"
       }`}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <div className="text-muted text-[10px] font-semibold tracking-wider uppercase">
         {turn.role === "user" ? "You" : "Claude"}
-        {turn.streaming && <span className="ml-2 text-think">streaming…</span>}
+        {turn.streaming && <span className="text-think ml-2">streaming…</span>}
       </div>
-      <div className="mt-1 font-mono text-[11px] text-secondary">
+      <div className="text-secondary mt-1 font-mono text-[11px]">
         blocks: {turn.blocks.length} · {turn.streaming ? "in flight" : "complete"}
       </div>
     </div>

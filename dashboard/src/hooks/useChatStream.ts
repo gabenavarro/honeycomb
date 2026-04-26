@@ -16,12 +16,7 @@
 
 import { useCallback, useEffect, useReducer } from "react";
 
-import type {
-  ChatCliEvent,
-  ChatTurn,
-  ChatBlock,
-  StreamEventInner,
-} from "../components/chat/types";
+import type { ChatCliEvent, ChatTurn, ChatBlock, StreamEventInner } from "../components/chat/types";
 import { useHiveWebSocket } from "./useWebSocket";
 
 export interface UseChatStreamResult {
@@ -31,9 +26,7 @@ export interface UseChatStreamResult {
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 
-type Action =
-  | { type: "event"; payload: ChatCliEvent }
-  | { type: "clear" };
+type Action = { type: "event"; payload: ChatCliEvent } | { type: "clear" };
 
 function reducer(prev: ChatTurn[], action: Action): ChatTurn[] {
   if (action.type === "clear") return [];

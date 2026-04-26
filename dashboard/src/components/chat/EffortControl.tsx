@@ -42,7 +42,7 @@ export function EffortControl({ sessionId }: Props) {
     <div
       role="radiogroup"
       aria-label="Effort"
-      className="inline-flex items-center rounded-md border border-edge bg-pane p-0.5"
+      className="border-edge bg-pane inline-flex items-center rounded-md border p-0.5"
     >
       {EFFORTS.map((e) => {
         const active = e === effort;
