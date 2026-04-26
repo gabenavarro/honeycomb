@@ -33,6 +33,84 @@ class TestBuildCommand:
         assert "--resume" in cmd
         assert cmd[cmd.index("--resume") + 1] == "sess-001"
 
+    # ── M34 additions ──────────────────────────────────────────────
+
+    def test_quick_effort_adds_max_budget_flag(self) -> None:
+        cmd = build_command(claude_session_id=None, effort="quick")
+        assert "--max-budget-usd" in cmd
+        assert cmd[cmd.index("--max-budget-usd") + 1] == "0.05"
+
+    def test_standard_effort_no_extra_flags(self) -> None:
+        cmd = build_command(claude_session_id=None, effort="standard")
+        assert "--max-budget-usd" not in cmd
+        assert "--append-system-prompt" not in cmd
+
+    def test_deep_effort_no_flag(self) -> None:
+        cmd = build_command(claude_session_id=None, effort="deep")
+        assert "--max-budget-usd" not in cmd
+
+    def test_max_effort_no_flag(self) -> None:
+        cmd = build_command(claude_session_id=None, effort="max")
+        assert "--max-budget-usd" not in cmd
+
+    def test_model_flag_passed_through(self) -> None:
+        cmd = build_command(claude_session_id=None, model="opus-4-7")
+        assert "--model" in cmd
+        assert cmd[cmd.index("--model") + 1] == "opus-4-7"
+
+    def test_model_1m_alias_passed_through(self) -> None:
+        cmd = build_command(claude_session_id=None, model="claude-opus-4-7[1m]")
+        assert "--model" in cmd
+        assert cmd[cmd.index("--model") + 1] == "claude-opus-4-7[1m]"
+
+    def test_no_model_no_flag(self) -> None:
+        cmd = build_command(claude_session_id=None)
+        assert "--model" not in cmd
+
+    def test_plan_mode_sets_permission_mode_plan(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="plan")
+        assert "--permission-mode" in cmd
+        assert cmd[cmd.index("--permission-mode") + 1] == "plan"
+
+    def test_plan_mode_overrides_edit_auto(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="plan", edit_auto=True)
+        assert cmd[cmd.index("--permission-mode") + 1] == "plan"
+
+    def test_edit_auto_in_code_mode_sets_acceptEdits(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="code", edit_auto=True)
+        assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"
+
+    def test_code_mode_no_edit_auto_no_permission_flag(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="code", edit_auto=False)
+        assert "--permission-mode" not in cmd
+
+    def test_review_mode_appends_system_prompt(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="review")
+        assert "--append-system-prompt" in cmd
+        prompt = cmd[cmd.index("--append-system-prompt") + 1]
+        assert "reviewing code" in prompt
+        # Review uses the default permission chain (no edit_auto here)
+        assert "--permission-mode" not in cmd
+
+    def test_review_mode_with_edit_auto_sets_acceptEdits(self) -> None:
+        cmd = build_command(claude_session_id=None, mode="review", edit_auto=True)
+        assert cmd[cmd.index("--permission-mode") + 1] == "acceptEdits"
+        assert "--append-system-prompt" in cmd
+
+    def test_resume_still_works_with_all_extras(self) -> None:
+        cmd = build_command(
+            claude_session_id="sess-001",
+            effort="quick",
+            model="sonnet-4-6",
+            mode="plan",
+            edit_auto=True,
+        )
+        assert "--resume" in cmd
+        assert cmd[cmd.index("--resume") + 1] == "sess-001"
+        assert "--max-budget-usd" in cmd
+        assert "--model" in cmd
+        assert cmd[cmd.index("--permission-mode") + 1] == "plan"  # plan wins
+
 
 class TestClaudeTurnSession:
     @pytest.mark.asyncio

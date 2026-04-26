@@ -133,11 +133,29 @@ class TurnResult:
     forwarded_count: int
 
 
-def build_command(claude_session_id: str | None, claude_binary: str = "claude") -> list[str]:
-    """Build the argv for a single chat turn.
+def build_command(
+    claude_session_id: str | None,
+    *,
+    effort: str = "standard",
+    model: str | None = None,
+    mode: str = "code",
+    edit_auto: bool = False,
+    claude_binary: str = "claude",
+) -> list[str]:
+    """Build the argv for a single chat turn (M34 extended).
 
-    The first turn (no resume) creates a new Claude session; subsequent
-    turns resume that session so context is preserved.
+    Honors:
+      - claude_session_id  → --resume <id>  (only on turn ≥2)
+      - effort             → --max-budget-usd 0.05 when "quick"
+                             (deep / max are handled by apply_effort_prefix
+                              on the user text, not as a CLI flag — the
+                              CLI doesn't expose a thinking-budget knob)
+      - model              → --model <alias>
+      - mode + edit_auto:
+          - mode == "plan"          → --permission-mode plan  (precedence)
+          - elif edit_auto          → --permission-mode acceptEdits
+          - else                    → no --permission-mode flag (default)
+        Plus mode == "review" appends a system-prompt nudge.
     """
     cmd = [
         claude_binary,
@@ -150,8 +168,32 @@ def build_command(claude_session_id: str | None, claude_binary: str = "claude") 
         "--include-partial-messages",
         "--replay-user-messages",
     ]
+
+    # Permission mode (Plan wins over edit_auto)
+    if mode == "plan":
+        cmd += ["--permission-mode", "plan"]
+    elif edit_auto:
+        cmd += ["--permission-mode", "acceptEdits"]
+
+    # Model
+    if model:
+        cmd += ["--model", model]
+
+    # Quick effort = dollar cap. Deep/Max use apply_effort_prefix instead.
+    if effort == "quick":
+        cmd += ["--max-budget-usd", "0.05"]
+
+    # Review mode: append system-prompt nudge
+    if mode == "review":
+        cmd += [
+            "--append-system-prompt",
+            "You are reviewing code; suggest improvements without writing them.",
+        ]
+
+    # Resume (last so it groups visually with the rest of the session args)
     if claude_session_id:
         cmd += ["--resume", claude_session_id]
+
     return cmd
 
 
