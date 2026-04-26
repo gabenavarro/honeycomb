@@ -36,8 +36,8 @@ interface Props {
   onRetry: (turn: ChatTurn) => void;
   onFork: (turn: ChatTurn) => void;
   onEdit: (turn: ChatTurn) => void;
-  attachments?: string[];
-  onAttachmentsChange?: (next: string[]) => void;
+  attachments: string[];
+  onAttachmentsChange: (next: string[]) => void;
 }
 
 export function ChatThread({
@@ -122,8 +122,8 @@ export function ChatThread({
         mode={mode}
         disabled={pending}
         onSend={onSend}
-        attachments={attachments ?? []}
-        onAttachmentsChange={onAttachmentsChange ?? (() => undefined)}
+        attachments={attachments}
+        onAttachmentsChange={onAttachmentsChange}
       />
     </div>
   );
