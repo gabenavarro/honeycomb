@@ -100,9 +100,9 @@ export function ConnectivityChip({ activeContainerId }: Props) {
           side="top"
           align="start"
           sideOffset={6}
-          className="z-50 w-72 rounded-md border border-edge bg-page p-3 text-[11px] text-primary shadow-xl outline-none"
+          className="border-edge bg-page text-primary z-50 w-72 rounded-md border p-3 text-[11px] shadow-xl outline-none"
         >
-          <h4 className="mb-2 text-[10px] font-semibold tracking-wider text-secondary uppercase">
+          <h4 className="text-secondary mb-2 text-[10px] font-semibold tracking-wider uppercase">
             Connectivity
           </h4>
           <ul className="space-y-1.5">

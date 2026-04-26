@@ -257,7 +257,7 @@ function RenameInput({
           onCancel();
         }
       }}
-      className="flex-1 rounded border border-edge bg-page px-1.5 py-0.5 text-sm text-primary focus:border-accent focus:outline-none"
+      className="border-edge bg-page text-primary focus:border-accent flex-1 rounded border px-1.5 py-0.5 text-sm focus:outline-none"
       aria-label="Rename container"
     />
   );

@@ -49,7 +49,11 @@ interface RailEntry {
   /** True when this entry should appear "pressed" given the current activity. */
   isActive: (a: Activity) => boolean;
   /** Numeric badge shown over the icon, or null. */
-  badgeFor: (counts: { containerCount: number; prCount: number; problemCount: number }) => number | null;
+  badgeFor: (counts: {
+    containerCount: number;
+    prCount: number;
+    problemCount: number;
+  }) => number | null;
 }
 
 const TOP_ENTRIES: readonly RailEntry[] = [
@@ -105,7 +109,7 @@ export function ActivityBar({
   return (
     <nav
       aria-label="Activity bar"
-      className="flex w-12 shrink-0 flex-col items-center justify-between border-r border-edge bg-pane py-2"
+      className="border-edge bg-pane flex w-12 shrink-0 flex-col items-center justify-between border-r py-2"
     >
       <ul className="flex flex-col gap-1">
         {TOP_ENTRIES.map((item) => (
@@ -158,13 +162,13 @@ function ActivityButton({
         aria-pressed={isActive}
         className={`relative flex h-10 w-10 items-center justify-center rounded transition-colors ${
           isActive
-            ? "bg-chip text-primary before:absolute before:top-2 before:left-0 before:h-6 before:w-0.5 before:bg-accent"
+            ? "bg-chip text-primary before:bg-accent before:absolute before:top-2 before:left-0 before:h-6 before:w-0.5"
             : "text-secondary hover:bg-chip hover:text-primary"
         }`}
       >
         {item.icon}
         {badge !== null && (
-          <span className="absolute top-1 right-1 rounded-full bg-accent px-1 text-[8px] leading-none font-bold text-white">
+          <span className="bg-accent absolute top-1 right-1 rounded-full px-1 text-[8px] leading-none font-bold text-white">
             {badge > 99 ? "99+" : badge}
           </span>
         )}

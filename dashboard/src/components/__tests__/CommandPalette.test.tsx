@@ -75,7 +75,9 @@ function renderPalette(
           onFocusContainer={noop}
           onCloseContainer={noop}
           onNewClaudeSession={noop}
-          onActivity={(overrides.onActivity as Parameters<typeof CommandPalette>[0]["onActivity"]) ?? noop}
+          onActivity={
+            (overrides.onActivity as Parameters<typeof CommandPalette>[0]["onActivity"]) ?? noop
+          }
           onOpenProvisioner={noop}
           onOpenFile={overrides.onOpenFile ?? noop}
           onRunSuggestion={overrides.onRunSuggestion ?? noop}

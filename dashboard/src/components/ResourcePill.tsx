@@ -77,7 +77,7 @@ export function ResourcePill({ containerId, containerName }: Props) {
           side="top"
           align="end"
           sideOffset={6}
-          className="z-50 w-72 rounded-md border border-edge bg-page p-0 text-primary shadow-xl outline-none"
+          className="border-edge bg-page text-primary z-50 w-72 rounded-md border p-0 shadow-xl outline-none"
         >
           <div className="p-2">
             <ResourceMonitor containerId={containerId} />

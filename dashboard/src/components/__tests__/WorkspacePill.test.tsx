@@ -53,7 +53,10 @@ describe("WorkspacePill", () => {
   it("clicking the pill opens the picker popover", () => {
     render(
       <WorkspacePill
-        containers={[fixture({ id: 1, project_name: "foo" }), fixture({ id: 2, project_name: "bar" })]}
+        containers={[
+          fixture({ id: 1, project_name: "foo" }),
+          fixture({ id: 2, project_name: "bar" }),
+        ]}
         activeContainerId={1}
         onSelectContainer={vi.fn()}
       />,
@@ -69,7 +72,10 @@ describe("WorkspacePill", () => {
     const onSelect = vi.fn();
     render(
       <WorkspacePill
-        containers={[fixture({ id: 1, project_name: "foo" }), fixture({ id: 2, project_name: "bar" })]}
+        containers={[
+          fixture({ id: 1, project_name: "foo" }),
+          fixture({ id: 2, project_name: "bar" }),
+        ]}
         activeContainerId={1}
         onSelectContainer={onSelect}
       />,

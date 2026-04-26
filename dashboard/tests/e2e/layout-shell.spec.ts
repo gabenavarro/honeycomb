@@ -62,7 +62,9 @@ test.beforeEach(async ({ context }) => {
     ([t]) => {
       try {
         window.localStorage.setItem("hive:auth:token", t);
-      } catch {}
+      } catch {
+        // ignore
+      }
     },
     [TOKEN],
   );

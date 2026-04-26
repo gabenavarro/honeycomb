@@ -34,7 +34,7 @@ function Swatch({ value }: { value: ThemePreference }) {
   if (value === "system") {
     return (
       <div
-        className="h-9 w-14 flex-shrink-0 overflow-hidden rounded border border-edge"
+        className="border-edge h-9 w-14 flex-shrink-0 overflow-hidden rounded border"
         style={{
           background: "linear-gradient(135deg, #ffffff 0%, #ffffff 49%, #161b22 51%, #161b22 100%)",
         }}
@@ -53,7 +53,7 @@ function Swatch({ value }: { value: ThemePreference }) {
   }
   return (
     <div
-      className="h-9 w-14 flex-shrink-0 overflow-hidden rounded border border-edge"
+      className="border-edge h-9 w-14 flex-shrink-0 overflow-hidden rounded border"
       style={{
         background: "linear-gradient(135deg, #fdfaf3 0%, #f7f1e3 50%, #f0e9d6 100%)",
       }}
@@ -80,8 +80,8 @@ export function AppearancePicker() {
           >
             <Swatch value={opt.value} />
             <div className="flex-1">
-              <div className="text-[13px] font-medium text-primary">{opt.label}</div>
-              <div className="mt-0.5 text-[11px] text-secondary">{opt.description}</div>
+              <div className="text-primary text-[13px] font-medium">{opt.label}</div>
+              <div className="text-secondary mt-0.5 text-[11px]">{opt.description}</div>
             </div>
             <input
               id={id}

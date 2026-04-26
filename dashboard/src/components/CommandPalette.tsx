@@ -29,7 +29,14 @@ interface PaletteCommand {
   title: string;
   subtitle?: string;
   shortcut?: string;
-  group: "Containers" | "Activity" | "Sessions" | "Discover" | "Suggestions" | "Appearance" | "Routes";
+  group:
+    | "Containers"
+    | "Activity"
+    | "Sessions"
+    | "Discover"
+    | "Suggestions"
+    | "Appearance"
+    | "Routes";
   run: () => void;
 }
 

@@ -28,12 +28,12 @@ export function WorkspacePill({ containers, activeContainerId, onSelectContainer
   const label = active?.project_name ?? "No workspace";
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <div className="flex items-center gap-2 border-b border-edge bg-pane px-3 py-1.5">
+      <div className="border-edge bg-pane flex items-center gap-2 border-b px-3 py-1.5">
         <Popover.Trigger asChild>
           <button
             type="button"
             aria-label={active === null ? "No workspace selected" : label}
-            className="flex max-w-[18rem] items-center gap-1.5 rounded border border-edge bg-chip px-2 py-1 text-[12px] text-primary transition-colors hover:bg-pane focus-visible:outline-2 focus-visible:outline-accent"
+            className="border-edge bg-chip text-primary hover:bg-pane focus-visible:outline-accent flex max-w-[18rem] items-center gap-1.5 rounded border px-2 py-1 text-[12px] transition-colors focus-visible:outline-2"
           >
             <span className="truncate">{label}</span>
             <ChevronDown size={12} aria-hidden="true" />
@@ -44,7 +44,7 @@ export function WorkspacePill({ containers, activeContainerId, onSelectContainer
         <Popover.Content
           align="start"
           sideOffset={4}
-          className="z-50 w-80 overflow-hidden rounded border border-edge bg-pane shadow-medium"
+          className="border-edge bg-pane shadow-medium z-50 w-80 overflow-hidden rounded border"
         >
           <WorkspacePicker
             containers={containers}
