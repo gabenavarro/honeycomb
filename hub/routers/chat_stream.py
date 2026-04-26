@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -37,7 +38,14 @@ _tasks: dict[str, asyncio.Task[None]] = {}
 
 class TurnRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200_000)
-    # M33: attachments are accepted but unused (composer UI parity).
+    # M34: effort/model/mode/edit_auto wire to chat_stream.build_command
+    effort: Literal["quick", "standard", "deep", "max"] = "standard"
+    model: str | None = None
+    mode: Literal["code", "review", "plan"] = "code"
+    edit_auto: bool = False
+    # M34: attachments accepted but unused server-side — the dashboard
+    # appends @<path> references into `text` before sending. Field stays
+    # for forward-compat (M35 may use it for richer context).
     attachments: list[str] = Field(default_factory=list)
 
 
@@ -69,6 +77,10 @@ async def post_turn(session_id: str, body: TurnRequest, request: Request) -> dic
             result = await chat.run(
                 user_text=body.text,
                 claude_session_id=sess.claude_session_id,
+                effort=body.effort,
+                model=body.model,
+                mode=body.mode,
+                edit_auto=body.edit_auto,
             )
             if result.captured_claude_session_id is not None:
                 await set_claude_session_id(
