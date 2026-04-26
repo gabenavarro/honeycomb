@@ -1,4 +1,15 @@
 import "@testing-library/jest-dom/vitest";
+import { configure } from "@testing-library/react";
+
+// WorkspacePicker renders project names in spans marked [data-project-name].
+// When workspace_folder contains the project_name as a substring (e.g.
+// project_name="foo", workspace_folder="/repos/foo"), getByText(/foo/) would
+// match BOTH the name span and the path span. Excluding [data-project-name]
+// from the default text-query ignore list ensures getByText finds only the
+// workspace path span — the unique per-row identifier.
+configure({
+  defaultIgnore: "script, style, [data-project-name]",
+});
 
 // cmdk uses ResizeObserver internally. jsdom does not provide it.
 if (typeof globalThis.ResizeObserver === "undefined") {
