@@ -34,16 +34,19 @@ describe("WorkspacePicker", () => {
       fixture({ id: 2, project_name: "bar", workspace_folder: "/repos/bar" }),
     ];
     render(<WorkspacePicker containers={containers} activeContainerId={1} onSelect={vi.fn()} />);
-    expect(screen.getByText(/foo/)).toBeTruthy();
-    expect(screen.getByText("/repos/foo")).toBeTruthy();
-    expect(screen.getByText(/bar/)).toBeTruthy();
-    expect(screen.getByText("/repos/bar")).toBeTruthy();
+    // Project names render exactly (not as substrings) inside their own span
+    const opts = screen.getAllByRole("option");
+    expect(opts).toHaveLength(2);
+    expect(opts[0].textContent).toContain("foo");
+    expect(opts[0].textContent).toContain("/repos/foo");
+    expect(opts[1].textContent).toContain("bar");
+    expect(opts[1].textContent).toContain("/repos/bar");
   });
 
   it("the active workspace is marked aria-current", () => {
     const containers = [fixture({ id: 1 }), fixture({ id: 2, project_name: "bar" })];
     render(<WorkspacePicker containers={containers} activeContainerId={2} onSelect={vi.fn()} />);
-    const rows = screen.getAllByRole("button");
+    const rows = screen.getAllByRole("option");
     const active = rows.find((r) => r.getAttribute("aria-current") === "true");
     expect(active?.textContent).toContain("bar");
   });
@@ -52,7 +55,7 @@ describe("WorkspacePicker", () => {
     const onSelect = vi.fn();
     const containers = [fixture({ id: 1 }), fixture({ id: 2, project_name: "bar" })];
     render(<WorkspacePicker containers={containers} activeContainerId={1} onSelect={onSelect} />);
-    fireEvent.click(screen.getByText(/bar/));
+    fireEvent.click(screen.getByRole("option", { name: /bar/ }));
     expect(onSelect).toHaveBeenCalledWith(2);
   });
 

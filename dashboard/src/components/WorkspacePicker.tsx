@@ -57,9 +57,9 @@ function StatusDot({ status }: { status: string }) {
 export function WorkspacePicker({ containers, activeContainerId, onSelect }: Props) {
   if (containers.length === 0) {
     return (
-      <div className="text-muted p-3 text-[12px]">
+      <div className="p-3 text-[12px] text-muted">
         <p>No workspaces registered.</p>
-        <p className="text-faint mt-1 text-[11px]">
+        <p className="mt-1 text-[11px] text-faint">
           Use the &quot;+ New&quot; button on the Containers sidebar to register one.
         </p>
       </div>
@@ -67,13 +67,14 @@ export function WorkspacePicker({ containers, activeContainerId, onSelect }: Pro
   }
 
   return (
-    <ul aria-label="Workspaces" className="flex max-h-80 flex-col overflow-y-auto py-1">
+    <ul role="listbox" aria-label="Workspaces" className="flex max-h-80 flex-col overflow-y-auto py-1">
       {containers.map((c) => {
         const isActive = c.id === activeContainerId;
         return (
           <li key={c.id}>
             <button
               type="button"
+              role="option"
               aria-selected={isActive}
               aria-current={isActive}
               onClick={() => onSelect(c.id)}
@@ -85,17 +86,8 @@ export function WorkspacePicker({ containers, activeContainerId, onSelect }: Pro
             >
               <StatusDot status={c.container_status} />
               <span className="flex flex-1 flex-col overflow-hidden">
-                <span
-                  {...(c.workspace_folder.includes(c.project_name)
-                    ? { "data-project-name": "" }
-                    : {})}
-                  className="truncate text-[12px] font-medium"
-                >
-                  {c.project_name}
-                </span>
-                <span className="text-muted truncate font-mono text-[10px]">
-                  {c.workspace_folder}
-                </span>
+                <span className="truncate text-[12px] font-medium">{c.project_name}</span>
+                <span className="truncate font-mono text-[10px] text-muted">{c.workspace_folder}</span>
               </span>
             </button>
           </li>
