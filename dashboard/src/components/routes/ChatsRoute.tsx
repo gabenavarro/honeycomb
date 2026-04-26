@@ -251,7 +251,7 @@ function ChatThreadWrapper({
   const send = async (text: string) => {
     setPending(true);
     try {
-      await postChatTurn(sessionId, text);
+      await postChatTurn(sessionId, { text });
     } finally {
       setPending(false);
     }

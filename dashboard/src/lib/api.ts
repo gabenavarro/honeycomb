@@ -40,6 +40,9 @@ import type {
   ResourceStats,
   WalkResult,
 } from "./types";
+import type { ChatEffort } from "../components/chat/EffortControl";
+import type { ChatMode } from "../components/chat/ModeToggle";
+import type { ChatModel } from "../components/chat/ModelChip";
 import { z } from "zod";
 
 const BASE = "/api";
@@ -327,12 +330,26 @@ export const commitChanges = (
     body: JSON.stringify({ workspace_folder, message, files, push_after }),
   });
 
-// ─── M33 chat-stream ─────────────────────────────────────────────────────────
+// ─── M33/M34 chat-stream ────────────────────────────────────────────────────
 
-export const postChatTurn = (sessionId: string, text: string) =>
+export interface ChatTurnParams {
+  text: string;
+  /** M34: per-turn effort. Defaults server-side to "standard". */
+  effort?: ChatEffort;
+  /** M34: per-conversation model. */
+  model?: ChatModel | string;
+  /** M34: chat mode. Defaults to "code". */
+  mode?: ChatMode;
+  /** M34: when true, Edit-tool calls auto-accept. */
+  edit_auto?: boolean;
+  /** M34: attachment path strings appended as @<path> references in text. */
+  attachments?: string[];
+}
+
+export const postChatTurn = (sessionId: string, params: ChatTurnParams) =>
   request<{ accepted: boolean; session_id: string }>(`/named-sessions/${sessionId}/turns`, {
     method: "POST",
-    body: JSON.stringify({ text, attachments: [] }),
+    body: JSON.stringify(params),
   });
 
 export const cancelActiveTurn = (sessionId: string) =>
