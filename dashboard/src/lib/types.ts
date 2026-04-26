@@ -250,6 +250,8 @@ export interface NamedSession {
   position: number;
   created_at: string;
   updated_at: string;
+  /** M33 — Claude Code session ID for chat stream subscriptions. */
+  claude_session_id?: string | null;
 }
 
 export interface NamedSessionCreate {
