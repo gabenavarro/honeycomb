@@ -26,6 +26,7 @@ from hub.logging_setup import (
 from hub.models.schemas import EventPayload, HeartbeatPayload, WSFrame
 from hub.routers import (
     agent,
+    chat_stream,
     commands,
     containers,
     diff_events,
@@ -352,6 +353,7 @@ app.add_middleware(
 
 
 # Mount routers
+app.include_router(chat_stream.router)
 app.include_router(containers.router)
 app.include_router(commands.router)
 app.include_router(diff_events.router)

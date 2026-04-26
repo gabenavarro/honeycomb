@@ -272,6 +272,18 @@ class HiveSocket {
       this.listeners.get(channel)?.delete(cb);
     };
   }
+
+  /** Test-only: dispatch a frame as if it came from the server.
+   *
+   * Lets Playwright + integration tests inject WS frames directly into
+   * the singleton's listener map without going through the actual
+   * WebSocket connection. Production code never invokes this — the
+   * `window.__pumpWsFrame` shim that wraps it lives in main.tsx behind
+   * an env check.
+   */
+  __testDispatch(frame: WSFrame): void {
+    this.dispatch(frame);
+  }
 }
 
 // Lazy-init so SSR / tests don't construct a socket just by importing.
@@ -279,6 +291,19 @@ let instance: HiveSocket | null = null;
 function getInstance(): HiveSocket {
   if (!instance) instance = new HiveSocket();
   return instance;
+}
+
+/** Test-only frame pump.
+ *
+ * Module-level shim around the singleton's ``__testDispatch``. The
+ * ``window.__pumpWsFrame`` global wired in ``main.tsx`` (gated on
+ * ``import.meta.env.DEV`` or ``window.__playwright_test``) calls
+ * through here so Playwright specs can synthesize stream-json events
+ * without spinning up a real WebSocket. Never invoke from production
+ * code paths.
+ */
+export function __test_dispatch(frame: WSFrame): void {
+  getInstance().__testDispatch(frame);
 }
 
 /** React hook — thin wrapper over the singleton. */

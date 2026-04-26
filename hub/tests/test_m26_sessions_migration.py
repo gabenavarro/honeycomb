@@ -28,6 +28,7 @@ async def test_sessions_table_exists_after_migration(tmp_path: Path) -> None:
         "created_at",
         "updated_at",
         "position",
+        "claude_session_id",  # M33
     }
     assert cols["session_id"]["primary_key"] == 1
 

@@ -273,6 +273,7 @@ class NamedSession(BaseModel):
     position: int
     created_at: datetime
     updated_at: datetime
+    claude_session_id: str | None = None  # M33 — captured from `claude --print` init event
 
 
 class NamedSessionCreate(BaseModel):
