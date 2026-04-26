@@ -31,6 +31,8 @@ export function ReviewRenderer({ artifact }: Props) {
         </p>
       </header>
       <MarkdownBody source={artifact.body} />
+      {/* TODO(M35.x|M36): remove this banner once auto-source for review
+          artifacts (PR thread loading + inline comments) ships. */}
       <div className="border-edge-soft bg-pane text-muted rounded border px-3 py-2 text-[11px]">
         PR thread loading + inline comments arrive in a future milestone.
       </div>
