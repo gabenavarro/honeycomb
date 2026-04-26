@@ -2,7 +2,8 @@
  *
  * Stubs /api/containers and /api/containers/7/diff-events to avoid a
  * real hub. Asserts:
- *   - "Recent Edits" activity bar button opens the sidebar
+ *   - "Library" activity bar button (M32) opens the Library route
+ *     where Recent Edits lives as bridge content
  *   - seeded event row appears with the file name
  *   - clicking the row opens the DiffViewerTab with the Unified/Split toggle
  *   - toggling Split mode flips the button's data-on attribute
@@ -155,12 +156,13 @@ test.beforeEach(async ({ context }) => {
 test("diff event renders in sidebar and opens in viewer tab", async ({ page }) => {
   await page.goto("/");
 
-  // Wait for the container tab to appear — confirms the active-container
+  // Wait for the container row to appear — confirms the active-container
   // state has been read from localStorage + the containers query resolved.
   await expect(page.getByText("demo").first()).toBeVisible();
 
-  // ── Step 1: open Recent Edits via the activity bar ──────────────────────────
-  await page.getByRole("button", { name: /recent edits/i }).click();
+  // ── Step 1: open the Library route via the activity bar ────────────────────
+  // M32: Recent Edits is bridge content rendered inside the Library route.
+  await page.getByRole("button", { name: /^library$/i }).click();
 
   // ── Step 2: verify the seeded path appears as a row ────────────────────────
   await expect(page.getByText("Foo.tsx")).toBeVisible({ timeout: 5000 });
