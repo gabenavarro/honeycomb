@@ -12,14 +12,14 @@ interface Props {
 }
 
 const TYPE_ICON: Record<ArtifactType, string> = {
-  plan: "▶",
+  plan: "📋",
   review: "👁",
   edit: "✏️",
   snippet: "</>",
-  note: "✎",
-  skill: "★",
+  note: "🗒",
+  skill: "🛠",
   subagent: "🤝",
-  spec: "§",
+  spec: "📄",
 };
 
 const TYPE_ACCENT: Record<ArtifactType, string> = {

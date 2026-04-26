@@ -56,7 +56,7 @@ describe("ArtifactCard", () => {
         <ArtifactCard artifact={{ ...sample, type: t }} active={false} onSelect={vi.fn()} />,
       );
       const text = container.textContent ?? "";
-      seen.add(text.charAt(0));
+      seen.add(Array.from(text)[0] ?? "");
       unmount();
     }
     expect(seen.size).toBeGreaterThanOrEqual(6);
