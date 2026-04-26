@@ -223,6 +223,8 @@ async def test_create_artifact_endpoint(
     body = resp.json()
     assert body["type"] == "note"
     assert body["title"] == "New Note"
+    assert body["body"] == "hello"
+    assert body["body_format"] == "markdown"
     # Verify it landed in the DB
     fetched = await get_artifact(registry_engine, artifact_id=body["artifact_id"])
     assert fetched is not None
@@ -282,3 +284,19 @@ async def test_delete_artifact_endpoint(
     resp = await client.delete(f"/api/artifacts/{art.artifact_id}", headers=AUTH)
     assert resp.status_code == 204
     assert await get_artifact(registry_engine, artifact_id=art.artifact_id) is None
+
+
+@pytest.mark.asyncio
+async def test_pin_unknown_artifact_is_idempotent_204(client: AsyncClient) -> None:
+    """Mutators silently no-op on unknown IDs (idempotent contract)."""
+    resp = await client.post("/api/artifacts/never-existed/pin", headers=AUTH)
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_archive_synthesized_edit_id_is_silent_204(
+    client: AsyncClient,
+) -> None:
+    """Mutators on 'edit-*' synthesized IDs no-op silently (no DB write)."""
+    resp = await client.post("/api/artifacts/edit-abc123/archive", headers=AUTH)
+    assert resp.status_code == 204

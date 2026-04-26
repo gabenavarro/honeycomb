@@ -12,11 +12,13 @@ Endpoints:
 Edit-type artifacts (artifact_id prefixed 'edit-') are synthesized
 from diff_events; pin/unpin/archive/delete on those silently no-op
 at the service layer.
+
+Mutators (pin/unpin/archive/delete) are idempotent and return 204 even for
+unknown artifact_ids; clients should refetch to confirm state.
 """
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -32,8 +34,6 @@ from hub.services.artifacts import (
     record_artifact,
     unpin_artifact,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["artifacts"])
 
