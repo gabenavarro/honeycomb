@@ -48,21 +48,31 @@ export function useArtifacts(
   // 'updated' invalidates so TanStack refetches pinned/archived state.
   // 30s staleTime + refetchOnWindowFocus remain as a fallback for
   // events missed during a reconnect gap.
+  //
+  // We fan out to ALL active queries scoped to this container
+  // (["artifacts", containerId, ...any params]) so that toggling
+  // filter chips in T8 doesn't create stale key mismatches — the
+  // listener uses a container-scoped prefix key, not the specific
+  // queryKey that was current when the effect mounted.
   useEffect(() => {
     if (containerId === null) return;
+    const containerScopedKey = ["artifacts", containerId] as const;
     const channel = `library:${containerId}`;
     ws.subscribe([channel]);
     const removeListener = ws.onChannel(channel, (frame) => {
       if (frame.event === "new") {
         const incoming = frame.data as Artifact;
-        qc.setQueryData<Artifact[]>(queryKey, (prev) => [incoming, ...(prev ?? [])]);
+        qc.setQueriesData<Artifact[]>({ queryKey: containerScopedKey }, (prev) => [
+          incoming,
+          ...(prev ?? []),
+        ]);
       } else if (frame.event === "deleted") {
         const { artifact_id } = frame.data as { artifact_id: string };
-        qc.setQueryData<Artifact[]>(queryKey, (prev) =>
+        qc.setQueriesData<Artifact[]>({ queryKey: containerScopedKey }, (prev) =>
           (prev ?? []).filter((a) => a.artifact_id !== artifact_id),
         );
       } else if (frame.event === "updated") {
-        void qc.invalidateQueries({ queryKey });
+        void qc.invalidateQueries({ queryKey: containerScopedKey });
       }
     });
     return () => {

@@ -75,6 +75,11 @@ async function request<T>(path: string, init?: RequestInit, schema?: z.ZodType<T
     (err as Error & { status: number }).status = res.status;
     throw err;
   }
+  // 204 No Content — skip JSON parsing (body is empty).
+  // Affects cancelActiveTurn, deleteNamedSession, pin/unpin/archive/deleteArtifact.
+  if (res.status === 204) {
+    return undefined as T;
+  }
   const json = (await res.json()) as unknown;
   if (schema) return validateResponse(schema, path, json);
   return json as T;
