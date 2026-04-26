@@ -17,6 +17,8 @@ import {
   validateResponse,
 } from "./schemas";
 import type {
+  Artifact,
+  ArtifactType,
   CommandResponse,
   ContainerCreate,
   ContainerRecord,
@@ -32,6 +34,7 @@ import type {
   HubSettings,
   HubSettingsPatch,
   KeybindingsPayload,
+  ListArtifactsParams,
   NamedSession,
   NamedSessionCreate,
   Problem,
@@ -356,3 +359,49 @@ export const cancelActiveTurn = (sessionId: string) =>
   request<void>(`/named-sessions/${sessionId}/turns/active`, {
     method: "DELETE",
   });
+
+// ─── M35 Library ─────────────────────────────────────────────────────────────
+
+function buildArtifactQuery(params: ListArtifactsParams): string {
+  const sp = new URLSearchParams();
+  if (params.type) {
+    for (const t of params.type) sp.append("type", t);
+  }
+  if (params.search) sp.set("search", params.search);
+  if (params.archived) sp.set("archived", "true");
+  const qs = sp.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export const listArtifacts = (containerId: number, params: ListArtifactsParams = {}) =>
+  request<Artifact[]>(`/containers/${containerId}/artifacts${buildArtifactQuery(params)}`);
+
+export const getArtifact = (artifactId: string) => request<Artifact>(`/artifacts/${artifactId}`);
+
+export interface CreateArtifactBody {
+  type: ArtifactType;
+  title: string;
+  body: string;
+  body_format?: string;
+  source_chat_id?: string | null;
+  source_message_id?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export const createArtifact = (containerId: number, body: CreateArtifactBody) =>
+  request<Artifact>(`/containers/${containerId}/artifacts`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const pinArtifact = (artifactId: string) =>
+  request<void>(`/artifacts/${artifactId}/pin`, { method: "POST" });
+
+export const unpinArtifact = (artifactId: string) =>
+  request<void>(`/artifacts/${artifactId}/unpin`, { method: "POST" });
+
+export const archiveArtifact = (artifactId: string) =>
+  request<void>(`/artifacts/${artifactId}/archive`, { method: "POST" });
+
+export const deleteArtifact = (artifactId: string) =>
+  request<void>(`/artifacts/${artifactId}`, { method: "DELETE" });

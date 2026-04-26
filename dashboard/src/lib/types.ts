@@ -277,3 +277,37 @@ export interface DiffEvent {
   timestamp: string;
   created_at: string;
 }
+
+// ─── M35 Library artifacts ───────────────────────────────────────────────────
+
+export type ArtifactType =
+  | "plan"
+  | "review"
+  | "edit"
+  | "snippet"
+  | "note"
+  | "skill"
+  | "subagent"
+  | "spec";
+
+export interface Artifact {
+  artifact_id: string;
+  container_id: number;
+  type: ArtifactType;
+  title: string;
+  body: string;
+  body_format: string;
+  source_chat_id: string | null;
+  source_message_id: string | null;
+  metadata: Record<string, unknown> | null;
+  pinned: boolean;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListArtifactsParams {
+  type?: ArtifactType[];
+  search?: string;
+  archived?: boolean;
+}
