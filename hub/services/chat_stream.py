@@ -197,6 +197,22 @@ def build_command(
     return cmd
 
 
+def apply_effort_prefix(user_text: str, effort: str) -> str:
+    """Map Effort to a user-text prefix when it changes Claude's
+    thinking depth (M34). The CLI doesn't expose a thinking-budget
+    flag, so Deep/Max nudge the model via Anthropic's documented
+    chat-protocol keywords.
+
+    Quick uses the dollar cap (--max-budget-usd) at the CLI layer
+    (see build_command) and doesn't need a text prefix.
+    """
+    if effort == "deep":
+        return f"think hard about this.\n\n{user_text}"
+    if effort == "max":
+        return f"ultrathink.\n\n{user_text}"
+    return user_text
+
+
 class ClaudeTurnSession:
     """Manages one ``claude --print`` invocation per user turn.
 
@@ -239,18 +255,33 @@ class ClaudeTurnSession:
         *,
         user_text: str,
         claude_session_id: str | None,
+        effort: str = "standard",
+        model: str | None = None,
+        mode: str = "code",
+        edit_auto: bool = False,
     ) -> TurnResult:
         if shutil.which(self.claude_binary) is None and not self.claude_binary.startswith("/"):
             # Defensive: explicit path or PATH lookup must succeed.
             raise FileNotFoundError(f"claude binary not found: {self.claude_binary}")
 
-        cmd = build_command(claude_session_id, claude_binary=self.claude_binary)
+        cmd = build_command(
+            claude_session_id,
+            effort=effort,
+            model=model,
+            mode=mode,
+            edit_auto=edit_auto,
+            claude_binary=self.claude_binary,
+        )
         logger.info(
-            "chat_stream spawn: ns=%s cmd=%s cwd=%s resume=%s",
+            "chat_stream spawn: ns=%s cmd=%s cwd=%s resume=%s effort=%s model=%s mode=%s edit_auto=%s",
             self.named_session_id,
             " ".join(cmd),
             self.cwd,
             claude_session_id,
+            effort,
+            model,
+            mode,
+            edit_auto,
         )
         self._proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -261,9 +292,12 @@ class ClaudeTurnSession:
             start_new_session=True,  # own process group so cancel() can kill all children
         )
 
+        # Apply effort prefix to user text before building the JSON payload.
+        prefixed_text = apply_effort_prefix(user_text, effort)
+
         # Write the user message JSON, then close stdin to trigger EOF.
         user_payload = json.dumps(
-            {"type": "user", "message": {"role": "user", "content": user_text}},
+            {"type": "user", "message": {"role": "user", "content": prefixed_text}},
             separators=(",", ":"),
         )
         if self._proc.stdin is not None:
