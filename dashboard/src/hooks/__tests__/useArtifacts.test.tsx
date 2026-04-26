@@ -98,7 +98,7 @@ describe("useArtifacts", () => {
     act(() => {
       emit("library:1", "new", sampleArtifact);
     });
-    expect(result.current.artifacts).toHaveLength(1);
+    await waitFor(() => expect(result.current.artifacts).toHaveLength(1));
     expect(result.current.artifacts[0].artifact_id).toBe("a-1");
   });
 
@@ -110,7 +110,7 @@ describe("useArtifacts", () => {
     act(() => {
       emit("library:1", "deleted", { artifact_id: "a-1" });
     });
-    expect(result.current.artifacts).toHaveLength(0);
+    await waitFor(() => expect(result.current.artifacts).toHaveLength(0));
   });
 
   it("'updated' WS event refetches the list", async () => {
