@@ -1,58 +1,204 @@
 @import "tailwindcss";
 
-/* ─── Colour theme ─────────────────────────────────────────────
- * Default VSCode/Cursor dark palette.
- *   editor bg      #1e1e1e
- *   sidebar bg     #252526
- *   accent         #0078d4 (same as the VSCode "statusBarItem" blue)
- *   activity rail  #181818
+/* ─── Design system tokens (M31) ────────────────────────────────
+ * Tailwind v4 reads @theme as the single source of design tokens.
+ * Each --color-* declaration becomes both a CSS custom property at
+ * :root AND a utility class (e.g., bg-page, text-primary,
+ * border-edge-soft).
  *
- * M8 additionally exposes a light palette behind
- * ``prefers-color-scheme: light``. The swap is palette-only — no
- * component logic depends on the mode today. The dashboard
- * currently hard-codes hex values in many Tailwind arbitrary
- * classes, so only chrome-level surfaces flip here. A fuller light
- * pass is scoped for M10 (VSCode bones) where the settings UI
- * lets users override.
+ * Dark is the default palette (these match the M0–M30 GitHub-dark
+ * aesthetic exactly so existing components render unchanged).
+ * Light overrides come below in [data-theme="light"] + the
+ * prefers-color-scheme fallback for unset preference.
+ *
+ * To flip themes: set or clear data-theme on <html>:
+ *   <html data-theme="light">  // explicit light
+ *   <html data-theme="dark">   // explicit dark
+ *   <html>                     // follow OS via prefers-color-scheme
  */
+@theme {
+  /* Backgrounds */
+  --color-page: #0d1117;
+  --color-pane: #161b22;
+  --color-main: #0a0e14;
+  --color-card: #161b22;
+  --color-chip: #1c2128;
+  --color-input: #0d1117;
 
+  /* Foreground (text) */
+  --color-primary: #c9d1d9;
+  --color-secondary: #8b949e;
+  --color-muted: #6e7681;
+  --color-faint: #4a5159;
+
+  /* Borders — named "edge" to avoid Tailwind's `border` width keyword */
+  --color-edge: #30363d;
+  --color-edge-soft: #21262d;
+
+  /* Accent / semantic colors */
+  --color-accent: #58a6ff;
+  --color-claude: #d2a8ff;
+  --color-tool: #79c0ff;
+  --color-think: #ffa657;
+  --color-write: #3fb950;
+  --color-task: #ff7b72;
+  --color-edit: #58a6ff;
+  --color-read: #f0883e;
+  --color-plan: #ffa657;
+  --color-review: #d2a8ff;
+
+  /* Diff backgrounds (saturated + soft variants) */
+  --color-add-bg: rgba(46, 160, 67, 0.18);
+  --color-add-bg-soft: rgba(46, 160, 67, 0.07);
+  --color-rem-bg: rgba(248, 81, 73, 0.18);
+  --color-rem-bg-soft: rgba(248, 81, 73, 0.07);
+
+  /* Radius scale */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Shadows (dark-tuned by default; overridden for light below) */
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-deep: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  /* Typography scale (size / line-height pairs) */
+  --text-display: 22px;
+  --text-display--line-height: 1.2;
+  --text-title: 18px;
+  --text-title--line-height: 1.35;
+  --text-heading: 14px;
+  --text-heading--line-height: 1.5;
+  --text-body: 13px;
+  --text-body--line-height: 1.55;
+  --text-meta: 11px;
+  --text-meta--line-height: 1.4;
+  --text-mono: 12.5px;
+  --text-mono--line-height: 1.55;
+}
+
+/* ─── Light theme: Warm Workshop ─────────────────────────────── */
+[data-theme="light"] {
+  --color-page: #fdfaf3;
+  --color-pane: #f7f1e3;
+  --color-main: #fffdf7;
+  --color-card: #faf5e8;
+  --color-chip: #f0e9d6;
+  --color-input: #fffdf7;
+
+  --color-primary: #2a241b;
+  --color-secondary: #6b5d4a;
+  --color-muted: #968773;
+  --color-faint: #c5b9a1;
+
+  --color-edge: #e0d6bf;
+  --color-edge-soft: #ece4d2;
+
+  --color-accent: #b8541c;
+  --color-claude: #7c3aed;
+  --color-tool: #0969da;
+  --color-think: #b8541c;
+  --color-write: #1f7a36;
+  --color-task: #be1e1e;
+  --color-edit: #0969da;
+  --color-read: #b8541c;
+  --color-plan: #b8541c;
+  --color-review: #7c3aed;
+
+  --color-add-bg: #ddf3e0;
+  --color-add-bg-soft: #ecfaee;
+  --color-rem-bg: #f8d8d4;
+  --color-rem-bg-soft: #fbeae6;
+
+  /* Lighter shadow alpha tuned for warm backgrounds */
+  --shadow-soft: 0 1px 3px rgba(42, 36, 27, 0.08);
+  --shadow-medium: 0 4px 12px rgba(42, 36, 27, 0.12);
+  --shadow-deep: 0 8px 24px rgba(42, 36, 27, 0.18);
+  --shadow-pop: 0 12px 32px rgba(42, 36, 27, 0.22);
+}
+
+/* ─── prefers-color-scheme fallback ──────────────────────────────
+ * When the user has NOT explicitly chosen a theme (no data-theme
+ * attribute on <html>), follow the OS preference. The :not()
+ * qualifier makes user overrides win.
+ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --color-page: #fdfaf3;
+    --color-pane: #f7f1e3;
+    --color-main: #fffdf7;
+    --color-card: #faf5e8;
+    --color-chip: #f0e9d6;
+    --color-input: #fffdf7;
+
+    --color-primary: #2a241b;
+    --color-secondary: #6b5d4a;
+    --color-muted: #968773;
+    --color-faint: #c5b9a1;
+
+    --color-edge: #e0d6bf;
+    --color-edge-soft: #ece4d2;
+
+    --color-accent: #b8541c;
+    --color-claude: #7c3aed;
+    --color-tool: #0969da;
+    --color-think: #b8541c;
+    --color-write: #1f7a36;
+    --color-task: #be1e1e;
+    --color-edit: #0969da;
+    --color-read: #b8541c;
+    --color-plan: #b8541c;
+    --color-review: #7c3aed;
+
+    --color-add-bg: #ddf3e0;
+    --color-add-bg-soft: #ecfaee;
+    --color-rem-bg: #f8d8d4;
+    --color-rem-bg-soft: #fbeae6;
+
+    --shadow-soft: 0 1px 3px rgba(42, 36, 27, 0.08);
+    --shadow-medium: 0 4px 12px rgba(42, 36, 27, 0.12);
+    --shadow-deep: 0 8px 24px rgba(42, 36, 27, 0.18);
+    --shadow-pop: 0 12px 32px rgba(42, 36, 27, 0.22);
+  }
+}
+
+/* color-scheme hint to the browser for native form controls + scrollbar */
 :root {
   color-scheme: dark;
 }
+[data-theme="light"] {
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+  }
+}
 
+/* ─── Body baseline — the only chrome rule that uses the new
+ * tokens in M31. Existing components keep their hardcoded hex
+ * values until M32 migrates the shell.
+ */
 body {
   margin: 0;
-  background: #1e1e1e;
-  color: #cccccc;
+  background: var(--color-page);
+  color: var(--color-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "HelveticaNeue-Light",
     system-ui, "Ubuntu", "Droid Sans", sans-serif;
   font-size: 13px;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-  }
-  body {
-    background: #fafafa;
-    color: #111827;
-  }
 }
 
 #root {
   min-height: 100vh;
 }
 
-/* ─── Focus ring (a11y win, M8) ────────────────────────────────
- * Global ``:focus-visible`` outline replaces the default
- * user-agent focus ring which components frequently override to
- * ``outline: none`` (often without replacement). The value below
- * uses ``accent`` so it picks up the selection colour on light
- * schemes too. ``focus:outline-none focus-visible:ring-*`` classes
- * applied on individual components take precedence.
- */
+/* ─── Focus ring (existing M8 a11y) — re-using token ────────── */
 :focus-visible {
-  outline: 2px solid #0078d4;
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -60,13 +206,12 @@ body {
 button,
 a,
 [role="button"] {
-  /* Every interactive control should stay keyboard-navigable. */
   &:focus {
     outline: none;
   }
 }
 
-/* ─── Scrollbars: thin and unobtrusive, VSCode-style. ──────────*/
+/* ─── Scrollbars (existing) ─────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -82,7 +227,7 @@ a,
   background: transparent;
 }
 
-/* Selection tuned to the VSCode editor blue. */
+/* Selection color (existing) */
 ::selection {
   background: rgba(0, 120, 212, 0.4);
 }
