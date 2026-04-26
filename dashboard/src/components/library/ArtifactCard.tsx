@@ -51,8 +51,8 @@ export function ArtifactCard({ artifact, active, onSelect }: Props) {
   return (
     <button
       type="button"
-      role="button"
-      aria-pressed={active}
+      title={artifact.type}
+      aria-current={active ? "true" : undefined}
       onClick={() => onSelect(artifact.artifact_id)}
       className={`flex w-full items-start gap-2 rounded border px-3 py-2 text-left transition-colors ${
         active

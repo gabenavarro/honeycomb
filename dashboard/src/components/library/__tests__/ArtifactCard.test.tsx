@@ -34,9 +34,9 @@ describe("ArtifactCard", () => {
     expect(onSelect).toHaveBeenCalledWith("a-1");
   });
 
-  it("active card carries aria-pressed=true", () => {
+  it("active card carries aria-current=true", () => {
     render(<ArtifactCard artifact={sample} active={true} onSelect={vi.fn()} />);
-    expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button").getAttribute("aria-current")).toBe("true");
   });
 
   it("each type renders a distinct emoji marker", () => {
