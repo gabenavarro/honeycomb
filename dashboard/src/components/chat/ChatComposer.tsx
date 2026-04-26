@@ -97,7 +97,7 @@ export function ChatComposer({
   return (
     <div
       data-testid="chat-composer"
-      className="border-t border-edge bg-pane"
+      className="border-edge bg-pane border-t"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
@@ -134,14 +134,14 @@ export function ChatComposer({
           aria-label="Chat input"
           disabled={disabled}
           rows={1}
-          className="min-h-[2.25rem] flex-1 resize-none rounded border border-edge bg-input px-2 py-1.5 text-[13px] text-primary placeholder:text-muted focus:outline-none focus-visible:border-accent disabled:opacity-60"
+          className="border-edge bg-input text-primary placeholder:text-muted focus-visible:border-accent min-h-[2.25rem] flex-1 resize-none rounded border px-2 py-1.5 text-[13px] focus:outline-none disabled:opacity-60"
         />
         <button
           type="button"
           onClick={handlePromptAttach}
           aria-label="Attach file"
           title="Attach file"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <Paperclip size={14} aria-hidden="true" />
         </button>
@@ -154,7 +154,7 @@ export function ChatComposer({
           }}
           aria-label="Insert slash command"
           title="Slash commands"
-          className="rounded p-1 text-secondary hover:bg-chip hover:text-primary"
+          className="text-secondary hover:bg-chip hover:text-primary rounded p-1"
         >
           <Slash size={14} aria-hidden="true" />
         </button>
@@ -163,14 +163,14 @@ export function ChatComposer({
           onClick={send}
           aria-label="Send"
           disabled={disabled || value.trim().length === 0}
-          className="inline-flex items-center gap-1 rounded bg-accent px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-accent disabled:opacity-50"
+          className="bg-accent hover:bg-accent inline-flex items-center gap-1 rounded px-3 py-1.5 text-[12px] font-semibold text-white transition-colors disabled:opacity-50"
         >
           <Send size={12} aria-hidden="true" />
           <span>Send</span>
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-edge-soft px-3 py-1 text-[10px] text-secondary">
+      <div className="border-edge-soft text-secondary flex items-center justify-between gap-2 border-t px-3 py-1 text-[10px]">
         <div className="flex items-center gap-2">
           <EffortControl sessionId={sessionId} />
           <EditAutoToggle sessionId={sessionId} />
@@ -178,7 +178,7 @@ export function ChatComposer({
             Mode: <span className="text-primary">{MODE_LABEL[mode]}</span>
           </span>
         </div>
-        <span className="font-mono text-secondary">⌘↵ send · esc cancel</span>
+        <span className="text-secondary font-mono">⌘↵ send · esc cancel</span>
       </div>
     </div>
   );

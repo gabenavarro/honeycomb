@@ -37,7 +37,7 @@ export function EditAutoToggle({ sessionId }: Props) {
       role="switch"
       aria-checked={on}
       onClick={toggle}
-      className={`inline-flex items-center gap-1.5 rounded-md border border-edge px-2 py-0.5 text-[10px] transition-colors ${
+      className={`border-edge inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] transition-colors ${
         on ? "bg-write/20 text-write" : "bg-pane text-secondary hover:text-primary"
       }`}
     >
@@ -53,6 +53,7 @@ export function EditAutoToggle({ sessionId }: Props) {
 /** Read the persisted edit-auto value without rendering the toggle.
  *  Used by the chat dispatcher (Task 9 ChatThreadWrapper) to compose
  *  the postChatTurn payload. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function readEditAuto(sessionId: string): boolean {
   return readStored(sessionId);
 }

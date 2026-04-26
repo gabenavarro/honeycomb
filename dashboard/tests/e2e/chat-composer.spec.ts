@@ -180,9 +180,7 @@ test("composer passes axe-core in dark theme", async ({ page }) => {
   await expect(page.getByRole("textbox", { name: /chat input/i })).toBeVisible();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   // Scope to the composer region via data-testid added to ChatComposer.
-  const results = await new AxeBuilder({ page })
-    .include('[data-testid="chat-composer"]')
-    .analyze();
+  const results = await new AxeBuilder({ page }).include('[data-testid="chat-composer"]').analyze();
   expect(results.violations).toEqual([]);
 });
 
@@ -190,8 +188,6 @@ test("composer passes axe-core in light theme", async ({ page }) => {
   await page.goto("/chats");
   await expect(page.getByRole("textbox", { name: /chat input/i })).toBeVisible();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-  const results = await new AxeBuilder({ page })
-    .include('[data-testid="chat-composer"]')
-    .analyze();
+  const results = await new AxeBuilder({ page }).include('[data-testid="chat-composer"]').analyze();
   expect(results.violations).toEqual([]);
 });

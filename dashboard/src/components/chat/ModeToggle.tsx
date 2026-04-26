@@ -32,10 +32,9 @@ function readStored(sessionId: string): ChatMode {
 
 /** Dispatch a custom event so the ModeToggle can react when the mode
  *  is changed programmatically (e.g. via the /plan slash command). */
+// eslint-disable-next-line react-refresh/only-export-components
 export function dispatchModeChange(sessionId: string, mode: ChatMode): void {
-  window.dispatchEvent(
-    new CustomEvent("hive:mode-change", { detail: { sessionId, mode } }),
-  );
+  window.dispatchEvent(new CustomEvent("hive:mode-change", { detail: { sessionId, mode } }));
 }
 
 export function ModeToggle({ sessionId, onChange }: Props) {

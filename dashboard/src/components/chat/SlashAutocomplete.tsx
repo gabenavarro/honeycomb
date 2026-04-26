@@ -21,7 +21,7 @@ export function SlashAutocomplete({ prefix, onSelect }: Props) {
     <div
       role="listbox"
       aria-label="Slash command suggestions"
-      className="z-20 max-h-60 overflow-y-auto rounded border border-edge bg-pane shadow-medium"
+      className="border-edge bg-pane shadow-medium z-20 max-h-60 overflow-y-auto rounded border"
     >
       {matches.map((cmd) => (
         <div
@@ -33,11 +33,11 @@ export function SlashAutocomplete({ prefix, onSelect }: Props) {
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") onSelect(`${cmd.name} `);
           }}
-          className="flex w-full cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-[12px] hover:bg-chip"
+          className="hover:bg-chip flex w-full cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-[12px]"
         >
-          <span className="font-mono text-tool">{cmd.name}</span>
-          {cmd.argHint && <span className="font-mono text-secondary">{cmd.argHint}</span>}
-          <span className="ml-auto text-[11px] text-secondary">{cmd.hint}</span>
+          <span className="text-tool font-mono">{cmd.name}</span>
+          {cmd.argHint && <span className="text-secondary font-mono">{cmd.argHint}</span>}
+          <span className="text-secondary ml-auto text-[11px]">{cmd.hint}</span>
         </div>
       ))}
     </div>
