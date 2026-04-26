@@ -3,7 +3,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "../ChatComposer";
 
-beforeEach(() => window.localStorage.clear());
+/** Simulate a desktop-width viewport so useIsPhone() returns false.
+ *  jsdom has no matchMedia implementation; this minimal stub returns
+ *  `matches: true` for min-width queries ≤ 1280px (desktop), keeping
+ *  the desktop branch of ChatComposer active in all tests that don't
+ *  need the phone branch. */
+function mockDesktopMediaQuery() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes("min-width"),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
+  mockDesktopMediaQuery();
+});
 afterEach(() => window.localStorage.clear());
 
 describe("ChatComposer", () => {
