@@ -3,35 +3,14 @@
  * Per spec lines 360-369: each type has a distinct icon + accent color.
  * Card shows type icon + title + meta line (From: <chat name> · <relative time>).
  */
-import type { Artifact, ArtifactType } from "../../lib/types";
+import type { Artifact } from "../../lib/types";
+import { TYPE_ICON, TYPE_ACCENT } from "../../lib/artifact-meta";
 
 interface Props {
   artifact: Artifact;
   active: boolean;
   onSelect: (artifactId: string) => void;
 }
-
-const TYPE_ICON: Record<ArtifactType, string> = {
-  plan: "📋",
-  review: "👁",
-  edit: "✏️",
-  snippet: "</>",
-  note: "🗒",
-  skill: "🛠",
-  subagent: "🤝",
-  spec: "📄",
-};
-
-const TYPE_ACCENT: Record<ArtifactType, string> = {
-  plan: "text-think",
-  review: "text-claude",
-  edit: "text-edit",
-  snippet: "text-tool",
-  note: "text-secondary",
-  skill: "text-claude",
-  subagent: "text-task",
-  spec: "text-think",
-};
 
 function relativeTime(iso: string): string {
   const t = new Date(iso).getTime();
