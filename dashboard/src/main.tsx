@@ -63,6 +63,27 @@ function ToastRelayBinder() {
   return null;
 }
 
+// Test-only WS frame pump — exposes ``window.__pumpWsFrame`` so
+// Playwright specs can inject mocked stream-json events directly into
+// the singleton's listener map. Gated on Vite's DEV flag or an
+// explicit ``window.__playwright_test`` opt-in so production bundles
+// never expose it. The dynamic import keeps the bundle slim and
+// resolves before ``createRoot`` so the hook is installed by the time
+// any spec calls ``page.evaluate``.
+if (
+  import.meta.env.DEV ||
+  (typeof window !== "undefined" &&
+    (window as unknown as { __playwright_test?: boolean }).__playwright_test)
+) {
+  void import("./hooks/useWebSocket").then((mod) => {
+    (
+      window as unknown as {
+        __pumpWsFrame?: (frame: { channel: string; event: string; data: unknown }) => void;
+      }
+    ).__pumpWsFrame = (frame) => mod.__test_dispatch(frame);
+  });
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
