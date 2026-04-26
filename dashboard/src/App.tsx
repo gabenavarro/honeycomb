@@ -590,8 +590,6 @@ export default function App() {
                   containers={containers}
                   activeContainerId={activeTabId}
                   onSelectContainer={openContainer}
-                  openedDiffEvent={openedDiffEvent}
-                  onOpenEvent={setOpenedDiffEvent}
                 />
               }
             />
