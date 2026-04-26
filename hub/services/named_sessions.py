@@ -39,6 +39,7 @@ def _row_to_model(row) -> NamedSession:
         position=row["position"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        claude_session_id=row["claude_session_id"],
     )
 
 
@@ -86,7 +87,7 @@ async def create_session(
                 await conn.execute(
                     sa.text(
                         "SELECT session_id, container_id, name, kind, position, "
-                        "created_at, updated_at FROM sessions "
+                        "created_at, updated_at, claude_session_id FROM sessions "
                         "WHERE session_id = :sid"
                     ),
                     {"sid": session_id},
@@ -114,7 +115,7 @@ async def list_sessions(
                 await conn.execute(
                     sa.text(
                         "SELECT session_id, container_id, name, kind, position, "
-                        "created_at, updated_at FROM sessions "
+                        "created_at, updated_at, claude_session_id FROM sessions "
                         "WHERE container_id = :cid "
                         "ORDER BY position ASC, created_at ASC, session_id ASC"
                     ),
@@ -184,7 +185,7 @@ async def patch_session(
                 await conn.execute(
                     sa.text(
                         "SELECT session_id, container_id, name, kind, position, "
-                        "created_at, updated_at FROM sessions "
+                        "created_at, updated_at, claude_session_id FROM sessions "
                         "WHERE session_id = :sid"
                     ),
                     {"sid": session_id},
@@ -264,3 +265,49 @@ async def delete_session(
             {"sid": session_id},
         )
     return container_id
+
+
+async def set_claude_session_id(
+    engine: AsyncEngine,
+    *,
+    session_id: str,
+    claude_session_id: str,
+) -> None:
+    """Persist the Claude-side session ID captured from the init event.
+
+    Idempotent: callers pass the same value across turns; if already
+    set we skip the write.
+    """
+    async with engine.begin() as conn:
+        await conn.execute(
+            sa.text(
+                "UPDATE sessions SET claude_session_id = :csid, "
+                "    updated_at = :ua "
+                "WHERE session_id = :sid AND (claude_session_id IS NULL OR claude_session_id != :csid)"
+            ),
+            {"sid": session_id, "csid": claude_session_id, "ua": datetime.now().isoformat()},
+        )
+
+
+async def get_session(
+    engine: AsyncEngine,
+    *,
+    session_id: str,
+) -> NamedSession | None:
+    """Fetch one session by ID, or None if missing."""
+    async with engine.connect() as conn:
+        row = (
+            (
+                await conn.execute(
+                    sa.text(
+                        "SELECT session_id, container_id, name, kind, position, "
+                        "       created_at, updated_at, claude_session_id "
+                        "FROM sessions WHERE session_id = :sid"
+                    ),
+                    {"sid": session_id},
+                )
+            )
+            .mappings()
+            .first()
+        )
+    return _row_to_model(row) if row is not None else None
