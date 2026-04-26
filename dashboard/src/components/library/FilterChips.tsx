@@ -37,7 +37,7 @@ function ChipButton({ label, count, pressed, onClick }: ChipButtonProps) {
       className={[
         "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
         pressed
-          ? "border-accent bg-accent/10 text-accent"
+          ? "border-accent bg-accent/10 text-primary"
           : "border-edge bg-chip text-secondary hover:text-primary",
       ].join(" ")}
     >
@@ -47,7 +47,7 @@ function ChipButton({ label, count, pressed, onClick }: ChipButtonProps) {
         aria-label={`${count} artifacts`}
         className={[
           "rounded-full px-1 text-[10px] font-medium",
-          pressed ? "bg-accent/20 text-accent" : "bg-edge text-faint",
+          pressed ? "bg-accent/20 text-primary" : "bg-edge text-secondary",
         ].join(" ")}
       >
         {count}
@@ -112,7 +112,7 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
           type="button"
           onClick={() => setSheetOpen(true)}
           aria-label="More filter options"
-          className="border-edge bg-chip text-muted hover:text-secondary flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px]"
+          className="border-edge bg-chip text-secondary hover:text-primary flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px]"
         >
           ⋯ More
         </button>
