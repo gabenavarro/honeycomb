@@ -5,33 +5,30 @@ import { ReviewRenderer } from "../renderers/ReviewRenderer";
 import type { Artifact } from "../../../lib/types";
 
 const sample: Artifact = {
-  artifact_id: "rv-1",
+  artifact_id: "r-1",
   container_id: 1,
   type: "review",
-  title: "Review: fix auth bug",
-  body: "The auth bug is fixed by patching the token refresh logic.",
+  title: "Review of PR #42",
+  body: "Some markdown body.",
   body_format: "markdown",
   source_chat_id: null,
   source_message_id: null,
-  metadata: {
-    pr_repo: "org/repo",
-    pr_number: 42,
-    status: "pending",
-  },
+  metadata: { pr_repo: "owner/repo", pr_number: 42, status: "open" },
   pinned: false,
   archived: false,
-  created_at: "2026-04-26T12:00:00Z",
-  updated_at: "2026-04-26T12:00:00Z",
+  created_at: "2026-04-26T00:00:00Z",
+  updated_at: "2026-04-26T00:00:00Z",
 };
 
 describe("ReviewRenderer", () => {
-  it("renders the artifact title in an h1", () => {
+  it("renders title + repo + PR number", () => {
     render(<ReviewRenderer artifact={sample} />);
-    expect(screen.getByRole("heading", { level: 1, name: "Review: fix auth bug" })).toBeTruthy();
+    expect(screen.getByText("Review of PR #42")).toBeTruthy();
+    expect(screen.getByText(/owner\/repo#42/)).toBeTruthy();
   });
 
-  it("renders pr_repo#pr_number in the subtitle when metadata is present", () => {
+  it("shows the M35-deferral notice", () => {
     render(<ReviewRenderer artifact={sample} />);
-    expect(screen.getByText(/org\/repo#42/i)).toBeTruthy();
+    expect(screen.getByText(/PR thread loading.+arrive/i)).toBeTruthy();
   });
 });

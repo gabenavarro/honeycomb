@@ -5,45 +5,48 @@ import { SubagentRenderer } from "../renderers/SubagentRenderer";
 import type { Artifact } from "../../../lib/types";
 
 const sample: Artifact = {
-  artifact_id: "sa-1",
+  artifact_id: "sub-1",
   container_id: 1,
   type: "subagent",
-  title: "Run linter subagent",
-  body: "Please lint all Python files under src/ and report issues.",
+  title: "Find the bug",
+  body: "Find the bug in main.py",
   body_format: "markdown",
-  source_chat_id: null,
-  source_message_id: null,
+  source_chat_id: "ns-1",
+  source_message_id: "tu-1",
   metadata: {
-    subagent_type: "linter-agent",
-    result_summary: "Found **3 issues** in 2 files.",
-    parent_chat_id: "abcdef1234567890",
+    subagent_type: "general-purpose",
+    parent_chat_id: "ns-1",
+    result_summary: "Found the bug in line 42.",
   },
   pinned: false,
   archived: false,
-  created_at: "2026-04-26T11:00:00Z",
-  updated_at: "2026-04-26T11:00:00Z",
+  created_at: "2026-04-26T00:00:00Z",
+  updated_at: "2026-04-26T00:00:00Z",
 };
 
 describe("SubagentRenderer", () => {
-  it("renders the artifact title in an h1", () => {
-    render(<SubagentRenderer artifact={sample} />);
-    expect(screen.getByRole("heading", { level: 1, name: "Run linter subagent" })).toBeTruthy();
+  it("renders the prompt body inside a <pre>", () => {
+    const { container } = render(<SubagentRenderer artifact={sample} />);
+    const pre = container.querySelector("pre");
+    expect(pre?.textContent).toContain("Find the bug in main.py");
   });
 
-  it("renders metadata.subagent_type in the Task → line", () => {
+  it("shows the agent_type in the header", () => {
     render(<SubagentRenderer artifact={sample} />);
-    expect(screen.getByText("linter-agent")).toBeTruthy();
+    expect(screen.getByText(/general-purpose/)).toBeTruthy();
   });
 
-  it("renders a truncated parent_chat_id when present", () => {
+  it("renders the result_summary section when present", () => {
     render(<SubagentRenderer artifact={sample} />);
-    // slice(0, 8) of "abcdef1234567890" → "abcdef12"
-    expect(screen.getByText(/abcdef12/)).toBeTruthy();
+    expect(screen.getByText(/Found the bug in line 42/)).toBeTruthy();
   });
 
-  it("renders result_summary as markdown when present", () => {
-    render(<SubagentRenderer artifact={sample} />);
-    // react-markdown renders **3 issues** as <strong>
-    expect(screen.getByText("3 issues")).toBeTruthy();
+  it("omits the result section when result_summary is absent", () => {
+    const noResult: Artifact = {
+      ...sample,
+      metadata: { ...sample.metadata, result_summary: undefined },
+    };
+    render(<SubagentRenderer artifact={noResult} />);
+    expect(screen.queryByText(/Result/)).toBeNull();
   });
 });
