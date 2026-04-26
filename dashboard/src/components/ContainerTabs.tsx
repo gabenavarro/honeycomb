@@ -75,7 +75,7 @@ function ContainerTab({
       className={`group flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-edge px-3 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
         active
           ? "border-t-2 border-t-accent bg-page text-primary"
-          : "bg-[#2d2d2d] text-[#969696] hover:bg-[#353535]"
+          : "bg-pane text-secondary hover:bg-chip"
       }`}
     >
       {needsAttention && <NeedsAttentionIcon />}
@@ -89,7 +89,7 @@ function ContainerTab({
           e.stopPropagation();
           onClose(container.id);
         }}
-        className="ml-0.5 rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="ml-0.5 rounded p-0.5 opacity-40 hover:bg-chip hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         aria-label={`Close ${container.project_name} tab`}
       >
         <X size={11} aria-hidden="true" />

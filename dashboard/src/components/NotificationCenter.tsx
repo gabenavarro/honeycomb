@@ -75,7 +75,7 @@ export function NotificationCenter() {
               type="button"
               onClick={clearHistory}
               disabled={history.length === 0}
-              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-secondary hover:bg-[#2a2a2a] hover:text-primary disabled:opacity-40"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-secondary hover:bg-chip hover:text-primary disabled:opacity-40"
               aria-label="Clear notification history"
               title="Clear history"
             >

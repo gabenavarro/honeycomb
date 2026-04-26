@@ -51,7 +51,7 @@ export function SessionSubTabs({
     <div
       role="tablist"
       aria-label="Container sessions"
-      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-edge bg-[#1a1a1a] px-1"
+      className="flex shrink-0 items-center gap-0 overflow-x-auto border-b border-edge bg-page px-1"
     >
       {sessions.map((s) => (
         <SessionTab
@@ -215,7 +215,7 @@ function SessionTab({
         className={`flex items-center gap-1.5 border-r border-edge px-2.5 py-1 text-[10px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset ${
           active
             ? "bg-page text-primary"
-            : "bg-[#222] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-primary"
+            : "bg-pane text-secondary hover:bg-chip hover:text-primary"
         } ${dragClasses}`}
       >
         {editing ? (
@@ -234,7 +234,7 @@ function SessionTab({
                 cancel();
               }
             }}
-            className="w-[110px] rounded border border-[#3c3c3c] bg-page px-1 text-[10px] text-primary focus:border-accent focus:outline-none"
+            className="w-[110px] rounded border border-edge bg-page px-1 text-[10px] text-primary focus:border-accent focus:outline-none"
             aria-label={`Rename session ${session.name}`}
           />
         ) : (
@@ -251,7 +251,7 @@ function SessionTab({
               e.stopPropagation();
               onStartEdit();
             }}
-            className="ml-0.5 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100"
+            className="ml-0.5 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-chip hover:opacity-100"
             aria-label={`Rename session ${session.name}`}
             title="Rename session"
           >
@@ -267,7 +267,7 @@ function SessionTab({
               e.stopPropagation();
               onClose(session.id);
             }}
-            className="ml-1 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-[#444] hover:opacity-100"
+            className="ml-1 inline-flex cursor-pointer rounded p-0.5 opacity-40 hover:bg-chip hover:opacity-100"
             aria-label={`Close session ${session.name}`}
           >
             <X size={9} aria-hidden="true" />

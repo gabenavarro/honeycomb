@@ -91,7 +91,7 @@ export function Breadcrumbs({ containerId, path, onPathChange }: Props) {
               setEditing(false);
             }
           }}
-          className="flex-1 rounded border border-[#3c3c3c] bg-page px-2 py-0.5 font-mono text-[11px] text-primary focus:border-accent focus:outline-none"
+          className="flex-1 rounded border border-edge bg-page px-2 py-0.5 font-mono text-[11px] text-primary focus:border-accent focus:outline-none"
           placeholder="/absolute/path"
           aria-label="Absolute path inside the container"
         />
