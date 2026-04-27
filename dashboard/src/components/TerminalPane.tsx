@@ -145,14 +145,18 @@ function SubTab({
   label: string;
 }) {
   const { isStreaming, hasLines, lastActive } = useSessionSummary(containerId, kind);
+  // Inactive uses the -700 shade (not -500/70) so the Claude/Shell hue
+  // hint stays visible at 11px while still passing WCAG AA on the
+  // light theme `--color-page` (#fdfaf3). text-purple-500/70 only got
+  // 2.57:1 there.
   const accent =
     kind === "claude"
       ? active
         ? "text-purple-300"
-        : "text-purple-500/70 hover:text-purple-400"
+        : "text-purple-700 hover:text-purple-400"
       : active
         ? "text-green-300"
-        : "text-green-500/70 hover:text-green-400";
+        : "text-green-700 hover:text-green-400";
 
   const lastActiveStr = lastActive
     ? new Date(lastActive).toLocaleTimeString([], { hour12: false })

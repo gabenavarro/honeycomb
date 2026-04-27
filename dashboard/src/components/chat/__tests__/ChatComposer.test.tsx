@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "../ChatComposer";
 
-beforeEach(() => window.localStorage.clear());
+beforeEach(() => {
+  window.localStorage.clear();
+});
 afterEach(() => window.localStorage.clear());
 
 describe("ChatComposer", () => {

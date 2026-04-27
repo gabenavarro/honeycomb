@@ -80,7 +80,19 @@
   --text-meta--line-height: 1.4;
   --text-mono: 12.5px;
   --text-mono--line-height: 1.55;
+
+  /* M36 — responsive breakpoints. Mobile-first: base = phone (<768),
+     tablet: ≥ 768, desktop: ≥ 1024. Names match the M36 spec
+     (docs/superpowers/specs/2026-04-26-dashboard-redesign-design.md
+     §"Mobile breakpoints"). */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
 }
+
+/* M36 — gate `hover:` styles behind (hover: hover) so touch devices
+   don't get sticky-tap-as-hover. See:
+   https://tailwindcss.com/docs/adding-custom-styles#with-arbitrary-variants */
+@custom-variant hover (&:hover) (@media (hover: hover));
 
 /* ─── Light theme: Warm Workshop ─────────────────────────────── */
 [data-theme="light"] {
@@ -247,5 +259,27 @@ kbd {
   }
   .prose-tight :where(p, ul, ol, blockquote, table, pre):not(:last-child) {
     margin-bottom: 0.5rem;
+  }
+}
+
+@layer utilities {
+  /* M36 — iOS home-indicator gap. PhoneTabBar uses pb-[var(--safe-bottom)]
+     so the tab bar floats above the home indicator on iPhone X+. */
+  .pb-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@layer utilities {
+  /* M36 — hide scrollbar visually while keeping the element scrollable
+     (used by FilterChips at phone for the horizontal-scroll chip row). */
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
   }
 }

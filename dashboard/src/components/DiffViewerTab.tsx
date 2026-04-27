@@ -15,6 +15,7 @@ import "react-diff-view/style/index.css";
 
 import type { DiffEvent, DiffTool } from "../lib/types";
 import type { HunkData } from "react-diff-view";
+import { useIsPhone } from "../hooks/useMediaQuery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,9 @@ interface Props {
 }
 
 export function DiffViewerTab({ event, onOpenFile }: Props) {
+  const isPhone = useIsPhone();
   const [mode, setMode] = useState<ViewMode>(loadStoredMode);
+  const effectiveMode: ViewMode = isPhone ? "unified" : mode;
   const [showCopiedToast, setShowCopiedToast] = useState(false);
 
   // Persist view-mode preference
@@ -175,27 +178,29 @@ export function DiffViewerTab({ event, onOpenFile }: Props) {
           <button
             type="button"
             onClick={() => setMode("unified")}
-            data-on={mode === "unified"}
+            data-on={effectiveMode === "unified"}
             className={
-              mode === "unified"
+              effectiveMode === "unified"
                 ? "rounded bg-gray-950 px-3 py-1 text-gray-100 shadow-[0_0_0_1px_#374151]"
                 : "px-3 py-1 text-gray-400 hover:text-gray-200"
             }
           >
             Unified
           </button>
-          <button
-            type="button"
-            onClick={() => setMode("split")}
-            data-on={mode === "split"}
-            className={
-              mode === "split"
-                ? "rounded bg-gray-950 px-3 py-1 text-gray-100 shadow-[0_0_0_1px_#374151]"
-                : "px-3 py-1 text-gray-400 hover:text-gray-200"
-            }
-          >
-            Split
-          </button>
+          {!isPhone && (
+            <button
+              type="button"
+              onClick={() => setMode("split")}
+              data-on={effectiveMode === "split"}
+              className={
+                effectiveMode === "split"
+                  ? "rounded bg-gray-950 px-3 py-1 text-gray-100 shadow-[0_0_0_1px_#374151]"
+                  : "px-3 py-1 text-gray-400 hover:text-gray-200"
+              }
+            >
+              Split
+            </button>
+          )}
         </div>
 
         {/* Open file button */}
@@ -229,7 +234,7 @@ export function DiffViewerTab({ event, onOpenFile }: Props) {
           files.map((file, i) => (
             <Diff
               key={`${file.oldPath ?? ""}-${file.newPath ?? ""}-${i}`}
-              viewType={mode === "unified" ? "unified" : "split"}
+              viewType={effectiveMode === "unified" ? "unified" : "split"}
               diffType={file.type ?? "modify"}
               hunks={file.hunks}
               tokens={tokens[i] ?? undefined}

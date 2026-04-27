@@ -220,6 +220,25 @@ export function PtyPane({ recordId, containerName, command = "bash", sessionKey 
     };
   }, [recordId, sessionKey, sendCtrl, prefs.fontSize, prefs.cursorStyle, prefs.copyOnSelect]);
 
+  // M36 — virtual keyboard on iOS/Android shrinks window.visualViewport
+  // but not window.innerHeight, so the terminal renders BEHIND the keyboard.
+  // Listen to visualViewport.resize and call FitAddon.fit() to reflow the
+  // terminal when the visual viewport changes. No-op on desktop and in jsdom
+  // (visualViewport is undefined there, so the effect early-returns).
+  // Pairs with the viewport-fit=cover + interactive-widget meta hints
+  // landing in T14; both layers are needed for full iOS Safari < 17 support.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const handler = () => {
+      fitRef.current?.fit();
+    };
+    vv.addEventListener("resize", handler);
+    return () => {
+      vv.removeEventListener("resize", handler);
+    };
+  }, []);
+
   // M23 — palette "run suggestion" dispatches text at us via
   // ``dispatchPretype``. Match on (recordId, sessionKey) and forward
   // to the live WS. The text is NOT auto-submitted — we strip any
@@ -428,7 +447,9 @@ function StatusPill({ status, command }: { status: PtyStatus; command: string })
     closed: "closed",
   }[status];
   const color = {
-    connecting: "text-gray-500",
+    // text-gray-500 (#6a7282) on bg-gray-950 fails AA at 4.16:1; bump
+    // to gray-400 (#99a1af) for ~6.6:1.
+    connecting: "text-gray-400",
     connected: "text-green-400",
     reattached: "text-green-400",
     disconnected: "text-yellow-400",
@@ -446,7 +467,7 @@ function StatusPill({ status, command }: { status: PtyStatus; command: string })
     <span className={`flex items-center gap-1.5 ${color}`}>
       {icon}
       <span>{label}</span>
-      <span className="text-gray-600">· {command}</span>
+      <span className="text-gray-400">· {command}</span>
     </span>
   );
 }

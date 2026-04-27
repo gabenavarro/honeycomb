@@ -6,9 +6,11 @@
  * would violate React's rules-of-hooks (the count would vary across
  * renders). Full multi-container fan-out is deferred (TODO M35.x).
  */
+import { ChevronLeft } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useArtifacts } from "../../hooks/useArtifacts";
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import type { Artifact, ArtifactType, ContainerRecord } from "../../lib/types";
 import { ArtifactCard } from "./ArtifactCard";
 import { FilterChips } from "./FilterChips";
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export function LibraryActivity({ containers, activeContainerId, onSelectContainer }: Props) {
+  const isPhone = useIsPhone();
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<ArtifactType[]>([]);
   const [search, setSearch] = useState("");
@@ -52,6 +55,76 @@ export function LibraryActivity({ containers, activeContainerId, onSelectContain
   const allArtifacts: Artifact[] = stableIds.length === 1 ? single.artifacts : [];
   const activeContainer = containers.find((c) => c.id === activeContainerId);
 
+  // M36 — phone branch: stack detail BELOW sidebar. Two sub-cases:
+  //   1. artifact selected → detail-only with back-arrow header
+  //   2. no selection      → sidebar-only, full-width
+  if (isPhone) {
+    if (activeArtifactId) {
+      return (
+        <main aria-label="Library artifact" className="bg-page flex h-full min-w-0 flex-1 flex-col">
+          <header className="border-edge bg-pane flex items-center gap-2 border-b px-2 py-2">
+            <button
+              type="button"
+              onClick={() => setActiveArtifactId(null)}
+              aria-label="Back to library"
+              className="text-secondary hover:text-primary flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-2"
+            >
+              <ChevronLeft size={20} aria-hidden="true" />
+            </button>
+            <h1 className="text-primary flex-1 truncate text-[14px] font-semibold">Library</h1>
+          </header>
+          <ArtifactDetail
+            artifactId={activeArtifactId}
+            allArtifacts={allArtifacts}
+            onSelectContainer={onSelectContainer}
+          />
+        </main>
+      );
+    }
+    // No artifact selected — sidebar takes the full width.
+    return (
+      <main aria-label="Library" className="bg-page flex h-full min-w-0 flex-1 flex-col">
+        <header className="border-edge flex flex-col gap-1.5 border-b px-3 py-2">
+          <h2 className="text-secondary text-[10px] font-semibold tracking-wider uppercase">
+            Library
+          </h2>
+          <ScopeToggle
+            activeContainerName={activeContainer?.project_name ?? null}
+            onScopeChange={setScope}
+          />
+        </header>
+        <FilterChips
+          selected={selectedTypes}
+          onSelectedChange={setSelectedTypes}
+          artifacts={allArtifacts}
+        />
+        <div className="px-2 pb-1">
+          <SearchInput value={search} onChange={setSearch} />
+        </div>
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          {allArtifacts.length === 0 ? (
+            <p className="text-secondary px-2 py-4 text-[12px]">
+              {single.isLoading ? "Loading…" : "No artifacts yet."}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {allArtifacts.map((a) => (
+                <li key={a.artifact_id}>
+                  <ArtifactCard
+                    artifact={a}
+                    active={a.artifact_id === activeArtifactId}
+                    onSelect={setActiveArtifactId}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // Tablet / desktop — M35 layout (unchanged).
   return (
     <div className="flex h-full min-w-0 flex-1">
       <aside

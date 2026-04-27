@@ -11,11 +11,16 @@
 import { Paperclip, Send, Slash } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import { AttachmentChip } from "./AttachmentChip";
 import { EditAutoToggle } from "./EditAutoToggle";
+import type { ChatEffort } from "./EffortControl";
 import { EffortControl } from "./EffortControl";
-import { SlashAutocomplete } from "./SlashAutocomplete";
+import { EffortPickerSheet } from "./EffortPickerSheet";
+import { dispatchModeChange } from "./ModeToggle";
 import type { ChatMode } from "./ModeToggle";
+import { ModeToggleSheet } from "./ModeToggleSheet";
+import { SlashAutocomplete } from "./SlashAutocomplete";
 
 interface Props {
   sessionId: string;
@@ -44,6 +49,21 @@ export function ChatComposer({
 }: Props) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement | null>(null);
+
+  const isPhone = useIsPhone();
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const [effortSheetOpen, setEffortSheetOpen] = useState(false);
+  const [phoneEffort, setPhoneEffort] = useState<ChatEffort>(() => {
+    if (typeof window === "undefined") return "standard";
+    const v = window.localStorage.getItem(`hive:chat:${sessionId}:effort`);
+    return v === "quick" || v === "deep" || v === "max" ? (v as ChatEffort) : "standard";
+  });
+  // Re-read on sessionId change so phone effort chip stays in sync.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const v = window.localStorage.getItem(`hive:chat:${sessionId}:effort`);
+    setPhoneEffort(v === "quick" || v === "deep" || v === "max" ? (v as ChatEffort) : "standard");
+  }, [sessionId]);
 
   useEffect(() => {
     const el = ref.current;
@@ -171,15 +191,63 @@ export function ChatComposer({
       </div>
 
       <div className="border-edge-soft text-secondary flex items-center justify-between gap-2 border-t px-3 py-1 text-[10px]">
-        <div className="flex items-center gap-2">
-          <EffortControl sessionId={sessionId} />
-          <EditAutoToggle sessionId={sessionId} />
-          <span>
-            Mode: <span className="text-primary">{MODE_LABEL[mode]}</span>
-          </span>
-        </div>
-        <span className="text-secondary font-mono">⌘↵ send · esc cancel</span>
+        {isPhone ? (
+          <div className="flex items-center gap-2">
+            {/* Effort chip → opens EffortPickerSheet */}
+            <button
+              type="button"
+              onClick={() => setEffortSheetOpen(true)}
+              aria-label="Effort level"
+              className="bg-chip border-edge-soft text-primary flex min-h-[44px] items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+            >
+              <span className="text-secondary">Effort:</span>
+              <span className="font-medium capitalize">{phoneEffort}</span>
+            </button>
+            {/* Mode chip → opens ModeToggleSheet */}
+            <button
+              type="button"
+              onClick={() => setModeSheetOpen(true)}
+              aria-label="Chat mode"
+              className="bg-chip border-edge-soft text-primary flex min-h-[44px] items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+            >
+              <span className="text-secondary">Mode:</span>
+              <span className="font-medium">{MODE_LABEL[mode]}</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <EffortControl sessionId={sessionId} />
+              <EditAutoToggle sessionId={sessionId} />
+              <span>
+                Mode: <span className="text-primary">{MODE_LABEL[mode]}</span>
+              </span>
+            </div>
+            <span className="text-secondary font-mono">⌘↵ send · esc cancel</span>
+          </>
+        )}
       </div>
+
+      {/* M36 — sheets only render at phone via the open flag */}
+      {isPhone && (
+        <>
+          <ModeToggleSheet
+            open={modeSheetOpen}
+            mode={mode}
+            onSelect={(m) => dispatchModeChange(sessionId, m)}
+            onClose={() => setModeSheetOpen(false)}
+          />
+          <EffortPickerSheet
+            open={effortSheetOpen}
+            effort={phoneEffort}
+            onSelect={(e) => {
+              setPhoneEffort(e);
+              window.localStorage.setItem(`hive:chat:${sessionId}:effort`, e);
+            }}
+            onClose={() => setEffortSheetOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 }

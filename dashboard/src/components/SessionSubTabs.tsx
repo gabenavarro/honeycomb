@@ -47,46 +47,53 @@ export function SessionSubTabs({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
+  // ARIA structure: role="tablist" must contain only role="tab" (or
+  // presentational) children. The "+ New" button is an action, not a
+  // tab, so it lives in a sibling div alongside the tablist inside a
+  // shared flex row. Fixes axe-core aria-required-children violation
+  // ("Element has children which are not allowed: button[aria-label]").
   return (
-    <div
-      role="tablist"
-      aria-label="Container sessions"
-      className="border-edge bg-page flex shrink-0 items-center gap-0 overflow-x-auto border-b px-1"
-    >
-      {sessions.map((s) => (
-        <SessionTab
-          key={s.id}
-          session={s}
-          active={s.id === activeId}
-          canClose={sessions.length > 1}
-          editing={editingId === s.id}
-          dragging={draggingId === s.id}
-          dragOver={dragOverId === s.id && draggingId !== s.id}
-          onStartEdit={() => setEditingId(s.id)}
-          onEndEdit={() => setEditingId(null)}
-          onFocus={onFocus}
-          onClose={onClose}
-          onRename={onRename}
-          onDragStart={(id) => setDraggingId(id)}
-          onDragEnter={(id) => setDragOverId(id)}
-          onDragEnd={() => {
-            setDraggingId(null);
-            setDragOverId(null);
-          }}
-          onDrop={(fromIdDt, toId) => {
-            // Prefer the id from dataTransfer (reliable with synthetic events);
-            // fall back to React state for native drags.
-            const from = fromIdDt || draggingId;
-            if (from && from !== toId) onReorder(from, toId);
-            setDraggingId(null);
-            setDragOverId(null);
-          }}
-        />
-      ))}
+    <div className="border-edge bg-page flex shrink-0 items-center border-b px-1">
+      <div
+        role="tablist"
+        aria-label="Container sessions"
+        className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto"
+      >
+        {sessions.map((s) => (
+          <SessionTab
+            key={s.id}
+            session={s}
+            active={s.id === activeId}
+            canClose={sessions.length > 1}
+            editing={editingId === s.id}
+            dragging={draggingId === s.id}
+            dragOver={dragOverId === s.id && draggingId !== s.id}
+            onStartEdit={() => setEditingId(s.id)}
+            onEndEdit={() => setEditingId(null)}
+            onFocus={onFocus}
+            onClose={onClose}
+            onRename={onRename}
+            onDragStart={(id) => setDraggingId(id)}
+            onDragEnter={(id) => setDragOverId(id)}
+            onDragEnd={() => {
+              setDraggingId(null);
+              setDragOverId(null);
+            }}
+            onDrop={(fromIdDt, toId) => {
+              // Prefer the id from dataTransfer (reliable with synthetic events);
+              // fall back to React state for native drags.
+              const from = fromIdDt || draggingId;
+              if (from && from !== toId) onReorder(from, toId);
+              setDraggingId(null);
+              setDragOverId(null);
+            }}
+          />
+        ))}
+      </div>
       <button
         type="button"
         onClick={onNew}
-        className="text-secondary hover:bg-chip hover:text-primary flex items-center gap-1 px-2 py-1 text-[10px]"
+        className="text-secondary hover:bg-chip hover:text-primary flex shrink-0 items-center gap-1 px-2 py-1 text-[10px]"
         aria-label="New session"
         title="New session"
       >
