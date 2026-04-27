@@ -13,7 +13,7 @@
  * - Enter commits, Escape cancels, blur auto-commits.
  */
 
-import { Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, Terminal, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface SessionInfo {
@@ -26,7 +26,13 @@ interface Props {
   activeId: string | null;
   onFocus: (id: string) => void;
   onClose: (id: string) => void;
-  onNew: () => void;
+  /** M36-hotfix: spawn a new claude-kind session (the M33+ ChatThread
+   *  surface). This is the default + primary affordance. */
+  onNewChat: () => void;
+  /** M36-hotfix: spawn a new shell-kind session (the legacy terminal
+   *  pane). Secondary affordance — terminal access without making
+   *  shell the default. */
+  onNewShell: () => void;
   onRename: (id: string, name: string) => void;
   /** M21 D — reorder the session list. The caller gets (fromId, toId)
    * and is responsible for moving ``fromId`` to occupy ``toId``'s
@@ -39,7 +45,8 @@ export function SessionSubTabs({
   activeId,
   onFocus,
   onClose,
-  onNew,
+  onNewChat,
+  onNewShell,
   onRename,
   onReorder,
 }: Props) {
@@ -92,13 +99,23 @@ export function SessionSubTabs({
       </div>
       <button
         type="button"
-        onClick={onNew}
+        onClick={onNewChat}
         className="text-secondary hover:bg-chip hover:text-primary flex shrink-0 items-center gap-1 px-2 py-1 text-[10px]"
-        aria-label="New session"
-        title="New session"
+        aria-label="New chat session"
+        title="New chat session (Claude)"
       >
         <Plus size={10} />
-        New
+        Chat
+      </button>
+      <button
+        type="button"
+        onClick={onNewShell}
+        className="text-secondary hover:bg-chip hover:text-primary flex shrink-0 items-center gap-1 px-2 py-1 text-[10px]"
+        aria-label="New shell session"
+        title="New shell session (terminal)"
+      >
+        <Terminal size={10} />
+        Shell
       </button>
     </div>
   );

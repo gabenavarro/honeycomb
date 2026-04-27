@@ -331,7 +331,10 @@ export default function App() {
     if (namedSessions.length > 0) return;
     if (firstEmptyGuardRef.current) return;
     firstEmptyGuardRef.current = true;
-    void createSessionApi({ name: "Main", kind: "shell" });
+    // M36-hotfix: first-time auto-create defaults to claude (the M33+
+    // ChatThread surface). Pre-hotfix this was kind: "shell", which
+    // forced new workspaces into the legacy terminal pane.
+    void createSessionApi({ name: "Main", kind: "claude" });
   }, [active, namedSessions, sessionsLoading, createSessionApi]);
   useEffect(() => {
     // Reset the guard when the active container changes.
@@ -393,14 +396,31 @@ export default function App() {
     [active, setFsPathByContainer],
   );
 
-  const newSession = useCallback(async () => {
+  // M36-hotfix: split the previous `newSession` into two explicit
+  // affordances. Pre-hotfix the single "+ New" button hardcoded
+  // kind: "shell", leaving the M33 ChatThread surface only reachable
+  // via ⌘K. Now "+ Chat" defaults to claude (the redesign's primary
+  // surface) and "+ Shell" preserves terminal access.
+  const newChatSession = useCallback(async () => {
     if (active === undefined) return;
     const rawName = window.prompt(
-      `Name for the new session on ${active.project_name}:`,
-      `session ${namedSessions.length + 1}`,
+      `Name for the new chat on ${active.project_name}:`,
+      `chat ${namedSessions.length + 1}`,
     );
     if (rawName === null) return;
-    const name = rawName.trim() || `session ${namedSessions.length + 1}`;
+    const name = rawName.trim() || `chat ${namedSessions.length + 1}`;
+    const created = await createSessionApi({ name, kind: "claude" });
+    focusSession(created.session_id);
+  }, [active, namedSessions.length, createSessionApi, focusSession]);
+
+  const newShellSession = useCallback(async () => {
+    if (active === undefined) return;
+    const rawName = window.prompt(
+      `Name for the new shell on ${active.project_name}:`,
+      `shell ${namedSessions.length + 1}`,
+    );
+    if (rawName === null) return;
+    const name = rawName.trim() || `shell ${namedSessions.length + 1}`;
     const created = await createSessionApi({ name, kind: "shell" });
     focusSession(created.session_id);
   }, [active, namedSessions.length, createSessionApi, focusSession]);
@@ -620,7 +640,8 @@ export default function App() {
                   activeSplitSessionId={activeSplitSessionId}
                   onFocusSession={focusSession}
                   onCloseSession={closeSession}
-                  onNewSession={newSession}
+                  onNewChatSession={newChatSession}
+                  onNewShellSession={newShellSession}
                   onRenameSession={renameSession}
                   onReorderSession={reorderSession}
                   onSetSplitSession={setActiveSplitSession}

@@ -46,7 +46,12 @@ interface Props {
   activeSplitSessionId: string | null;
   onFocusSession: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => void;
-  onNewSession: () => void;
+  /** M36-hotfix: spawn a new claude-kind session (the M33 ChatThread
+   *  surface). The `+ Chat` button in SessionSubTabs binds to this. */
+  onNewChatSession: () => void;
+  /** M36-hotfix: spawn a new shell-kind session (the legacy terminal
+   *  pane). The `+ Shell` button in SessionSubTabs binds to this. */
+  onNewShellSession: () => void;
   onRenameSession: (sessionId: string, nextName: string) => void;
   onReorderSession: (fromId: string, toId: string) => void;
   onSetSplitSession: (sessionId: string) => void;
@@ -71,7 +76,8 @@ export function ChatsRoute({
   activeSplitSessionId,
   onFocusSession,
   onCloseSession,
-  onNewSession,
+  onNewChatSession,
+  onNewShellSession,
   onRenameSession,
   onReorderSession,
   onSetSplitSession,
@@ -136,7 +142,7 @@ export function ChatsRoute({
             onSelectContainer={onSelectContainer}
             onFocusSession={onFocusSession}
             onCloseSession={(id) => void onCloseSession(id)}
-            onNewSession={onNewSession}
+            onNewChatSession={onNewChatSession}
           />
         ) : (
           <>
@@ -158,7 +164,8 @@ export function ChatsRoute({
                   activeId={activeSessionId}
                   onFocus={onFocusSession}
                   onClose={onCloseSession}
-                  onNew={onNewSession}
+                  onNewChat={onNewChatSession}
+                  onNewShell={onNewShellSession}
                   onRename={onRenameSession}
                   onReorder={onReorderSession}
                 />
@@ -223,7 +230,9 @@ interface WrapperProps {
   onSelectContainer: (id: number) => void;
   onFocusSession: (id: string) => void;
   onCloseSession: (id: string) => void;
-  onNewSession: () => void;
+  /** M36-hotfix: spawn a new claude-kind session. Both the in-thread
+   *  fork action and the ChatTabStrip "+ New Tab" button bind to this. */
+  onNewChatSession: () => void;
 }
 
 function ChatThreadWrapper({
@@ -234,7 +243,7 @@ function ChatThreadWrapper({
   onSelectContainer,
   onFocusSession,
   onCloseSession,
-  onNewSession,
+  onNewChatSession,
 }: WrapperProps) {
   const sessionId = activeNamedSession.session_id;
   const { turns, clearTurns } = useChatStream(sessionId);
@@ -353,7 +362,7 @@ function ChatThreadWrapper({
         JSON.stringify({ at_message: turn.id }),
       );
     }
-    onNewSession();
+    onNewChatSession();
   };
 
   const edit = (turn: ChatTurn) => {
@@ -373,7 +382,7 @@ function ChatThreadWrapper({
       activeTabId={sessionId}
       onFocusTab={onFocusSession}
       onCloseTab={onCloseSession}
-      onNewTab={onNewSession}
+      onNewTab={onNewChatSession}
       turns={turns}
       mode={mode}
       pending={pending}
