@@ -19,6 +19,7 @@ import { ActivityBar, type Activity } from "./components/ActivityBar";
 import { AuthGate } from "./components/AuthGate";
 import { CommandPalette } from "./components/CommandPalette";
 import { LocalStorageQuotaWatcher } from "./components/LocalStorageQuotaWatcher";
+import { PhoneTabBar, type PhoneTab } from "./components/PhoneTabBar";
 import { Provisioner } from "./components/Provisioner";
 import { HelpOverlay } from "./components/HelpOverlay";
 import { type SessionInfo } from "./components/SessionSubTabs";
@@ -29,6 +30,7 @@ import { ChatsRoute } from "./components/routes/ChatsRoute";
 import { LibraryRoute } from "./components/routes/LibraryRoute";
 import { FilesRoute } from "./components/routes/FilesRoute";
 import { SettingsRoute } from "./components/routes/SettingsRoute";
+import { useIsPhone } from "./hooks/useMediaQuery";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { purgeContainerSessions } from "./hooks/useSessionStore";
@@ -116,6 +118,45 @@ const DEFAULT_ROOT_LAYOUT: Layout = {
   "hive-sidebar": 20,
   "hive-editor": 80,
 };
+
+// M36 — PhoneTab ↔ Activity mapping for the phone bottom-nav. The
+// phone tab union (chats / library / files / git / more) is a flatter
+// view of the M32 activity space; "git" maps to the SCM sub-activity
+// (which lives inside the Files route in the URL space), and "more"
+// is a placeholder for Settings until a dedicated More page lands.
+function activityToPhoneTab(a: Activity): PhoneTab {
+  switch (a) {
+    case "containers":
+    case "gitops":
+    case "search":
+      return "chats";
+    case "diff-events":
+      return "library";
+    case "files":
+    case "problems":
+    case "keybindings":
+      return "files";
+    case "scm":
+      return "git";
+    case "settings":
+      return "more";
+  }
+}
+
+function phoneTabToActivity(t: PhoneTab): Activity {
+  switch (t) {
+    case "chats":
+      return "containers";
+    case "library":
+      return "diff-events";
+    case "files":
+      return "files";
+    case "git":
+      return "scm";
+    case "more":
+      return "settings";
+  }
+}
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -532,6 +573,16 @@ export default function App() {
   void layoutByContainer;
   void setLayoutByContainer;
 
+  // M36 — phone bottom-nav. ActivityBar already auto-hides at phone via
+  // its `hidden tablet:flex` class (T5), so the PhoneTabBar simply
+  // appears at the bottom of the layout when isPhone is true. Hidden
+  // when the user is in a chat-detail view (active container with a
+  // selected session on /chats) so the composer gets full vertical
+  // room per the M36 spec.
+  const isPhone = useIsPhone();
+  const phoneInChatDetail =
+    isPhone && currentRoute === "chats" && active !== undefined && activeSessionId !== "";
+
   return (
     <AuthGate>
       <LocalStorageQuotaWatcher />
@@ -620,6 +671,19 @@ export default function App() {
             <Route path="*" element={<Navigate to="/chats" replace />} />
           </Routes>
         </div>
+
+        {isPhone && (
+          <PhoneTabBar
+            activeTab={activityToPhoneTab(activity)}
+            onTabChange={(t) => {
+              const a = phoneTabToActivity(t);
+              setActivity(a);
+              setSidebarOpen(true);
+              goToRoute(routeForActivity(a));
+            }}
+            visible={!phoneInChatDetail}
+          />
+        )}
 
         <StatusBar
           activeContainerId={active?.id ?? null}
