@@ -447,7 +447,9 @@ function StatusPill({ status, command }: { status: PtyStatus; command: string })
     closed: "closed",
   }[status];
   const color = {
-    connecting: "text-gray-500",
+    // text-gray-500 (#6a7282) on bg-gray-950 fails AA at 4.16:1; bump
+    // to gray-400 (#99a1af) for ~6.6:1.
+    connecting: "text-gray-400",
     connected: "text-green-400",
     reattached: "text-green-400",
     disconnected: "text-yellow-400",
@@ -465,7 +467,7 @@ function StatusPill({ status, command }: { status: PtyStatus; command: string })
     <span className={`flex items-center gap-1.5 ${color}`}>
       {icon}
       <span>{label}</span>
-      <span className="text-gray-600">· {command}</span>
+      <span className="text-gray-400">· {command}</span>
     </span>
   );
 }

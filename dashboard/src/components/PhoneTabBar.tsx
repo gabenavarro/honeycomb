@@ -44,16 +44,24 @@ export function PhoneTabBar({ activeTab, onTabChange, visible = true }: Props) {
     >
       {TABS.map((t) => {
         const active = t.id === activeTab;
+        // Active uses text-primary (font-semibold) + a top accent bar
+        // for visual emphasis. Pure text-accent (#b8541c on #f7f1e3 in
+        // light theme) fails WCAG AA contrast at 10px (4.31:1 < 4.5).
+        // The top bar carries the accent color; the label stays high-
+        // contrast.
         return (
           <button
             key={t.id}
             type="button"
             aria-current={active ? "page" : undefined}
             onClick={() => onTabChange(t.id)}
-            className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] transition-colors ${
-              active ? "text-accent" : "text-secondary"
+            className={`relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] transition-colors ${
+              active ? "text-primary font-semibold" : "text-secondary"
             }`}
           >
+            {active && (
+              <span aria-hidden="true" className="bg-accent absolute inset-x-0 top-0 h-0.5" />
+            )}
             {t.icon}
             <span>{t.label}</span>
           </button>

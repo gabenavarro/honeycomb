@@ -61,7 +61,7 @@ export function LibraryActivity({ containers, activeContainerId, onSelectContain
   if (isPhone) {
     if (activeArtifactId) {
       return (
-        <div className="bg-page flex h-full min-w-0 flex-1 flex-col">
+        <main aria-label="Library artifact" className="bg-page flex h-full min-w-0 flex-1 flex-col">
           <header className="border-edge bg-pane flex items-center gap-2 border-b px-2 py-2">
             <button
               type="button"
@@ -78,12 +78,12 @@ export function LibraryActivity({ containers, activeContainerId, onSelectContain
             allArtifacts={allArtifacts}
             onSelectContainer={onSelectContainer}
           />
-        </div>
+        </main>
       );
     }
     // No artifact selected — sidebar takes the full width.
     return (
-      <div className="bg-page flex h-full min-w-0 flex-1 flex-col">
+      <main aria-label="Library" className="bg-page flex h-full min-w-0 flex-1 flex-col">
         <header className="border-edge flex flex-col gap-1.5 border-b px-3 py-2">
           <h2 className="text-secondary text-[10px] font-semibold tracking-wider uppercase">
             Library
@@ -120,7 +120,7 @@ export function LibraryActivity({ containers, activeContainerId, onSelectContain
             </ul>
           )}
         </div>
-      </div>
+      </main>
     );
   }
 
