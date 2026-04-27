@@ -1,8 +1,17 @@
-/** Modal sheet for customising which artifact types appear as primary chips. M35. */
+/** Modal sheet for customising which artifact types appear as primary chips. M35.
+ *
+ *  M36 — branches on useIsPhone(): on phone we use the new bottom Sheet
+ *  primitive (full-screen-ish, slides up from the bottom); on tablet+
+ *  we keep the M35 hand-rolled centered popover. The dialog title
+ *  ("Customize artifact chips") is preserved across both branches so
+ *  existing tests continue to pass.
+ */
 import { Star } from "lucide-react";
 
+import { useIsPhone } from "../../hooks/useMediaQuery";
 import type { ArtifactType } from "../../lib/types";
 import { ALL_TYPES, TYPE_LABEL } from "../../lib/artifact-meta";
+import { Sheet } from "../Sheet";
 
 const MAX_PRIMARY = 4;
 
@@ -13,6 +22,8 @@ interface Props {
 }
 
 export function MoreCustomizationSheet({ primaryTypes, onPrimaryTypesChange, onClose }: Props) {
+  const isPhone = useIsPhone();
+
   function handleToggle(type: ArtifactType) {
     if (primaryTypes.includes(type)) {
       // Demote: remove from primary
@@ -27,6 +38,43 @@ export function MoreCustomizationSheet({ primaryTypes, onPrimaryTypesChange, onC
     }
   }
 
+  // Shared list — same 8-row mapping in both branches.
+  const rows = (
+    <ul className="flex flex-col gap-1">
+      {ALL_TYPES.map((type) => {
+        const isPrimary = primaryTypes.includes(type);
+        return (
+          <li key={type} className="flex items-center justify-between">
+            <span className="text-secondary text-[12px]">{TYPE_LABEL[type]}</span>
+            <button
+              type="button"
+              onClick={() => handleToggle(type)}
+              aria-label={isPrimary ? `Remove ${type} from primary` : `Add ${type} to primary`}
+              aria-pressed={isPrimary}
+              className="transition-colors"
+            >
+              <Star
+                size={12}
+                aria-hidden="true"
+                className={isPrimary ? "fill-think text-think" : "text-muted"}
+              />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  if (isPhone) {
+    return (
+      <Sheet open={true} onClose={onClose} title="Customize artifact chips">
+        {rows}
+        <p className="text-faint mt-3 text-[10px]">Up to {MAX_PRIMARY} primary chips.</p>
+      </Sheet>
+    );
+  }
+
+  // Desktop / tablet: M35 popover (unchanged structure).
   return (
     <>
       {/* Backdrop */}
@@ -49,29 +97,7 @@ export function MoreCustomizationSheet({ primaryTypes, onPrimaryTypesChange, onC
             ✕
           </button>
         </header>
-        <ul className="flex flex-col gap-1">
-          {ALL_TYPES.map((type) => {
-            const isPrimary = primaryTypes.includes(type);
-            return (
-              <li key={type} className="flex items-center justify-between">
-                <span className="text-secondary text-[12px]">{TYPE_LABEL[type]}</span>
-                <button
-                  type="button"
-                  onClick={() => handleToggle(type)}
-                  aria-label={isPrimary ? `Remove ${type} from primary` : `Add ${type} to primary`}
-                  aria-pressed={isPrimary}
-                  className="transition-colors"
-                >
-                  <Star
-                    size={12}
-                    aria-hidden="true"
-                    className={isPrimary ? "fill-think text-think" : "text-muted"}
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {rows}
         <p className="text-faint mt-3 text-[10px]">Up to {MAX_PRIMARY} primary chips.</p>
       </div>
     </>

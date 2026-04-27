@@ -35,7 +35,7 @@ function ChipButton({ label, count, pressed, onClick }: ChipButtonProps) {
       onClick={onClick}
       aria-pressed={pressed}
       className={[
-        "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+        "flex shrink-0 snap-start items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors",
         pressed
           ? "border-accent bg-accent/10 text-primary"
           : "border-edge bg-chip text-secondary hover:text-primary",
@@ -92,7 +92,7 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-1 px-2 py-1.5">
+      <div className="scrollbar-hidden tablet:flex-wrap tablet:overflow-x-visible flex snap-x snap-mandatory flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1.5">
         {/* All chip */}
         <ChipButton label="All" pressed={allSelected} onClick={clearAll} count={artifacts.length} />
 
@@ -112,7 +112,7 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
           type="button"
           onClick={() => setSheetOpen(true)}
           aria-label="More filter options"
-          className="border-edge bg-chip text-secondary hover:text-primary flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px]"
+          className="border-edge bg-chip text-secondary hover:text-primary flex shrink-0 snap-start items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px]"
         >
           ⋯ More
         </button>

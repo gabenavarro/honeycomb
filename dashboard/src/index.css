@@ -272,3 +272,14 @@ kbd {
     padding-top: env(safe-area-inset-top, 0px);
   }
 }
+
+@layer utilities {
+  /* M36 — hide scrollbar visually while keeping the element scrollable
+     (used by FilterChips at phone for the horizontal-scroll chip row). */
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
