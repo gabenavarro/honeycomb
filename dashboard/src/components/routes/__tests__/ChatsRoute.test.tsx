@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "../../../hooks/useToasts";
+import type { ContainerRecord } from "../../../lib/types";
 import { ChatsRoute } from "../ChatsRoute";
 
 // Mock the chat stream hook so we can observe its subscribe targets.
@@ -54,7 +55,7 @@ function makeWrapper() {
   };
 }
 
-const mkContainer = (id: number, name: string) => ({
+const mkContainer = (id: number, name: string): ContainerRecord => ({
   id,
   workspace_folder: `/repos/${name}`,
   project_type: "base",
