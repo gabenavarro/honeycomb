@@ -92,7 +92,11 @@ export function FilterChips({ selected, onSelectedChange, artifacts }: Props) {
 
   return (
     <>
-      <div className="scrollbar-hidden tablet:flex-wrap tablet:overflow-x-visible flex snap-x snap-mandatory flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1.5">
+      <div
+        role="group"
+        aria-label="Artifact type filter"
+        className="scrollbar-hidden tablet:flex-wrap tablet:overflow-x-visible flex snap-x snap-mandatory flex-nowrap items-center gap-1.5 overflow-x-auto px-2 py-1.5"
+      >
         {/* All chip */}
         <ChipButton label="All" pressed={allSelected} onClick={clearAll} count={artifacts.length} />
 
