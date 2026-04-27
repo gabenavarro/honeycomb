@@ -145,6 +145,9 @@ test("first-empty container auto-creates a Main session", async ({ context, page
   await seedRoutes(context, []);
 
   // Capture POST body; respond with a server-assigned UUID.
+  // M36-hotfix: the auto-create now defaults to kind=claude (the M33+
+  // ChatThread surface). Pre-hotfix this was kind=shell, which forced
+  // new workspaces into the legacy terminal pane.
   const posts: unknown[] = [];
   await context.route("**/api/containers/7/named-sessions", async (route) => {
     if (route.request().method() === "POST") {
@@ -154,7 +157,7 @@ test("first-empty container auto-creates a Main session", async ({ context, page
           session_id: "auto",
           container_id: 7,
           name: "Main",
-          kind: "shell",
+          kind: "claude",
           created_at: "2026-04-20T00:00:00",
           updated_at: "2026-04-20T00:00:00",
         }),
@@ -164,10 +167,15 @@ test("first-empty container auto-creates a Main session", async ({ context, page
     }
   });
   await page.goto("/");
-  const tablist = page.getByRole("tablist", { name: /container sessions/i });
+  // After M36-hotfix the auto-created session is kind=claude, so the
+  // route renders ChatThread (which has its own ChatTabStrip with
+  // aria-label="Chat tabs") instead of the legacy SessionSubTabs
+  // ("Container sessions" tablist). Look for the Main tab in either —
+  // both shapes are valid surfaces for this test.
+  const tablist = page.getByRole("tablist", { name: /chat tabs|container sessions/i }).first();
   await expect(tablist.getByRole("tab", { name: /Main/ }).first()).toBeVisible();
   // The auto-seed POST fired with the expected body.
-  expect(posts).toContainEqual({ name: "Main", kind: "shell" });
+  expect(posts).toContainEqual({ name: "Main", kind: "claude" });
 });
 
 test("drag a session tab to position 1 reorders via PATCH", async ({ context, page }) => {
