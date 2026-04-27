@@ -116,7 +116,7 @@ export function ChatThread({
         onClose={onCloseTab}
         onNew={onNewTab}
       />
-      <ChatStream turns={turns} renderTurn={renderTurn} />
+      <ChatStream turns={turns} renderTurn={renderTurn} pending={pending} />
       <ChatComposer
         sessionId={sessionId}
         mode={mode}

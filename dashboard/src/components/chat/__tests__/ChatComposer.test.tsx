@@ -163,3 +163,37 @@ describe("ChatComposer", () => {
     expect(screen.getByRole("switch")).toBeTruthy();
   });
 });
+
+/** ChatComposer — Send button spinner (M37 Lane B). */
+describe("ChatComposer — Send button (M37 Lane B)", () => {
+  it("shows a spinning loader on the Send button when disabled (pending)", () => {
+    render(
+      <ChatComposer
+        sessionId="ns-1"
+        mode="code"
+        disabled
+        onSend={vi.fn()}
+        attachments={[]}
+        onAttachmentsChange={vi.fn()}
+      />,
+    );
+    const sendBtn = screen.getByRole("button", { name: /send/i });
+    // The spinner is identified by the animate-spin class on its svg child.
+    expect(sendBtn.querySelector(".animate-spin")).toBeTruthy();
+  });
+
+  it("does NOT show a spinner when not disabled", () => {
+    render(
+      <ChatComposer
+        sessionId="ns-1"
+        mode="code"
+        disabled={false}
+        onSend={vi.fn()}
+        attachments={[]}
+        onAttachmentsChange={vi.fn()}
+      />,
+    );
+    const sendBtn = screen.getByRole("button", { name: /send/i });
+    expect(sendBtn.querySelector(".animate-spin")).toBeNull();
+  });
+});
