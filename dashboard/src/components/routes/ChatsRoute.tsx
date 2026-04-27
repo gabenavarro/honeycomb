@@ -111,7 +111,7 @@ export function ChatsRoute({
   });
 
   return (
-    <div className="flex h-full min-w-0 flex-1">
+    <div className="flex h-full min-w-0 flex-1 overflow-x-hidden">
       <aside
         aria-label="Chats sidebar"
         className="border-edge bg-pane flex w-72 shrink-0 flex-col border-r"
