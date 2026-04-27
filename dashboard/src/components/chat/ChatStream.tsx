@@ -27,9 +27,7 @@ export function ChatStream({ turns, renderTurn, pending }: Props) {
   // responded), or the last assistant turn has zero blocks (silent window).
   const showPlaceholder =
     pending &&
-    (turns.length === 0 ||
-      lastTurn.role !== "assistant" ||
-      lastTurn.blocks.length === 0);
+    (turns.length === 0 || lastTurn.role !== "assistant" || lastTurn.blocks.length === 0);
 
   useEffect(() => {
     if (lastTurn?.streaming) {
@@ -56,7 +54,10 @@ export function ChatStream({ turns, renderTurn, pending }: Props) {
       )}
       {showPlaceholder && (
         <div className="text-secondary flex items-center gap-2 px-3 py-2 text-[12px]">
-          <span className="bg-think inline-block h-2 w-2 animate-pulse rounded-full" aria-hidden="true" />
+          <span
+            className="bg-think inline-block h-2 w-2 animate-pulse rounded-full"
+            aria-hidden="true"
+          />
           <span className="animate-pulse">Claude is thinking…</span>
         </div>
       )}
