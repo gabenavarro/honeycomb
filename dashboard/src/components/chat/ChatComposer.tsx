@@ -8,7 +8,7 @@
  *   - Send button (Cmd+Enter or click)
  *   - Foot row: EffortControl, EditAutoToggle, mode label, kbd hints
  */
-import { Paperclip, Send, Slash } from "lucide-react";
+import { Loader2, Paperclip, Send, Slash } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useIsPhone } from "../../hooks/useMediaQuery";
@@ -185,7 +185,11 @@ export function ChatComposer({
           disabled={disabled || value.trim().length === 0}
           className="bg-accent hover:bg-accent inline-flex items-center gap-1 rounded px-3 py-1.5 text-[12px] font-semibold text-white transition-colors disabled:opacity-50"
         >
-          <Send size={12} aria-hidden="true" />
+          {disabled ? (
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Send size={12} aria-hidden="true" />
+          )}
           <span>Send</span>
         </button>
       </div>

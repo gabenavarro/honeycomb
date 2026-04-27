@@ -117,6 +117,53 @@ class TestBuildCommand:
         assert cmd[cmd.index("--permission-mode") + 1] == "plan"  # plan wins
 
 
+class TestBuildSpawnCommand:
+    """M37-hotfix: `ClaudeTurnSession._build_spawn_command` wraps the
+    plain claude argv with `docker exec -i -w <cwd> <container_id>`
+    when ``docker_container_id`` is set. The hub runs on the host but
+    the workspace path (e.g. ``/workspace/gnbio``) only exists inside
+    the container — host-side spawn fails with FileNotFoundError. This
+    helper makes the same M33 ClaudeTurnSession work for both
+    container-attached and host-only deployments.
+    """
+
+    def test_no_docker_container_id_returns_argv_unchanged(self) -> None:
+        session = ClaudeTurnSession(
+            named_session_id="ns",
+            cwd="/host/path",
+            ws_manager=AsyncMock(),
+        )
+        cmd = ["claude", "--print", "--output-format", "stream-json"]
+        spawn_cmd, spawn_cwd = session._build_spawn_command(cmd)
+        assert spawn_cmd == cmd
+        assert spawn_cwd == "/host/path"
+
+    def test_with_docker_container_id_wraps_with_docker_exec(self) -> None:
+        session = ClaudeTurnSession(
+            named_session_id="ns",
+            cwd="/workspace/gnbio",
+            ws_manager=AsyncMock(),
+            docker_container_id="7202c6deb33b",
+        )
+        cmd = ["claude", "--print", "--output-format", "stream-json"]
+        spawn_cmd, spawn_cwd = session._build_spawn_command(cmd)
+        assert spawn_cmd == [
+            "docker",
+            "exec",
+            "-i",
+            "-w",
+            "/workspace/gnbio",
+            "7202c6deb33b",
+            "claude",
+            "--print",
+            "--output-format",
+            "stream-json",
+        ]
+        # Docker exec owns the cwd inside the container; the host
+        # subprocess cwd is left unset so it inherits the hub's cwd.
+        assert spawn_cwd is None
+
+
 class TestClaudeTurnSession:
     @pytest.mark.asyncio
     async def test_run_pipes_user_message_and_broadcasts_events(self, tmp_path: Path) -> None:

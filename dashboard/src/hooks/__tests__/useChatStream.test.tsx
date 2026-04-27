@@ -9,22 +9,42 @@ import type { ChatCliEvent, StreamEvent } from "../../components/chat/types";
 
 // In-memory mock of useHiveWebSocket.
 type Listener = (frame: { channel: string; event: string; data: ChatCliEvent }) => void;
-const listeners = new Map<string, Set<Listener>>();
-const subscribed = new Set<string>();
+
+// vi.hoisted ensures these data structures and spies exist before vi.mock's
+// factory runs (vi.mock is hoisted to the top of the file by the transformer,
+// which would otherwise evaluate before module-level const declarations are
+// initialised). All three callbacks must be stable references — useHiveWebSocket
+// returns a fresh object literal per render (mirroring production), but the
+// hook's useEffect depends on the destructured callbacks, not the wrapper object.
+// Stable callbacks → effect runs once; unstable → churn.
+const { listeners, subscribed, subscribeSpy, unsubscribeSpy, onChannelSpy } = vi.hoisted(() => {
+  const listeners = new Map<string, Set<Listener>>();
+  const subscribed = new Set<string>();
+  const subscribeSpy = vi.fn((channels: string[]) => channels.forEach((c) => subscribed.add(c)));
+  const unsubscribeSpy = vi.fn((channels: string[]) =>
+    channels.forEach((c) => subscribed.delete(c)),
+  );
+  const onChannelSpy = vi.fn((channel: string, cb: Listener) => {
+    let set = listeners.get(channel);
+    if (!set) {
+      set = new Set();
+      listeners.set(channel, set);
+    }
+    set.add(cb);
+    return () => set!.delete(cb);
+  });
+  return { listeners, subscribed, subscribeSpy, unsubscribeSpy, onChannelSpy };
+});
 
 vi.mock("../useWebSocket", () => ({
   useHiveWebSocket: () => ({
-    subscribe: (channels: string[]) => channels.forEach((c) => subscribed.add(c)),
-    unsubscribe: (channels: string[]) => channels.forEach((c) => subscribed.delete(c)),
-    onChannel: (channel: string, cb: Listener) => {
-      let set = listeners.get(channel);
-      if (!set) {
-        set = new Set();
-        listeners.set(channel, set);
-      }
-      set.add(cb);
-      return () => set!.delete(cb);
-    },
+    // Fresh object literal every render — mirrors production. All three
+    // callback values are stable spy references so the hook's dep-array
+    // stabilisation (destructure instead of depending on the wrapper object)
+    // is what prevents subscribe/unsubscribe churn.
+    subscribe: subscribeSpy,
+    unsubscribe: unsubscribeSpy,
+    onChannel: onChannelSpy,
   }),
 }));
 
@@ -42,6 +62,9 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   listeners.clear();
   subscribed.clear();
+  subscribeSpy.mockClear();
+  unsubscribeSpy.mockClear();
+  onChannelSpy.mockClear();
 });
 afterEach(() => {
   listeners.clear();
@@ -274,5 +297,15 @@ describe("useChatStream", () => {
       result.current.clearTurns();
     });
     expect(result.current.turns).toHaveLength(0);
+  });
+
+  it("does NOT re-subscribe when the parent re-renders (regression: WS churn from object-identity dep)", () => {
+    const { rerender } = renderHook(() => useChatStream("ns-churn"), { wrapper });
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    rerender();
+    rerender();
+    rerender();
+    expect(subscribeSpy).toHaveBeenCalledTimes(1);
+    expect(unsubscribeSpy).toHaveBeenCalledTimes(0);
   });
 });

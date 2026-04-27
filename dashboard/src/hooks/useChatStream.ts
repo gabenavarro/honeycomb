@@ -164,21 +164,21 @@ function applyStreamEvent(prev: ChatTurn[], inner: StreamEventInner): ChatTurn[]
 
 export function useChatStream(sessionId: string | null): UseChatStreamResult {
   const [turns, dispatch] = useReducer(reducer, []);
-  const ws = useHiveWebSocket();
+  const { subscribe, unsubscribe, onChannel } = useHiveWebSocket();
 
   useEffect(() => {
     if (sessionId === null) return;
     const channel = `chat:${sessionId}`;
-    ws.subscribe([channel]);
-    const remove = ws.onChannel(channel, (frame) => {
+    subscribe([channel]);
+    const remove = onChannel(channel, (frame) => {
       const event = frame.data as ChatCliEvent;
       dispatch({ type: "event", payload: event });
     });
     return () => {
       remove();
-      ws.unsubscribe([channel]);
+      unsubscribe([channel]);
     };
-  }, [sessionId, ws]);
+  }, [sessionId, subscribe, unsubscribe, onChannel]);
 
   const clearTurns = useCallback(() => {
     dispatch({ type: "clear" });

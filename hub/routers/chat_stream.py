@@ -65,12 +65,19 @@ async def post_turn(session_id: str, body: TurnRequest, request: Request) -> dic
     container = await registry.get(sess.container_id)
     cwd = container.workspace_folder
 
+    # M37-hotfix: when the container is a real docker container with a
+    # known docker container id, dispatch claude inside that container.
+    # Hub-on-host can't cd into the container's workspace path; M33's
+    # original design assumed cwd was a host path which broke for every
+    # docker-discovered workspace. Falls back to host-spawn when
+    # container_id is empty (e.g. registry-only / synthetic records).
     chat = ClaudeTurnSession(
         named_session_id=session_id,
         cwd=cwd,
         ws_manager=ws_manager,
         container_id=sess.container_id,
         artifacts_engine=registry.engine,
+        docker_container_id=container.container_id or None,
     )
     _active[session_id] = chat
 
