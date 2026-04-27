@@ -135,6 +135,7 @@ export function ChatsRoute({
       <main className="bg-page flex h-full min-w-0 flex-1 flex-col">
         {isClaudeKind && activeNamedSession && activeContainer !== undefined ? (
           <ChatThreadWrapper
+            key={activeNamedSession.session_id}
             activeNamedSession={activeNamedSession}
             namedSessions={namedSessions}
             containers={containers}
