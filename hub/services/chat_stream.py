@@ -264,6 +264,7 @@ class ClaudeTurnSession:
         claude_binary: str = "claude",
         container_id: int | None = None,
         artifacts_engine: Any = None,
+        docker_container_id: str | None = None,
     ) -> None:
         self.named_session_id = named_session_id
         self.cwd = cwd
@@ -277,8 +278,34 @@ class ClaudeTurnSession:
         # is missing the hook dispatch becomes a no-op.
         self.container_id = container_id
         self.artifacts_engine = artifacts_engine
+        # M37-hotfix: when set, wrap the spawn with `docker exec -i -w <cwd>`
+        # so claude runs inside the container with the container-local
+        # workspace path. M33's host-subprocess design assumed cwd existed
+        # on the host, which is false for docker-discovered workspaces.
+        self.docker_container_id = docker_container_id
         self._proc: asyncio.subprocess.Process | None = None
         self._cancelled = False
+
+    def _build_spawn_command(self, cmd: list[str]) -> tuple[list[str], str | None]:
+        """Wrap *cmd* with `docker exec` when ``docker_container_id`` is set.
+
+        Returns ``(spawn_cmd, spawn_cwd)``. Without docker the caller
+        spawns ``cmd`` directly with ``cwd=self.cwd``; with docker the
+        caller spawns the wrapped argv with ``cwd=None`` (docker exec
+        owns the working directory inside the container).
+        """
+        if self.docker_container_id is None:
+            return cmd, self.cwd
+        wrapped = [
+            "docker",
+            "exec",
+            "-i",
+            "-w",
+            self.cwd,
+            self.docker_container_id,
+            *cmd,
+        ]
+        return wrapped, None
 
     async def run(
         self,
@@ -290,7 +317,13 @@ class ClaudeTurnSession:
         mode: str = "code",
         edit_auto: bool = False,
     ) -> TurnResult:
-        if shutil.which(self.claude_binary) is None and not self.claude_binary.startswith("/"):
+        # M37-hotfix: with docker_container_id we dispatch claude inside
+        # the container — the host doesn't need claude in $PATH.
+        if (
+            self.docker_container_id is None
+            and shutil.which(self.claude_binary) is None
+            and not self.claude_binary.startswith("/")
+        ):
             # Defensive: explicit path or PATH lookup must succeed.
             raise FileNotFoundError(f"claude binary not found: {self.claude_binary}")
 
@@ -302,11 +335,13 @@ class ClaudeTurnSession:
             edit_auto=edit_auto,
             claude_binary=self.claude_binary,
         )
+        spawn_cmd, spawn_cwd = self._build_spawn_command(cmd)
         logger.info(
-            "chat_stream spawn: ns=%s cmd=%s cwd=%s resume=%s effort=%s model=%s mode=%s edit_auto=%s",
+            "chat_stream spawn: ns=%s cmd=%s cwd=%s docker=%s resume=%s effort=%s model=%s mode=%s edit_auto=%s",
             self.named_session_id,
-            " ".join(cmd),
+            " ".join(spawn_cmd),
             self.cwd,
+            self.docker_container_id,
             claude_session_id,
             effort,
             model,
@@ -314,11 +349,11 @@ class ClaudeTurnSession:
             edit_auto,
         )
         self._proc = await asyncio.create_subprocess_exec(
-            *cmd,
+            *spawn_cmd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=self.cwd,
+            cwd=spawn_cwd,
             start_new_session=True,  # own process group so cancel() can kill all children
         )
 
