@@ -153,6 +153,34 @@ describe("useSessions", () => {
     await waitFor(() => expect(result.current.sessions.length).toBe(1));
     expect(result.current.sessions[0].session_id).toBe("b");
   });
+
+  it("close evicts the chat-stream store entry (M37 follow-up: prevent leak)", async () => {
+    const { dispatchEvent, getTurns, __resetForTests } = await import("../chatStreamStore");
+    __resetForTests();
+    // Seed the store with a turn for session "a".
+    dispatchEvent("a", {
+      type: "user",
+      message: {
+        id: "m",
+        type: "message",
+        role: "user",
+        content: [{ type: "text", text: "hi" }],
+      },
+      session_id: "",
+      uuid: "u-1",
+    });
+    expect(getTurns("a").length).toBe(1);
+
+    mockList.mockResolvedValue([session("a"), session("b")]);
+    mockDelete.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useSessions(1), { wrapper });
+    await waitFor(() => expect(result.current.sessions.length).toBe(2));
+    await act(async () => {
+      await result.current.close("a");
+    });
+    // After successful delete, store entry for "a" must be gone.
+    await waitFor(() => expect(getTurns("a").length).toBe(0));
+  });
 });
 
 // --- M28: reorder ---

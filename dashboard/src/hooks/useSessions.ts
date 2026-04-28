@@ -20,6 +20,7 @@ import {
   reorderNamedSession,
 } from "../lib/api";
 import type { NamedSession, NamedSessionCreate, SessionKind } from "../lib/types";
+import { clearTurns as clearChatStreamTurns } from "./chatStreamStore";
 import { useHiveWebSocket } from "./useWebSocket";
 
 export interface UseSessionsResult {
@@ -138,6 +139,12 @@ export function useSessions(containerId: number | null): UseSessionsResult {
         previous.filter((s) => s.session_id !== sessionId),
       );
       return { previous };
+    },
+    onSuccess: (_data, sessionId) => {
+      // Evict the chat-stream store entry once the server confirms the
+      // session is gone — without this the in-memory turns array would
+      // pin every transcript for the page lifetime (M37 follow-up).
+      clearChatStreamTurns(sessionId);
     },
     onError: (_err, _vars, ctx) => {
       if (ctx) qc.setQueryData(queryKey, ctx.previous);
