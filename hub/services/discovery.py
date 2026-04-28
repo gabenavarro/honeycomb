@@ -270,8 +270,25 @@ def scan_workspace_candidates(
 
 
 def _infer_workspace_from_container(container) -> str | None:
-    """Extract the host workspace folder from a container's devcontainer
-    labels or its bind mounts. Returns None when nothing credible matches."""
+    """Extract the workspace folder for a container.
+
+    Priority:
+      1. container.attrs["Config"]["WorkingDir"] — the canonical
+         container-side cwd. This is what docker-exec uses, and matches
+         chat_stream's expectations.
+      2. devcontainer.local_folder label — host-side path used by the
+         devcontainer CLI relay path.
+      3. com.docker.compose.project.working_dir label.
+      4. A bind mount whose target is /workspace*.
+
+    Returns None if nothing credible is available; the caller decides
+    whether to fall back to a synthetic placeholder.
+    """
+    config = container.attrs.get("Config") or {}
+    workdir = config.get("WorkingDir")
+    if workdir and workdir != "/":
+        return workdir
+
     labels = container.labels or {}
     # Standard devcontainer label set by the CLI.
     local_folder = labels.get("devcontainer.local_folder")
