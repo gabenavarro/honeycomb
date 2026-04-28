@@ -18,6 +18,19 @@ export function applyEvent(prev: ChatTurn[], event: ChatCliEvent): ChatTurn[] {
         .map((b) => (b as { type: "text"; text: string }).text)
         .join("");
     }
+
+    // Dedupe: if the most recent user turn already has this text and a
+    // local-tagged id, the dashboard pre-added it on Send and the hub
+    // echo we're seeing now is the redundant copy. Skip.
+    for (let i = prev.length - 1; i >= 0; i--) {
+      const t = prev[i];
+      if (t.role !== "user") continue;
+      if (t.id.startsWith("user-local-") && t.text === text) {
+        return prev;
+      }
+      break;  // only check the most recent user turn
+    }
+
     const turn: ChatTurn = {
       id: `user-${event.uuid}`,
       role: "user",

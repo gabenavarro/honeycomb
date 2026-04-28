@@ -370,3 +370,108 @@ describe("useChatStream — store persistence (M37 follow-up)", () => {
     expect(b.current.turns).toHaveLength(1);
   });
 });
+
+describe("useChatStream — user echo dedupe (M37 follow-up)", () => {
+  it("dedupes the hub user-echo when a local user turn was pre-added", () => {
+    const { result } = renderHook(() => useChatStream("ns-dedupe"), { wrapper });
+
+    // Simulate the dashboard's pre-add by dispatching a local user event.
+    act(() => {
+      emit("chat:ns-dedupe", {
+        type: "user",
+        message: {
+          id: "local-placeholder",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello world" }],
+        },
+        session_id: "s",
+        uuid: "local-abc-123",  // local- prefix
+      });
+    });
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-local-abc-123");
+
+    // Now the hub's echo arrives with the SAME text but a different uuid.
+    act(() => {
+      emit("chat:ns-dedupe", {
+        type: "user",
+        message: {
+          id: "msg-hub-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello world" }],
+        },
+        session_id: "s",
+        uuid: "9d96df85-475a-4d76-bbc8-05e00c4682af",  // hub-style uuid
+      });
+    });
+
+    // Should NOT add a second user turn — the local one is canonical.
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-local-abc-123");
+  });
+
+  it("still appends a hub user turn when there was no local pre-add", () => {
+    const { result } = renderHook(() => useChatStream("ns-no-local"), { wrapper });
+    act(() => {
+      emit("chat:ns-no-local", {
+        type: "user",
+        message: {
+          id: "msg-hub-2",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
+        session_id: "s",
+        uuid: "real-uuid-from-hub",
+      });
+    });
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-real-uuid-from-hub");
+  });
+
+  it("dedupes only the MOST RECENT user turn (different text → keep both)", () => {
+    const { result } = renderHook(() => useChatStream("ns-multi"), { wrapper });
+    act(() => {
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "local-placeholder-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "first message" }],
+        },
+        session_id: "s",
+        uuid: "local-1",
+      });
+      // Hub echo of message 1.
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "msg-hub-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "first message" }],
+        },
+        session_id: "s",
+        uuid: "hub-1",
+      });
+      // User sends a different message — local pre-add.
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "local-placeholder-2",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "second message" }],
+        },
+        session_id: "s",
+        uuid: "local-2",
+      });
+    });
+    expect(result.current.turns).toHaveLength(2);
+    expect(result.current.turns[0].text).toBe("first message");
+    expect(result.current.turns[1].text).toBe("second message");
+  });
+});
