@@ -270,8 +270,25 @@ def scan_workspace_candidates(
 
 
 def _infer_workspace_from_container(container) -> str | None:
-    """Extract the host workspace folder from a container's devcontainer
-    labels or its bind mounts. Returns None when nothing credible matches."""
+    """Extract the workspace folder for a container.
+
+    Priority:
+      1. devcontainer.local_folder label — host-side path used by the
+         devcontainer CLI relay path. Kept first because gitops, the
+         devcontainer up/rebuild flow, and the bootstrapper all read
+         workspace_folder as a HOST path on the hub.
+      2. com.docker.compose.project.working_dir label — also host-side.
+      3. A bind mount whose target is /workspace* — its source is the
+         host path.
+      4. container.attrs["Config"]["WorkingDir"] — last resort, the
+         container-side cwd. Useful for ad-hoc ``docker run`` containers
+         (e.g., gnbio) that have no devcontainer / compose / /workspace
+         signal but have a meaningful WORKDIR. The chat_stream relay's
+         docker-exec path uses this directly via ``-w <cwd>``.
+
+    Returns None if nothing credible is available; the caller decides
+    whether to fall back to a synthetic placeholder.
+    """
     labels = container.labels or {}
     # Standard devcontainer label set by the CLI.
     local_folder = labels.get("devcontainer.local_folder")
@@ -281,7 +298,7 @@ def _infer_workspace_from_container(container) -> str | None:
     compose_dir = labels.get("com.docker.compose.project.working_dir")
     if compose_dir:
         return compose_dir
-    # Last resort: look for a bind mount whose target is /workspace/*.
+    # Bind mount whose target is /workspace/*.
     for mount in container.attrs.get("Mounts", []) or []:
         if mount.get("Type") == "bind":
             dest = mount.get("Destination", "")
@@ -289,6 +306,15 @@ def _infer_workspace_from_container(container) -> str | None:
                 src = mount.get("Source")
                 if src:
                     return src
+    # Last resort before the synthetic /workspace/<name> fallback in
+    # routers/discover.py: the container's own WorkingDir. This is the
+    # only signal we have for ad-hoc containers (no devcontainer label,
+    # no compose, no /workspace mount). Skip when empty or "/" — those
+    # are Docker's uninformative defaults.
+    config = container.attrs.get("Config") or {}
+    workdir = config.get("WorkingDir")
+    if workdir and workdir != "/":
+        return workdir
     return None
 
 
