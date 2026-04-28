@@ -295,9 +295,10 @@ function ChatThreadWrapper({
     // Pre-add the user turn locally so it appears immediately on Send.
     // Tagged with local-<uuid> so the hub echo (which arrives later in the
     // stream) is deduped by the reducer.
-    const localUuid = (typeof crypto !== "undefined" && "randomUUID" in crypto)
-      ? `local-${crypto.randomUUID()}`
-      : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const localUuid =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `local-${crypto.randomUUID()}`
+        : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     storeDispatchEvent(sessionId, {
       type: "user",
       message: {

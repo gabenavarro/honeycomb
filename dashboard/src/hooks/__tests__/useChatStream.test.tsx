@@ -318,7 +318,12 @@ describe("useChatStream — store persistence (M37 follow-up)", () => {
     act(() => {
       emit("chat:ns-persist", {
         type: "user",
-        message: { id: "m", type: "message", role: "user", content: [{ type: "text", text: "hi" }] },
+        message: {
+          id: "m",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
         session_id: "s",
         uuid: "u",
       });
@@ -337,7 +342,12 @@ describe("useChatStream — store persistence (M37 follow-up)", () => {
     act(() => {
       emit("chat:ns-A", {
         type: "user",
-        message: { id: "m", type: "message", role: "user", content: [{ type: "text", text: "hello A" }] },
+        message: {
+          id: "m",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello A" }],
+        },
         session_id: "s",
         uuid: "u-a",
       });
@@ -386,7 +396,7 @@ describe("useChatStream — user echo dedupe (M37 follow-up)", () => {
           content: [{ type: "text", text: "hello world" }],
         },
         session_id: "s",
-        uuid: "local-abc-123",  // local- prefix
+        uuid: "local-abc-123", // local- prefix
       });
     });
     expect(result.current.turns).toHaveLength(1);
@@ -403,7 +413,7 @@ describe("useChatStream — user echo dedupe (M37 follow-up)", () => {
           content: [{ type: "text", text: "hello world" }],
         },
         session_id: "s",
-        uuid: "9d96df85-475a-4d76-bbc8-05e00c4682af",  // hub-style uuid
+        uuid: "9d96df85-475a-4d76-bbc8-05e00c4682af", // hub-style uuid
       });
     });
 

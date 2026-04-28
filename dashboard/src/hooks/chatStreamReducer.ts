@@ -28,7 +28,7 @@ export function applyEvent(prev: ChatTurn[], event: ChatCliEvent): ChatTurn[] {
       if (t.id.startsWith("user-local-") && t.text === text) {
         return prev;
       }
-      break;  // only check the most recent user turn
+      break; // only check the most recent user turn
     }
 
     const turn: ChatTurn = {
