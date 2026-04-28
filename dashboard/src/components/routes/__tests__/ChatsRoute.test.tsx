@@ -86,7 +86,8 @@ const mkSession = (id: string, name: string) => ({
 });
 
 describe("ChatsRoute — per-session isolation (M37 Lane C)", () => {
-  it("ChatThreadWrapper has key={sessionId} so React remounts on session switch", () => {
+  // After M37 follow-up: state lifted to chatStreamStore, key prop removed, instance reuse is fine.
+  it("ChatThreadWrapper updates its child sessionId on session switch", () => {
     const props = {
       containers: [mkContainer(1, "alpha")],
       activeContainer: mkContainer(1, "alpha"),
@@ -117,17 +118,15 @@ describe("ChatsRoute — per-session isolation (M37 Lane C)", () => {
     });
 
     expect(getByTestId("chat-thread").getAttribute("data-session-id")).toBe("ns-1");
-    const firstThread = getByTestId("chat-thread");
 
-    // Switch active session — the same ChatThread test-id should now report ns-2,
-    // and (because of the key) it must be a different DOM node from before.
+    // Switch active session — the inner <ChatThread> receives the new sessionId prop.
     rerender(<ChatsRoute {...props} activeSessionId="ns-2" />);
 
     const secondThread = getByTestId("chat-thread");
     expect(secondThread.getAttribute("data-session-id")).toBe("ns-2");
 
-    // The proof: with the key fix, React unmounts and remounts —
-    // the DOM node identity differs.
-    expect(firstThread).not.toBe(secondThread);
+    // Behavioral assertion: both sessions were passed to useChatStream.
+    expect(subscribeChannels).toContain("ns-1");
+    expect(subscribeChannels).toContain("ns-2");
   });
 });

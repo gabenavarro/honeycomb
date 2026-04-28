@@ -28,6 +28,8 @@ import type { ChatTurn } from "../chat/types";
 import { readEditAuto } from "../chat/EditAutoToggle";
 import { dispatchModeChange } from "../chat/ModeToggle";
 import { useChatStream } from "../../hooks/useChatStream";
+import { dispatchEvent as storeDispatchEvent } from "../../hooks/chatStreamStore";
+import type { ChatCliEvent } from "../chat/types";
 import { createArtifact, listContainerSessions, getSettings, postChatTurn } from "../../lib/api";
 import { TYPE_LABEL } from "../../lib/artifact-meta";
 import { parseSlashCommand } from "../../lib/slashCommands";
@@ -135,7 +137,6 @@ export function ChatsRoute({
       <main className="bg-page flex h-full min-w-0 flex-1 flex-col">
         {isClaudeKind && activeNamedSession && activeContainer !== undefined ? (
           <ChatThreadWrapper
-            key={activeNamedSession.session_id}
             activeNamedSession={activeNamedSession}
             namedSessions={namedSessions}
             containers={containers}
@@ -290,6 +291,26 @@ function ChatThreadWrapper({
     const attachClause =
       attachments.length > 0 ? `\n\nAttachments: ${attachments.map((a) => `@${a}`).join(" ")}` : "";
     const finalText = `${rawUserText}${attachClause}`;
+
+    // Pre-add the user turn locally so it appears immediately on Send.
+    // Tagged with local-<uuid> so the hub echo (which arrives later in the
+    // stream) is deduped by the reducer.
+    const localUuid =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `local-${crypto.randomUUID()}`
+        : `local-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    storeDispatchEvent(sessionId, {
+      type: "user",
+      message: {
+        id: localUuid,
+        type: "message",
+        role: "user",
+        content: [{ type: "text", text: finalText }],
+      },
+      session_id: "",
+      uuid: localUuid,
+    } as ChatCliEvent);
+
     setPending(true);
     try {
       await postChatTurn(sessionId, {

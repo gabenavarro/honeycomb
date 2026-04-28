@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useChatStream } from "../useChatStream";
+import { __resetForTests } from "../chatStreamStore";
 import type { ChatCliEvent, StreamEvent } from "../../components/chat/types";
 
 // In-memory mock of useHiveWebSocket.
@@ -65,6 +66,7 @@ beforeEach(() => {
   subscribeSpy.mockClear();
   unsubscribeSpy.mockClear();
   onChannelSpy.mockClear();
+  __resetForTests();
 });
 afterEach(() => {
   listeners.clear();
@@ -307,5 +309,179 @@ describe("useChatStream", () => {
     rerender();
     expect(subscribeSpy).toHaveBeenCalledTimes(1);
     expect(unsubscribeSpy).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe("useChatStream — store persistence (M37 follow-up)", () => {
+  it("preserves turns across unmount + remount with the same sessionId", () => {
+    const { result, unmount } = renderHook(() => useChatStream("ns-persist"), { wrapper });
+    act(() => {
+      emit("chat:ns-persist", {
+        type: "user",
+        message: {
+          id: "m",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
+        session_id: "s",
+        uuid: "u",
+      });
+    });
+    expect(result.current.turns).toHaveLength(1);
+    unmount();
+    // Remount — turns should still be there because the store persists.
+    const { result: result2 } = renderHook(() => useChatStream("ns-persist"), { wrapper });
+    expect(result2.current.turns).toHaveLength(1);
+    expect(result2.current.turns[0].text).toBe("hi");
+  });
+
+  it("isolates turns per sessionId", () => {
+    const { result: a } = renderHook(() => useChatStream("ns-A"), { wrapper });
+    const { result: b } = renderHook(() => useChatStream("ns-B"), { wrapper });
+    act(() => {
+      emit("chat:ns-A", {
+        type: "user",
+        message: {
+          id: "m",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello A" }],
+        },
+        session_id: "s",
+        uuid: "u-a",
+      });
+    });
+    expect(a.current.turns).toHaveLength(1);
+    expect(b.current.turns).toHaveLength(0);
+  });
+
+  it("clearTurns wipes only that session", () => {
+    const { result: a } = renderHook(() => useChatStream("ns-X"), { wrapper });
+    const { result: b } = renderHook(() => useChatStream("ns-Y"), { wrapper });
+    act(() => {
+      emit("chat:ns-X", {
+        type: "user",
+        message: { id: "m", type: "message", role: "user", content: [{ type: "text", text: "x" }] },
+        session_id: "s",
+        uuid: "u-x",
+      });
+      emit("chat:ns-Y", {
+        type: "user",
+        message: { id: "m", type: "message", role: "user", content: [{ type: "text", text: "y" }] },
+        session_id: "s",
+        uuid: "u-y",
+      });
+    });
+    expect(a.current.turns).toHaveLength(1);
+    expect(b.current.turns).toHaveLength(1);
+    act(() => a.current.clearTurns());
+    expect(a.current.turns).toHaveLength(0);
+    expect(b.current.turns).toHaveLength(1);
+  });
+});
+
+describe("useChatStream — user echo dedupe (M37 follow-up)", () => {
+  it("dedupes the hub user-echo when a local user turn was pre-added", () => {
+    const { result } = renderHook(() => useChatStream("ns-dedupe"), { wrapper });
+
+    // Simulate the dashboard's pre-add by dispatching a local user event.
+    act(() => {
+      emit("chat:ns-dedupe", {
+        type: "user",
+        message: {
+          id: "local-placeholder",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello world" }],
+        },
+        session_id: "s",
+        uuid: "local-abc-123", // local- prefix
+      });
+    });
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-local-abc-123");
+
+    // Now the hub's echo arrives with the SAME text but a different uuid.
+    act(() => {
+      emit("chat:ns-dedupe", {
+        type: "user",
+        message: {
+          id: "msg-hub-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hello world" }],
+        },
+        session_id: "s",
+        uuid: "9d96df85-475a-4d76-bbc8-05e00c4682af", // hub-style uuid
+      });
+    });
+
+    // Should NOT add a second user turn — the local one is canonical.
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-local-abc-123");
+  });
+
+  it("still appends a hub user turn when there was no local pre-add", () => {
+    const { result } = renderHook(() => useChatStream("ns-no-local"), { wrapper });
+    act(() => {
+      emit("chat:ns-no-local", {
+        type: "user",
+        message: {
+          id: "msg-hub-2",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "hi" }],
+        },
+        session_id: "s",
+        uuid: "real-uuid-from-hub",
+      });
+    });
+    expect(result.current.turns).toHaveLength(1);
+    expect(result.current.turns[0].id).toBe("user-real-uuid-from-hub");
+  });
+
+  it("dedupes only the MOST RECENT user turn (different text → keep both)", () => {
+    const { result } = renderHook(() => useChatStream("ns-multi"), { wrapper });
+    act(() => {
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "local-placeholder-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "first message" }],
+        },
+        session_id: "s",
+        uuid: "local-1",
+      });
+      // Hub echo of message 1.
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "msg-hub-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "first message" }],
+        },
+        session_id: "s",
+        uuid: "hub-1",
+      });
+      // User sends a different message — local pre-add.
+      emit("chat:ns-multi", {
+        type: "user",
+        message: {
+          id: "local-placeholder-2",
+          type: "message",
+          role: "user",
+          content: [{ type: "text", text: "second message" }],
+        },
+        session_id: "s",
+        uuid: "local-2",
+      });
+    });
+    expect(result.current.turns).toHaveLength(2);
+    expect(result.current.turns[0].text).toBe("first message");
+    expect(result.current.turns[1].text).toBe("second message");
   });
 });
